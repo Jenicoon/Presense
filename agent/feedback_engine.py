@@ -214,12 +214,20 @@ class FeedbackEngine:
                           key=lambda x: abs(x[1]), reverse=True)[:3]
             cbm_text = "  CBM: " + ", ".join(
                 f"{k}({'↑' if v > 0 else '↓'}{abs(v):.2f})" for k, v in top3)
+        if deviation > 2.0:
+            tone = "매우 긴장된 상태입니다. 짧고 즉각적인 행동 지시 위주로 피드백하세요."
+        elif deviation > 1.0:
+            tone = "약간 긴장 상태입니다. 차분하고 격려하는 말투로 피드백하세요."
+        else:
+            tone = "안정적인 상태입니다. 잘 하고 있다고 칭찬하며 유지를 독려하세요."
+
         return (
             f"스트레스 {score:.1f}점 (베이스라인 대비 {deviation:+.1f}σ) | "
             f"주도 채널: {dominant} (영상 {gate_w[0]*100:.0f}% / 음성 {gate_w[1]*100:.0f}%)\n"
             f"{cbm_text}\n"
             f"관찰: {'; '.join(obs[:4])}\n"
-            f"{modal_focus}"
+            f"{modal_focus}\n"
+            f"[말투 지시] {tone}"
         )
 
     def _generate_llm_feedback(self, score, deviation, gate_w, dominant,

@@ -160,26 +160,21 @@ class StressInferenceEngine:
             for p in self.wav2vec.parameters():
                 p.requires_grad = False
 
-            self.audio_proj = nn.Linear(768, 256).to(self.device)
-            for proj_name in [
-                'student_kd_best.pt',
-                'kd_student_prev_best.pt',
-            ]:
-                proj_path = _WEIGHTS_DIR / proj_name
-                if not proj_path.exists():
-                    continue
-                ckpt = torch.load(proj_path, map_location='cpu')
-                sd   = ckpt.get('model_state_dict', ckpt)
-                proj_sd = {
-                    k.replace('audio_enc.proj.', ''): v
-                    for k, v in sd.items() if k.startswith('audio_enc.proj.')
-                }
-                if proj_sd:
-                    self.audio_proj.load_state_dict(proj_sd)
-                    print(f"✅ Wav2Vec2 + proj 로드 ({proj_name})")
-                    break
+            # PCA 프로젝션 (768→256) 로드
+            pca_comp = _cfg.CHECKPOINTS_DIR / 'binary' / 'audio_pca_components.npy'
+            pca_mean = _cfg.CHECKPOINTS_DIR / 'binary' / 'audio_pca_mean.npy'
+            if pca_comp.exists() and pca_mean.exists():
+                self._audio_pca_comp = torch.tensor(
+                    np.load(pca_comp), dtype=torch.float32).to(self.device)  # (256, 768)
+                self._audio_pca_mean = torch.tensor(
+                    np.load(pca_mean), dtype=torch.float32).to(self.device)  # (768,)
+                self.audio_proj = None
+                print("✅ Wav2Vec2 + PCA 프로젝션 로드")
             else:
-                print("⚠️  proj 가중치 없음 — 랜덤 초기화")
+                self._audio_pca_comp = None
+                self._audio_pca_mean = None
+                self.audio_proj = nn.Linear(768, 256).to(self.device)
+                print("⚠️  PCA 없음 — 랜덤 초기화 (extract_audio_proj.py 실행 필요)")
 
             self.audio_proj.eval()
             for p in self.audio_proj.parameters():
@@ -274,7 +269,10 @@ class StressInferenceEngine:
         audio_t = torch.from_numpy(audio_np.astype(np.float32)).unsqueeze(0).to(self.device)
         with torch.no_grad():
             h = self.wav2vec(audio_t).last_hidden_state.mean(dim=1)  # (1, 768)
-            ae = self.audio_proj(h)                                    # (1, 256)
+            if self._audio_pca_comp is not None:
+                ae = (h - self._audio_pca_mean) @ self._audio_pca_comp.T  # (1, 256)
+            else:
+                ae = self.audio_proj(h)                                    # (1, 256)
         return ae
 
     def _extract_ege_maps(self, audio_np: np.ndarray) -> torch.Tensor | None:
