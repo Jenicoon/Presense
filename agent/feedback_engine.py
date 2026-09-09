@@ -11,10 +11,10 @@ SYSTEM_PROMPT = """
 2. [주요 감지 채널] 비중이 높은 쪽을 중심으로 피드백하세요.
    - 영상 비중이 높으면 → 눈 맞춤, 고개 기울기, 입 움직임, 몸 자세 언급
    - 음성 비중이 높으면 → 말 속도, 목소리 떨림, 음량 변화 언급
-3. 스트레스 수준에 따라 어조를 조절하세요.
-   - 낮음(deviation<1): 격려 위주
-   - 중간(1~2): 부드러운 조언
-   - 높음(>2): 구체적인 안정화 방법 제시
+3. 모델 확신도(stress_prob)에 따라 어조를 조절하세요.
+   - 낮음(prob<0.60): 단정하지 말고 "조금 긴장해 보이시네요" 처럼 부드럽게
+   - 중간(0.60~0.80): 차분하고 격려하는 말투
+   - 높음(prob>0.80): 구체적인 안정화 방법을 즉각 제시
 4. 이전 피드백과 겹치지 않게 다양한 표현을 사용하세요.
 5. 관찰 사실만 언급하고, 스트레스의 '원인'이라고 단정하지 마세요.
 6. 관찰된 구체적 수치(눈 깜빡임 횟수, 고개 각도 등)는 자연스럽게 녹여서 사용하세요.
@@ -114,12 +114,14 @@ class FeedbackEngine:
 
         can_intervene = (time.time() - self.last_intervention_time) > 30
 
+        stress_prob = current_avg / 100.0
+
         if deviation > 2.0:
             status = "HIGH"
             if can_intervene:
                 message = self._generate_llm_feedback(
                     current_avg, deviation, gate_w, dominant,
-                    audio_feat, video_feat, concept_contrib)
+                    audio_feat, video_feat, concept_contrib, stress_prob)
                 self._trigger_intervention(current_avg)
             else:
                 message = "스트레스 높음 — 잠시 후 조언 제공 예정"
@@ -128,7 +130,7 @@ class FeedbackEngine:
             if can_intervene:
                 message = self._generate_llm_feedback(
                     current_avg, deviation, gate_w, dominant,
-                    audio_feat, video_feat, concept_contrib)
+                    audio_feat, video_feat, concept_contrib, stress_prob)
                 self._trigger_intervention(current_avg)
             else:
                 message = "약간 긴장 상태"
@@ -205,7 +207,8 @@ class FeedbackEngine:
         return obs, modal_focus
 
     def _build_stress_analysis(self, score, deviation, gate_w, dominant,
-                               audio_feat, video_feat, concept_contrib) -> str:
+                               audio_feat, video_feat, concept_contrib,
+                               stress_prob: float = 0.5) -> str:
         """DSPy / 직접 LLM 모두에서 쓰는 분석 요약 문자열."""
         obs, modal_focus = self._build_obs_lines(gate_w, audio_feat, video_feat)
         cbm_text = ""
@@ -214,12 +217,12 @@ class FeedbackEngine:
                           key=lambda x: abs(x[1]), reverse=True)[:3]
             cbm_text = "  CBM: " + ", ".join(
                 f"{k}({'↑' if v > 0 else '↓'}{abs(v):.2f})" for k, v in top3)
-        if deviation > 2.0:
-            tone = "매우 긴장된 상태입니다. 짧고 즉각적인 행동 지시 위주로 피드백하세요."
-        elif deviation > 1.0:
-            tone = "약간 긴장 상태입니다. 차분하고 격려하는 말투로 피드백하세요."
+        if stress_prob > 0.80:
+            tone = "모델이 스트레스를 확실히 감지했습니다. 즉각적인 행동 지시 위주로 피드백하세요."
+        elif stress_prob > 0.60:
+            tone = "모델 확신도가 중간입니다. 차분하고 격려하는 말투로 피드백하세요."
         else:
-            tone = "안정적인 상태입니다. 잘 하고 있다고 칭찬하며 유지를 독려하세요."
+            tone = "모델 확신도가 낮습니다. '조금 긴장해 보이시네요'처럼 단정하지 않는 부드러운 말투로 피드백하세요."
 
         return (
             f"스트레스 {score:.1f}점 (베이스라인 대비 {deviation:+.1f}σ) | "
@@ -232,21 +235,21 @@ class FeedbackEngine:
 
     def _generate_llm_feedback(self, score, deviation, gate_w, dominant,
                                 audio_feat=None, video_feat=None,
-                                concept_contrib=None) -> str:
+                                concept_contrib=None, stress_prob=0.5) -> str:
         # ── DSPy + RAG 우선 ──
         if self.dspy_coach is not None:
             return self._dspy_feedback(score, deviation, gate_w, dominant,
-                                       audio_feat, video_feat, concept_contrib)
+                                       audio_feat, video_feat, concept_contrib, stress_prob)
         # ── 직접 Anthropic API ──
         if self.llm is not None:
             return self._direct_llm_feedback(score, deviation, gate_w, dominant,
-                                             audio_feat, video_feat, concept_contrib)
+                                             audio_feat, video_feat, concept_contrib, stress_prob)
         return self._fallback_feedback(gate_w, audio_feat, video_feat)
 
     def _dspy_feedback(self, score, deviation, gate_w, dominant,
-                       audio_feat, video_feat, concept_contrib) -> str:
+                       audio_feat, video_feat, concept_contrib, stress_prob=0.5) -> str:
         analysis = self._build_stress_analysis(
-            score, deviation, gate_w, dominant, audio_feat, video_feat, concept_contrib)
+            score, deviation, gate_w, dominant, audio_feat, video_feat, concept_contrib, stress_prob)
 
         # RAG: 주도 채널 기반 쿼리
         query   = f"{dominant} voice stress presentation anxiety coaching"
@@ -271,7 +274,7 @@ class FeedbackEngine:
 
     def _direct_llm_feedback(self, score, deviation, gate_w, dominant,
                               audio_feat=None, video_feat=None,
-                              concept_contrib=None) -> str:
+                              concept_contrib=None, stress_prob=0.5) -> str:
         """직접 Luxia API 호출 (DSPy 없을 때 fallback)."""
         prev     = list(self.feedback_history) or ["없음"]
         obs, modal_focus = self._build_obs_lines(gate_w, audio_feat, video_feat)

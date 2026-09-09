@@ -144,10 +144,12 @@ class StressInferenceEngine:
             import torchvision.models as tv
             resnet = tv.resnet18(weights='IMAGENET1K_V1')
             self.resnet = nn.Sequential(*list(resnet.children())[:-1]).to(self.device)
+            if self.device in ('mps', 'cuda'):
+                self.resnet = self.resnet.half()
             self.resnet.eval()
             for p in self.resnet.parameters():
                 p.requires_grad = False
-            print("✅ ResNet18 로드")
+            print("✅ ResNet18 로드" + (" (fp16)" if self.device in ('mps', 'cuda') else ""))
         except Exception as e:
             print(f"⚠️  ResNet18 로드 실패: {e}"); self.resnet = None
 
@@ -176,9 +178,24 @@ class StressInferenceEngine:
                 self.audio_proj = nn.Linear(768, 256).to(self.device)
                 print("⚠️  PCA 없음 — 랜덤 초기화 (extract_audio_proj.py 실행 필요)")
 
-            self.audio_proj.eval()
-            for p in self.audio_proj.parameters():
-                p.requires_grad = False
+            # 양자화
+            if self.device in ('mps', 'cuda'):
+                self.wav2vec = self.wav2vec.half()
+                if self._audio_pca_comp is not None:
+                    self._audio_pca_comp = self._audio_pca_comp.half()
+                    self._audio_pca_mean = self._audio_pca_mean.half()
+                elif self.audio_proj is not None:
+                    self.audio_proj = self.audio_proj.half()
+                print("  Wav2Vec2 fp16 적용")
+            elif self.device == 'cpu':
+                self.wav2vec = torch.ao.quantization.quantize_dynamic(
+                    self.wav2vec, {nn.Linear}, dtype=torch.qint8)
+                print("  Wav2Vec2 int8 동적 양자화 적용")
+
+            if self.audio_proj is not None:
+                self.audio_proj.eval()
+                for p in self.audio_proj.parameters():
+                    p.requires_grad = False
         except Exception as e:
             print(f"⚠️  Wav2Vec2 로드 실패: {e}")
             self.wav2vec = None; self.audio_proj = None
@@ -257,9 +274,11 @@ class StressInferenceEngine:
             frames.append(torch.from_numpy(f_norm.transpose(2, 0, 1)))
 
         frames_t = torch.stack(frames).to(self.device)  # (16, 3, 224, 224)
+        if self.device in ('mps', 'cuda'):
+            frames_t = frames_t.half()
         with torch.no_grad():
-            feat = self.resnet(frames_t).flatten(1)     # (16, 512)
-        return feat.unsqueeze(0)                         # (1, 16, 512)
+            feat = self.resnet(frames_t).flatten(1).float()  # (16, 512)
+        return feat.unsqueeze(0)                              # (1, 16, 512)
 
     def _extract_audio_embedding(self, audio_np: np.ndarray) -> torch.Tensor:
         """(160000,) float32 16kHz → (1, 256) Wav2Vec2 임베딩."""
@@ -267,13 +286,15 @@ class StressInferenceEngine:
             return torch.zeros(1, 256, device=self.device)
 
         audio_t = torch.from_numpy(audio_np.astype(np.float32)).unsqueeze(0).to(self.device)
+        if self.device in ('mps', 'cuda'):
+            audio_t = audio_t.half()
         with torch.no_grad():
             h = self.wav2vec(audio_t).last_hidden_state.mean(dim=1)  # (1, 768)
             if self._audio_pca_comp is not None:
                 ae = (h - self._audio_pca_mean) @ self._audio_pca_comp.T  # (1, 256)
             else:
                 ae = self.audio_proj(h)                                    # (1, 256)
-        return ae
+        return ae.float()  # 메인 모델 fp32 입력용
 
     def _extract_ege_maps(self, audio_np: np.ndarray) -> torch.Tensor | None:
         """raw waveform → eGeMAPS v02 Functionals (1, 88), z-score 정규화."""

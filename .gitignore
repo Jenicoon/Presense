@@ -5,6 +5,11 @@ archive/
 *.npy
 *.pt
 
+# 추론용 가중치는 포함
+!weights/
+!weights/*.pt
+!weights/*.npy
+
 # UI (Teammate's work - ignore in this branch)
 frontend/
 node_modules/
