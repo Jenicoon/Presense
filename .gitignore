@@ -2,20 +2,42 @@
 results/
 checkpoints/
 archive/
-*.npy
-*.pt
 
-# Frontend build artifacts (the source itself must be versioned)
-node_modules/
-.next/
-.env*
+# Model weights and generated arrays
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.h5
+*.npy
 
 # Standard Python ignores
 __pycache__/
+*.py[cod]
+*$py.class
 .venv/
 venv/
-...
-*$py.class
+
+# Environment files, including templates, stay outside Git.
+.env*
+
+# JavaScript / Next.js build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+frontend/public/samples/
+
+# Local server logs
+*.log
+
+# Personal editor settings and project documents
+.obsidian/
+.document/
+design.md
+proposal.docx
+명령어.md
 
 # OS junk
 .DS_Store
@@ -25,37 +47,3 @@ venv/
 .Trashes
 ehthumbs.db
 Thumbs.db
-design.md
-proposal.docx
-명령어.md
-
-# Frontend build artifacts
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/tsconfig.tsbuildinfo
-
-# Local server output and development logs
-server/*.log
-*.log
-
-# Model weights are deployed to the inference host separately, never committed.
-models/
-*.ckpt
-*.pth
-*.onnx
-*.safetensors
-*.h5
-
-# Progress Report PDF — contains personal info (names, emails, phone numbers),
-# and is no longer used by the app. Do not publish.
-frontend/public/samples/
-
-.env
-.env.example
-.env.local
-# A non-secret template may be committed; real .env files remain ignored.
-!server/.env.example
-
-.obsidian/
-.document/
