@@ -17,8 +17,7 @@ from models_e2e import StudentCMABi, CBMWithResidual, GEO_INPUT_DIM, EGEMAP_DIM,
 from dataset_e2e import TASK_TO_ID
 import config as _cfg
 
-_CHECKPOINT_DIR = _root / "checkpoints" / "student_kd"
-_ARTIFACT_DIR = _CHECKPOINT_DIR / "artifacts"
+_WEIGHTS_DIR = _root / "weights"
 
 CONCEPT_NAMES = ['목소리 거칠기', '음색 불안정성', '음성 두께', '음성 피치',
                  '표정 변화량',   '입술 긴장도',   '눈썹 찡그림']
@@ -113,8 +112,8 @@ class StressInferenceEngine:
     # ── 모델 로드 ──────────────────────────────────────────────────────────────
 
     def _load_model(self):
-        backbone_path = _CHECKPOINT_DIR / "student_kd_best.pt"
-        cbm_path      = _ARTIFACT_DIR / "cbm_bi_residual_v2_w0.8_lc4.0_best.pt"
+        backbone_path = _WEIGHTS_DIR / "student_kd_best.pt"
+        cbm_path      = _WEIGHTS_DIR / "cbm_bi_residual_v2_w0.8_lc4.0_best.pt"
 
         if not backbone_path.exists():
             print(f"[error] backbone missing: {backbone_path}"); self.model = None; return
@@ -145,10 +144,13 @@ class StressInferenceEngine:
             import torchvision.models as tv
             resnet = tv.resnet18(weights='IMAGENET1K_V1')
             self.resnet = nn.Sequential(*list(resnet.children())[:-1]).to(self.device)
+            if self.device in ('mps', 'cuda'):
+                self.resnet = self.resnet.half()
             self.resnet.eval()
             for p in self.resnet.parameters():
                 p.requires_grad = False
-            print("[model] ResNet18 loaded")
+            precision = " (fp16)" if self.device in ('mps', 'cuda') else ""
+            print(f"[model] ResNet18 loaded{precision}")
         except Exception as e:
             print(f"[warning] ResNet18 load failed: {e}"); self.resnet = None
 
@@ -161,37 +163,63 @@ class StressInferenceEngine:
             for p in self.wav2vec.parameters():
                 p.requires_grad = False
 
-            self.audio_proj = nn.Linear(768, 256).to(self.device)
-            for proj_name in [
-                'student_kd_best.pt',
-                'kd_student_prev_best.pt',
-            ]:
-                proj_path = _CHECKPOINT_DIR / proj_name
-                if not proj_path.exists():
-                    continue
-                ckpt = torch.load(proj_path, map_location='cpu')
-                sd   = ckpt.get('model_state_dict', ckpt)
-                proj_sd = {
-                    k.replace('audio_enc.proj.', ''): v
-                    for k, v in sd.items() if k.startswith('audio_enc.proj.')
-                }
-                if proj_sd:
-                    self.audio_proj.load_state_dict(proj_sd)
-                    print(f"[model] Wav2Vec2 projection loaded ({proj_name})")
-                    break
+            # PCA 프로젝션 (768→256) 로드
+            pca_comp = _cfg.CHECKPOINTS_DIR / 'binary' / 'audio_pca_components.npy'
+            pca_mean = _cfg.CHECKPOINTS_DIR / 'binary' / 'audio_pca_mean.npy'
+            if pca_comp.exists() and pca_mean.exists():
+                self._audio_pca_comp = torch.tensor(
+                    np.load(pca_comp), dtype=torch.float32).to(self.device)  # (256, 768)
+                self._audio_pca_mean = torch.tensor(
+                    np.load(pca_mean), dtype=torch.float32).to(self.device)  # (768,)
+                self.audio_proj = None
+                print("✅ Wav2Vec2 + PCA 프로젝션 로드")
             else:
-                print("[warning] Wav2Vec2 projection weights missing; using random initialization")
+                self._audio_pca_comp = None
+                self._audio_pca_mean = None
+                self.audio_proj = nn.Linear(768, 256).to(self.device)
+                for proj_name in ('student_kd_best.pt', 'kd_student_prev_best.pt'):
+                    proj_path = _WEIGHTS_DIR / proj_name
+                    if not proj_path.exists():
+                        continue
+                    ckpt = torch.load(proj_path, map_location='cpu')
+                    state = ckpt.get('model_state_dict', ckpt)
+                    proj_state = {
+                        key.replace('audio_enc.proj.', ''): value
+                        for key, value in state.items()
+                        if key.startswith('audio_enc.proj.')
+                    }
+                    if proj_state:
+                        self.audio_proj.load_state_dict(proj_state)
+                        print(f"[model] Wav2Vec2 projection loaded ({proj_name})")
+                        break
+                else:
+                    print("[warning] PCA and trained projection weights missing; using random initialization")
 
-            self.audio_proj.eval()
-            for p in self.audio_proj.parameters():
-                p.requires_grad = False
+            # 양자화
+            if self.device in ('mps', 'cuda'):
+                self.wav2vec = self.wav2vec.half()
+                if self._audio_pca_comp is not None:
+                    self._audio_pca_comp = self._audio_pca_comp.half()
+                    self._audio_pca_mean = self._audio_pca_mean.half()
+                elif self.audio_proj is not None:
+                    self.audio_proj = self.audio_proj.half()
+                print("  Wav2Vec2 fp16 적용")
+            elif self.device == 'cpu':
+                self.wav2vec = torch.ao.quantization.quantize_dynamic(
+                    self.wav2vec, {nn.Linear}, dtype=torch.qint8)
+                print("  Wav2Vec2 int8 동적 양자화 적용")
+
+            if self.audio_proj is not None:
+                self.audio_proj.eval()
+                for p in self.audio_proj.parameters():
+                    p.requires_grad = False
         except Exception as e:
             print(f"[warning] Wav2Vec2 load failed: {e}")
             self.wav2vec = None; self.audio_proj = None
 
     def _load_geo_scaler(self):
-        mean_p = _ARTIFACT_DIR / "geo_scaler_mean.npy"
-        std_p  = _ARTIFACT_DIR / "geo_scaler_std.npy"
+        mean_p = _WEIGHTS_DIR / "geo_scaler_mean.npy"
+        std_p  = _WEIGHTS_DIR / "geo_scaler_std.npy"
         if mean_p.exists() and std_p.exists():
             self.geo_mean = np.load(mean_p)  # (24,)
             self.geo_std  = np.load(std_p)   # (24,)
@@ -203,7 +231,7 @@ class StressInferenceEngine:
 
     def _load_ege_scaler(self):
         """학습 시 사용된 eGeMAPS 통계 로드 (z-score 정규화용)."""
-        ege_path = _ARTIFACT_DIR / "ege_maps_feats.npy"
+        ege_path = _WEIGHTS_DIR / "ege_maps_feats.npy"
         if ege_path.exists():
             ege_np = np.load(ege_path).astype(np.float32)
             self._ege_mean = ege_np.mean(0)   # (88,)
@@ -263,9 +291,11 @@ class StressInferenceEngine:
             frames.append(torch.from_numpy(f_norm.transpose(2, 0, 1)))
 
         frames_t = torch.stack(frames).to(self.device)  # (16, 3, 224, 224)
+        if self.device in ('mps', 'cuda'):
+            frames_t = frames_t.half()
         with torch.no_grad():
-            feat = self.resnet(frames_t).flatten(1)     # (16, 512)
-        return feat.unsqueeze(0)                         # (1, 16, 512)
+            feat = self.resnet(frames_t).flatten(1).float()  # (16, 512)
+        return feat.unsqueeze(0)                              # (1, 16, 512)
 
     def _extract_audio_embedding(self, audio_np: np.ndarray) -> torch.Tensor:
         """(160000,) float32 16kHz → (1, 256) Wav2Vec2 임베딩."""
@@ -273,10 +303,15 @@ class StressInferenceEngine:
             return torch.zeros(1, 256, device=self.device)
 
         audio_t = torch.from_numpy(audio_np.astype(np.float32)).unsqueeze(0).to(self.device)
+        if self.device in ('mps', 'cuda'):
+            audio_t = audio_t.half()
         with torch.no_grad():
             h = self.wav2vec(audio_t).last_hidden_state.mean(dim=1)  # (1, 768)
-            ae = self.audio_proj(h)                                    # (1, 256)
-        return ae
+            if self._audio_pca_comp is not None:
+                ae = (h - self._audio_pca_mean) @ self._audio_pca_comp.T  # (1, 256)
+            else:
+                ae = self.audio_proj(h)                                    # (1, 256)
+        return ae.float()  # 메인 모델 fp32 입력용
 
     def _extract_ege_maps(self, audio_np: np.ndarray) -> torch.Tensor | None:
         """raw waveform → eGeMAPS v02 Functionals (1, 88), z-score 정규화."""

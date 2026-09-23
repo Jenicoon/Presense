@@ -12,6 +12,11 @@ archive/
 *.h5
 *.npy
 
+# 추론용 가중치는 포함
+!weights/
+!weights/*.pt
+!weights/*.npy
+
 # Standard Python ignores
 __pycache__/
 *.py[cod]
