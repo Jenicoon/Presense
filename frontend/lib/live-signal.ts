@@ -1,9 +1,10 @@
 // Live inference signal — model integration boundary (Progress Report §1.3.5).
 //
-// The UI depends ONLY on the LiveInferenceFrame shape below, never on the model
-// internals. Today the values come from a local simulator; once the backend
-// Student model is available it will stream the same shape over WebSocket and
-// only this module needs to change (Progress Report §2.3, §3.3).
+// The UI depends only on the LiveInferenceFrame shape below. In simulated mode
+// values come from a local simulator; live mode sends the capture to the Python
+// inference API (Progress Report §2.3, §3.3).
+
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type LiveInferenceFrame = {
   /** Normalized stress level, 0..1 (stress-class probability). */
@@ -30,6 +31,15 @@ export async function inferMultimodalFrame(
   task = "Speaking",
   signal?: AbortSignal,
 ): Promise<LiveInferenceFrame> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error("Live inference requires Supabase authentication.");
+  }
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session?.access_token) {
+    throw new Error("Sign in before using live inference.");
+  }
+
   const form = new FormData();
   frames.forEach((frame, index) => form.append("frames", frame, `frame-${index}.jpg`));
   // Copy into a browser-owned ArrayBuffer: Float32Array.buffer may be a
@@ -38,7 +48,12 @@ export async function inferMultimodalFrame(
   pcm.set(audio);
   form.append("audio", new Blob([pcm.buffer], { type: "application/octet-stream" }), "audio.f32");
   form.append("task", task);
-  const res = await fetch(`${INFERENCE_URL}/infer`, { method: "POST", body: form, signal });
+  const res = await fetch(`${INFERENCE_URL}/infer`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    body: form,
+    signal,
+  });
   if (!res.ok) throw new Error(`Inference failed: ${res.status}`);
   const data = await res.json();
   return {

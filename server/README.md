@@ -55,6 +55,23 @@ NEXT_PUBLIC_INFERENCE_URL=http://localhost:8000
 Restart `next dev`. Leave `NEXT_PUBLIC_SIGNAL_SOURCE` unset (or `simulated`) to
 keep the built-in demo signal.
 
+## Protect the inference endpoint
+
+`POST /infer` requires a valid Supabase user access token. The frontend attaches
+the signed-in user's token, and the server verifies it using the project's JWT
+signing keys. Set these values in `server/.env` (use the same project URL and
+publishable key configured for the frontend; never use a service-role key here):
+
+```dotenv
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+```
+
+The Netlify production origin `https://hyupresense.netlify.app` is allowed by
+default. Add other exact browser origins, comma-separated, with
+`PRESENSE_ALLOWED_ORIGINS` if needed. CORS is not authentication; `/infer`
+validates the bearer token independently.
+
 ## Endpoints
 
 | Method | Path      | Body                  | Returns                                   |
