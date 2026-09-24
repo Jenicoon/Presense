@@ -137,6 +137,32 @@ export async function loadDashboardData() {
   };
 }
 
+export async function loadAgentSessions(): Promise<PresentationRecord[]> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return (await loadSessionHistory()).slice(0, 5);
+  }
+
+  const { data, error } = await supabase
+    .from("presentation_records")
+    .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label")
+    .order("session_date", { ascending: false })
+    .limit(5);
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    date: formatSessionDate(row.session_date),
+    duration: formatDuration(row.duration_seconds),
+    result: row.result,
+    stressAverage: Number(row.stress_average).toFixed(2),
+    diagnosis: row.diagnosis,
+    nextAction: row.next_action ?? "",
+    sceneLabel: row.scene_label ?? "",
+  }));
+}
+
 export async function loadUserSettings() {
   const supabase = getSupabaseBrowserClient();
 

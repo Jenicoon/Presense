@@ -9,7 +9,6 @@ import {
   CircleStop,
   FileText,
   Gauge,
-  MessageSquareText,
   Mic,
   Play,
   Sparkles,
@@ -19,15 +18,13 @@ import {
   X,
 } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
-import { agentStarters, initialTimeline, postSessionHighlights, practiceScenes, samplePresentation } from "@/lib/dashboard-data";
-import { createSimulatedSignal, inferMultimodalFrame, INFERENCE_URL, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
+import { initialTimeline, postSessionHighlights, practiceScenes, samplePresentation } from "@/lib/dashboard-data";
+import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { StressChart } from "@/components/stress-chart";
 
 type SessionState = "idle" | "starting" | "live" | "ended" | "error";
-type ChatMessage = { role: "agent" | "user"; text: string };
 type ReportSummary = {
   startBaseline: number;
   peakValue: number;
@@ -233,8 +230,6 @@ export function DashboardShell() {
   const [voiceDetected, setVoiceDetected] = useState(false);
   const [timeline, setTimeline] = useState(initialTimeline);
   const [report, setReport] = useState<ReportSummary | null>(null);
-  const [chatInput, setChatInput] = useState("");
-  const [agentBusy, setAgentBusy] = useState(false);
   const [selectedScene, setSelectedScene] = useState<SceneId>("camera");
   const [deck, setDeck] = useState<DeckFile | null>(SAMPLE_DECK);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -248,9 +243,6 @@ export function DashboardShell() {
   const [recordedVideo, setRecordedVideo] = useState<Blob | null>(null);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState("");
   const [recordingFinalizing, setRecordingFinalizing] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: "agent", text: t("report.chatIntro") },
-  ]);
 
   useEffect(() => {
     if (!preparationComplete) preparationDialogRef.current?.showModal();
@@ -637,7 +629,6 @@ export function DashboardShell() {
         URL.revokeObjectURL(recordedVideoUrl);
         setRecordedVideoUrl("");
       }
-      setChatMessages([{ role: "agent", text: t("report.chatWaiting") }]);
 
       let stream = streamRef.current;
       if (!stream) {
@@ -722,7 +713,6 @@ export function DashboardShell() {
     setSaved(false);
     setSaveStatus("");
     setSaveDialogOpen(true);
-    setChatMessages([{ role: "agent", text: t("report.chatSummaryPrefix") + t("report.nextActionText") }]);
   }
 
   async function handleSaveSession() {
@@ -762,6 +752,7 @@ export function DashboardShell() {
         video: saveVideo ? recordedVideo : null,
       });
       setSaved(true);
+      window.dispatchEvent(new Event("presense:session-saved"));
       setSaveStatus(result?.warning ?? t("status.saved"));
       setSaveDialogOpen(false);
       saveCompleteDialogRef.current?.showModal();
@@ -773,59 +764,9 @@ export function DashboardShell() {
     }
   }
 
-  async function handleSendMessage() {
-    if (!chatInput.trim() || sessionState !== "ended" || !report || agentBusy) return;
-    const userText = chatInput.trim();
-    setChatInput("");
-    setAgentBusy(true);
-    setChatMessages((prev) => [...prev, { role: "user", text: userText }]);
-
-    try {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase) throw new Error(lang === "ko" ? "로그인 설정을 확인해 주세요." : "Sign-in is not configured.");
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) {
-        throw new Error(lang === "ko" ? "로그인 후 다시 질문해 주세요." : "Please sign in and try again.");
-      }
-
-      const response = await fetch(`${INFERENCE_URL.replace(/\/$/, "")}/agent/chat`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: userText,
-          language: lang === "ko" ? "ko" : "en",
-          report: {
-            startBaseline: report.startBaseline,
-            averageStress: report.averageStress,
-            peakValue: report.peakValue,
-            peakPhase: report.peakPhase,
-            mostStressfulPhase: report.mostStressfulPhase,
-            confidence: report.confidence,
-            noticeable: report.noticeable,
-          },
-          history: chatMessages.slice(-8).map((message) => ({
-            role: message.role === "agent" ? "assistant" : "user",
-            content: message.text,
-          })),
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(typeof data.detail === "string" ? data.detail : `AI Agent request failed (${response.status}).`);
-      }
-      if (typeof data.reply !== "string" || !data.reply.trim()) {
-        throw new Error(lang === "ko" ? "AI Agent에서 빈 답변을 받았습니다." : "The AI Agent returned an empty response.");
-      }
-      setChatMessages((prev) => [...prev, { role: "agent", text: data.reply.trim() }]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : (lang === "ko" ? "AI Agent 요청에 실패했습니다." : "The AI Agent request failed.");
-      setChatMessages((prev) => [...prev, { role: "agent", text: message }]);
-    } finally {
-      setAgentBusy(false);
-    }
+  function openAgentForReport() {
+    if (!report) return;
+    window.dispatchEvent(new CustomEvent("presense:open-agent", { detail: saved ? {} : { report } }));
   }
 
   function seekToTimelineBin(bin: number) {
@@ -1235,41 +1176,11 @@ export function DashboardShell() {
               <div className="panel-head">
                 <div className="panel-head-left">
                   <span className="panel-title">{t("report.aiAgent")}</span>
-                  <span className="panel-subtitle">{t("report.aiAgentSub")}</span>
+                  <span className="panel-subtitle">{t("agent.reportHint")}</span>
                 </div>
-                <MessageSquareText size={16} color="var(--text-secondary)" />
+                <BrainCircuit size={17} color="var(--text-secondary)" />
               </div>
-
-              <div className="starter-pills">
-                {agentStarters.map((s, i) => {
-                  const label = t(`starter.${i}`, s);
-                  return (
-                    <button key={s} type="button" className="starter-pill" onClick={() => setChatInput(label)}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="chat-messages">
-                {chatMessages.map((m, i) => (
-                  <div key={i} className={`chat-bubble ${m.role}`}>{m.text}</div>
-                ))}
-              </div>
-
-              <div className="chat-input-row">
-                <input
-                  className="chat-input"
-                  value={chatInput}
-                  disabled={agentBusy}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") void handleSendMessage(); }}
-                  placeholder={t("report.chatPlaceholder")}
-                />
-                <button type="button" className="btn btn-primary" onClick={() => void handleSendMessage()} disabled={agentBusy || !chatInput.trim()}>
-                  {agentBusy ? (lang === "ko" ? "답변 생성 중…" : "Thinking…") : t("report.ask")}
-                </button>
-              </div>
+              <button type="button" className="btn btn-primary" onClick={openAgentForReport}>{t("agent.openForReport")}</button>
             </div>
           </div>
         </>

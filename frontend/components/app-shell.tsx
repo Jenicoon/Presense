@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Bell, ClipboardList, HelpCircle, Languages, LogOut, Search, Settings, UserRound, Video } from "lucide-react";
+import { BarChart3, Bell, BrainCircuit, ClipboardList, HelpCircle, Languages, LogOut, Search, Settings, UserRound, Video } from "lucide-react";
+import { AgentPanel } from "@/components/agent-panel";
 import { BrandLogo } from "@/components/brand-logo";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { useLang } from "@/lib/i18n";
@@ -42,6 +43,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   async function handleSignOut() {
     setMenuOpen(false);
+    if (user) window.sessionStorage.removeItem(`presense-agent-chat:${user.id}`);
+    window.sessionStorage.removeItem("presense-agent-open");
     await signOut();
     router.push("/");
   }
@@ -78,6 +81,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+
+        <div className="sidebar-agent-slot">
+          <button type="button" className="sidebar-agent-button" onClick={() => window.dispatchEvent(new Event("presense:open-agent"))}>
+            <BrainCircuit size={19} />
+            <span><strong>{t("agent.title")}</strong><small>{t("agent.sidebarHint")}</small></span>
+          </button>
+        </div>
 
         <div className="sidebar-footer">
           <Link href="/practice" className="sidebar-cta">
@@ -150,6 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {children}
       </div>
+      <AgentPanel userId={user?.id ?? null} />
     </div>
   );
 }

@@ -68,9 +68,12 @@ SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 LUXIA_API_KEY=<luxia-api-key>
 ```
 
-`LUXIA_API_KEY` stays on the inference server. The report's AI Agent sends
-authenticated chat requests to `POST /agent/chat`; the browser never receives
-the Luxia key. Restart the server after changing `server/.env`.
+`LUXIA_API_KEY` stays on the inference server. The workspace sidebar opens an
+AI Agent panel on any authenticated page. It loads up to five recent sessions
+from Supabase, lets the user select one for focused discussion, and sends their
+summary data with authenticated chat requests to `POST /agent/chat`. The report
+can also open the panel with the just-finished session. The browser never
+receives the Luxia key. Restart the server after changing `server/.env`.
 
 The Netlify production origin `https://hyupresense.netlify.app` is allowed by
 default. Add other exact browser origins, comma-separated, with
@@ -83,4 +86,4 @@ validates the bearer token independently.
 | ------ | --------- | --------------------- | ----------------------------------------- |
 | GET    | `/health` | —                     | `{ status, checkpointLoaded }`            |
 | POST   | `/infer`  | multipart `frame` img | `{ stressScore, confidence, checkpointLoaded }` |
-| POST   | `/agent/chat` | report, message, optional chat history | `{ reply }` |
+| POST   | `/agent/chat` | message, optional report, recent sessions and chat history | `{ reply }` |
