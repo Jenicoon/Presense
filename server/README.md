@@ -65,7 +65,12 @@ publishable key configured for the frontend; never use a service-role key here):
 ```dotenv
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+LUXIA_API_KEY=<luxia-api-key>
 ```
+
+`LUXIA_API_KEY` stays on the inference server. The report's AI Agent sends
+authenticated chat requests to `POST /agent/chat`; the browser never receives
+the Luxia key. Restart the server after changing `server/.env`.
 
 The Netlify production origin `https://hyupresense.netlify.app` is allowed by
 default. Add other exact browser origins, comma-separated, with
@@ -78,3 +83,4 @@ validates the bearer token independently.
 | ------ | --------- | --------------------- | ----------------------------------------- |
 | GET    | `/health` | —                     | `{ status, checkpointLoaded }`            |
 | POST   | `/infer`  | multipart `frame` img | `{ stressScore, confidence, checkpointLoaded }` |
+| POST   | `/agent/chat` | report, message, optional chat history | `{ reply }` |

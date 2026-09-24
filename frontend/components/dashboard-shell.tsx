@@ -20,9 +20,10 @@ import {
 } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { agentStarters, initialTimeline, postSessionHighlights, practiceScenes, samplePresentation } from "@/lib/dashboard-data";
-import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
+import { createSimulatedSignal, inferMultimodalFrame, INFERENCE_URL, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { StressChart } from "@/components/stress-chart";
 
 type SessionState = "idle" | "starting" | "live" | "ended" | "error";
@@ -65,20 +66,6 @@ function getDeckType(fileName: string): DeckFile["type"] {
   if (lower.endsWith(".ppt")) return "ppt";
   if (lower.endsWith(".pptx")) return "pptx";
   return "unsupported";
-}
-
-function buildAgentReply(input: string, t: (k: string) => string, peakText: string) {
-  const s = input.toLowerCase();
-  if (s.includes("stress") || s.includes("tense") || input.includes("스트레스") || input.includes("긴장")) {
-    return t("agent.stressPre") + peakText + t("agent.stressPost");
-  }
-  if (s.includes("calm") || s.includes("confidence") || input.includes("차분") || input.includes("자신")) {
-    return t("agent.calm");
-  }
-  if (s.includes("improve") || s.includes("next") || input.includes("개선") || input.includes("다음")) {
-    return t("report.nextActionText");
-  }
-  return t("agent.default");
 }
 
 const PHASES = ["Open", "Build", "Core", "Close"] as const;
@@ -247,6 +234,7 @@ export function DashboardShell() {
   const [timeline, setTimeline] = useState(initialTimeline);
   const [report, setReport] = useState<ReportSummary | null>(null);
   const [chatInput, setChatInput] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
   const [selectedScene, setSelectedScene] = useState<SceneId>("camera");
   const [deck, setDeck] = useState<DeckFile | null>(SAMPLE_DECK);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -785,12 +773,59 @@ export function DashboardShell() {
     }
   }
 
-  function handleSendMessage() {
-    if (!chatInput.trim() || sessionState !== "ended") return;
+  async function handleSendMessage() {
+    if (!chatInput.trim() || sessionState !== "ended" || !report || agentBusy) return;
     const userText = chatInput.trim();
-    const reply = buildAgentReply(userText, t, peakText(report));
-    setChatMessages((prev) => [...prev, { role: "user", text: userText }, { role: "agent", text: reply }]);
     setChatInput("");
+    setAgentBusy(true);
+    setChatMessages((prev) => [...prev, { role: "user", text: userText }]);
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error(lang === "ko" ? "로그인 설정을 확인해 주세요." : "Sign-in is not configured.");
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error(lang === "ko" ? "로그인 후 다시 질문해 주세요." : "Please sign in and try again.");
+      }
+
+      const response = await fetch(`${INFERENCE_URL.replace(/\/$/, "")}/agent/chat`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userText,
+          language: lang === "ko" ? "ko" : "en",
+          report: {
+            startBaseline: report.startBaseline,
+            averageStress: report.averageStress,
+            peakValue: report.peakValue,
+            peakPhase: report.peakPhase,
+            mostStressfulPhase: report.mostStressfulPhase,
+            confidence: report.confidence,
+            noticeable: report.noticeable,
+          },
+          history: chatMessages.slice(-8).map((message) => ({
+            role: message.role === "agent" ? "assistant" : "user",
+            content: message.text,
+          })),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof data.detail === "string" ? data.detail : `AI Agent request failed (${response.status}).`);
+      }
+      if (typeof data.reply !== "string" || !data.reply.trim()) {
+        throw new Error(lang === "ko" ? "AI Agent에서 빈 답변을 받았습니다." : "The AI Agent returned an empty response.");
+      }
+      setChatMessages((prev) => [...prev, { role: "agent", text: data.reply.trim() }]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : (lang === "ko" ? "AI Agent 요청에 실패했습니다." : "The AI Agent request failed.");
+      setChatMessages((prev) => [...prev, { role: "agent", text: message }]);
+    } finally {
+      setAgentBusy(false);
+    }
   }
 
   function seekToTimelineBin(bin: number) {
@@ -1226,12 +1261,13 @@ export function DashboardShell() {
                 <input
                   className="chat-input"
                   value={chatInput}
+                  disabled={agentBusy}
                   onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleSendMessage(); }}
                   placeholder={t("report.chatPlaceholder")}
                 />
-                <button type="button" className="btn btn-primary" onClick={handleSendMessage}>
-                  {t("report.ask")}
+                <button type="button" className="btn btn-primary" onClick={() => void handleSendMessage()} disabled={agentBusy || !chatInput.trim()}>
+                  {agentBusy ? (lang === "ko" ? "답변 생성 중…" : "Thinking…") : t("report.ask")}
                 </button>
               </div>
             </div>
