@@ -8,28 +8,43 @@ function time(ms: number): string {
 export function AgentObservationReport({ report, ko }: { report: AgentReport; ko: boolean }) {
   const observed = report.observationReport;
   if (!observed) return null; // Reports saved before this schema have only summaryText.
-  const peak = observed.peakSegment;
-  const recommendation = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
-  const nextPractice = agentNextPractice(report, ko);
+  const largestConcept = Math.max(...observed.concepts.map((item) => Math.abs(item.meanValue)), 0.01);
+  const featureGroups = [
+    { label: ko ? "음성" : "Audio", items: observed.features.filter((item) => item.id.startsWith("pitch_")) },
+    { label: ko ? "영상" : "Video", items: observed.features.filter((item) => !item.id.startsWith("pitch_")) },
+  ];
+  const previous = observed.previousComparison;
   return <div className="coach-stack">
-    <div className="coach-card coach-data">
-      <h3>{ko ? "발표 요약 · 주요 구간" : "Session overview · key interval"}</h3>
-      <p>{ko ? `분석 가능한 구간 ${Math.round(observed.observedMs / 1000)}초 (전체의 ${Math.round(observed.coverage * 100)}%)` :
-        `${Math.round(observed.observedMs / 1000)} usable seconds (${Math.round(observed.coverage * 100)}% of session)`}</p>
-      {observed.averageStressScore !== null && <p>{ko ? "평균 모델 스트레스 점수" : "Mean model stress score"}: {Math.round(observed.averageStressScore * 100)}/100</p>}
-      {peak && <p>{ko ? "가장 높은 관측 구간" : "Highest observed interval"}: {time(peak.startMs)}–{time(peak.endMs)} · {Math.round(peak.stressScore * 100)}/100</p>}
-    </div>
     {(observed.concepts.length > 0 || observed.features.length > 0) && <div className="coach-card coach-data">
       <h3>{ko ? "관찰된 모델 출력" : "Observed model outputs"}</h3>
-      {observed.concepts.length > 0 && <p>{ko ? "Concept 출력 평균" : "Mean concept outputs"}: {observed.concepts.map((item) => `${item.name} ${item.meanValue.toFixed(2)}`).join(" · ")}</p>}
-      {observed.features.map((item) => <p key={item.id}>{ko ? item.label.split(" / ")[0] : item.label.split(" / ")[1] || item.label}: {item.meanValue.toFixed(2)}{item.unit ? ` ${item.unit}` : ""} ({ko ? "관측" : "samples"} {item.observations})</p>)}
+      {observed.modelWindowCount !== undefined && <p>{ko ? `모델 분석 창 ${observed.modelWindowCount}개 · 각 창은 최대 10초이며 서로 겹칠 수 있습니다.` : `${observed.modelWindowCount} model analysis windows · each covers up to 10 seconds and may overlap.`}</p>}
+      {observed.concepts.length > 0 && <div className="observation-section">
+        <strong>{ko ? "Concept 출력" : "Concept outputs"}</strong>
+        <div className="observation-bars">{observed.concepts.map((item) => <div className="observation-bar-row" key={item.name}>
+          <span>{item.name}</span><div className="observation-bar-track"><div className="observation-bar-fill" style={{ width: `${Math.max(2, Math.abs(item.meanValue) / largestConcept * 100)}%` }} /></div><b>{item.meanValue.toFixed(2)}</b>
+        </div>)}</div>
+      </div>}
+      {featureGroups.map((group) => group.items.length > 0 && <div className="observation-section" key={group.label}>
+        <strong>{group.label}</strong>
+        <div className="observation-table-wrap"><table className="observation-table"><thead><tr><th>{ko ? "측정 항목" : "Measurement"}</th><th>{ko ? "평균" : "Mean"}</th><th>{ko ? "관측 범위" : "Observed range"}</th></tr></thead><tbody>
+          {group.items.map((item) => <tr key={item.id}><td>{ko ? item.label.split(" / ")[0] : item.label.split(" / ")[1] || item.label}</td><td>{item.meanValue.toFixed(2)}{item.unit ? ` ${item.unit}` : ""}</td><td>{item.minValue.toFixed(2)}–{item.maxValue.toFixed(2)}{item.unit ? ` ${item.unit}` : ""}</td></tr>)}
+        </tbody></table></div>
+      </div>)}
     </div>}
-    <div className="coach-card coach-ok">
-      <h3>{ko ? "개선점 · 다음 연습" : "Improvement focus · next practice"}</h3>
-      {!recommendation && <p>{ko ? "현재 관측만으로 특정 음성·표정 특징을 개선점으로 확정할 근거가 부족합니다." : "The current observations do not establish a specific voice or facial feature to change."}</p>}
-      <p>{nextPractice}</p>
+    <div className="coach-card coach-data">
+      <h3>{ko ? "영상에서 확인할 변화" : "Changes to review in the recording"}</h3>
+      {(observed.patterns ?? []).length > 0 ? (observed.patterns ?? []).map((item) => <p key={item.id}>
+        <strong>{time(item.startMs)}–{time(item.endMs)} · {ko ? item.label.split(" / ")[0] : item.label.split(" / ")[1] || item.label}</strong><br />
+        {ko ? `해당 구간 ${item.value.toFixed(2)}${item.unit ? ` ${item.unit}` : ""} · 다른 분석 창 중앙값 ${item.comparisonValue.toFixed(2)}${item.unit ? ` ${item.unit}` : ""}` :
+          `This interval ${item.value.toFixed(2)}${item.unit ? ` ${item.unit}` : ""} · median of other windows ${item.comparisonValue.toFixed(2)}${item.unit ? ` ${item.unit}` : ""}`}
+      </p>) : <p>{observed.features.length === 0
+        ? (ko ? "비교할 음성·영상 측정값이 수집되지 않았습니다." : "No audio or video features were available for comparison.")
+        : (ko ? "구간별 음성·영상 특징의 차이가 뚜렷하지 않았습니다." : "Audio and video features showed no clear interval difference.")}</p>}
+      {previous && <p>{ko ? `이전 저장 기록 ${previous.previousSessionCount ?? 1}건과 비교: ${previous.label.split(" / ")[0]} 중앙값 ${previous.previousValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""} → 이번 ${previous.currentValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""}` :
+        `Compared with ${previous.previousSessionCount ?? 1} saved session(s): ${previous.label.split(" / ")[1] || previous.label} ${previous.previousValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""} → ${previous.currentValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""}`}</p>}
+      <AgentEvidence report={report} ids={report.observationEvidenceIds} ko={ko} />
     </div>
-    <p className="signal-note">{ko ? "모델 점수와 Concept는 진단이나 원인 설명이 아닙니다. 가장 높은 구간은 이 발표 안에서의 상대적인 위치입니다." : "Model scores and concepts are not diagnoses or causes. The highest interval is relative to this session."}</p>
+    <div className="coach-card coach-ok"><h3>{ko ? "이번 연습에서 해볼 것" : "Focus for the next take"}</h3><p>{agentNextPractice(report, ko)}</p></div>
   </div>;
 }
 

@@ -38,14 +38,18 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
   useEffect(() => () => {
     if (probeTimeoutRef.current !== null) window.clearTimeout(probeTimeoutRef.current);
   }, []);
-  const peak = record.timeline.length ? Math.max(...record.timeline) : 0;
+  const peak = record.agentReport?.observationReport?.peakSegment
+    ? Math.round(record.agentReport.observationReport.peakSegment.stressScore * 100)
+    : record.timeline.length ? Math.max(...record.timeline) : 0;
   const [playbackError, setPlaybackError] = useState(false);
   const phases = ko ? ["도입", "전개", "핵심", "마무리"] : ["Open", "Build", "Core", "Close"];
   const averages = phases.map((_, p) => {
     const values = record.timeline.slice(Math.floor(p * record.timeline.length / 4), Math.floor((p + 1) * record.timeline.length / 4));
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   });
-  const peakBin = record.timeline.indexOf(peak);
+  const peakBin = record.agentReport?.observationReport?.peakSegment && record.durationSeconds
+    ? Math.min(record.timeline.length - 1, Math.floor(record.agentReport.observationReport.peakSegment.startMs / (record.durationSeconds * 1000) * record.timeline.length))
+    : record.timeline.indexOf(peak);
   const strongest = record.timeline.length ? averages.indexOf(Math.max(...averages.map((v) => v ?? -1))) : -1;
   function restoreVideoStart(video: HTMLVideoElement) {
     if (!durationProbeRef.current || !Number.isFinite(video.duration)) return;
@@ -92,14 +96,13 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
         <AgentEvidence report={record.agentReport!} ids={item.evidenceIds} ko={ko} />
         {item.ranges?.length > 0 && <small>{item.ranges.map((range) => `${Math.round(range.startMs / 1000)}–${Math.round(range.endMs / 1000)}s`).join(", ")}</small>}
       </div>)}</div>
-      {record.agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
     </section>}
     <div className="history-review-meta"><span><CalendarDays size={13} /> {record.date} · {record.duration}</span><span className={`severity-pill ${severity(Number(record.stressAverage))}`}>{ko ? "평균 스트레스" : "Average stress"} {record.stressAverage}</span></div>
     <div className="history-review-video">
       {record.videoUrl ? <><video ref={videoRef} controls playsInline preload="metadata" src={record.videoUrl} onLoadedMetadata={(event) => checkVideoDuration(event.currentTarget)} onDurationChange={(event) => restoreVideoStart(event.currentTarget)} onError={() => setPlaybackError(true)} />{playbackError && <p role="alert" className="error-msg">{ko ? "영상 재생에 실패했습니다. 페이지를 새로고침해 재시도해 주세요." : "Playback failed. Refresh the page to retry."}</p>}</> : <div className="history-video-empty"><Film size={24} /><strong>{record.videoPath ? (ko ? "영상 불러오기 실패" : "Could not load video") : (ko ? "저장된 영상이 없습니다" : "No saved video")}</strong><span>{record.videoPath ? (ko ? "영상 경로는 저장되어 있지만 접근할 수 없습니다. 저장소 권한을 확인해 주세요." : "The video path exists but cannot be accessed. Check storage permissions.") : (ko ? "이 기록에는 영상 경로가 없습니다. 당시 녹화 또는 업로드가 완료되지 않았을 수 있습니다." : "This record has no video path. Recording or upload may not have completed.")}</span>{record.videoError && <small>{record.videoError}</small>}</div>}
     </div>
     <div className="history-review-section"><div className="history-review-section-head"><div><strong>{ko ? "스트레스 진행바" : "Stress timeline"}</strong><span>{record.videoUrl ? (ko ? "구간을 누르면 영상의 해당 시점으로 이동합니다" : "Select a segment to jump to that moment in the video") : (ko ? "영상 없이도 스트레스 구간을 확인할 수 있습니다" : "Stress moments are available without video")}</span></div><strong className="history-peak">{peak ? `${peak}% ${ko ? "최고" : "peak"}` : "–"}</strong></div><Timeline values={record.timeline} onSelect={record.videoUrl ? seekToBin : undefined} /><div className="video-timeline-legend"><span><i className="low" />{ko ? "좋음" : "Good"}</span><span><i className="mid" />{ko ? "보완 필요" : "Needs attention"}</span><span><i className="high" />{ko ? "스트레스 높음" : "High stress"}</span></div></div>
-    <div className="history-review-coaching"><div className="coach-card coach-alert"><h3>{ko ? "세션 결과" : "Session result"}</h3><p>{localizeRecordText(record.result, t)}</p></div><div className="coach-card coach-data"><h3>{ko ? "AI 진단" : "AI diagnosis"}</h3><p>{localizeRecordText(record.diagnosis, t)}</p></div><div className="coach-card coach-ok"><h3>{ko ? "다음 연습 포인트" : "Next practice focus"}</h3><p>{localizeRecordText(record.nextAction, t)}</p></div></div>
+    {!record.agentReport && <div className="history-review-coaching"><div className="coach-card coach-alert"><h3>{ko ? "세션 결과" : "Session result"}</h3><p>{localizeRecordText(record.result, t)}</p></div><div className="coach-card coach-data"><h3>{ko ? "AI 진단" : "AI diagnosis"}</h3><p>{localizeRecordText(record.diagnosis, t)}</p></div><div className="coach-card coach-ok"><h3>{ko ? "다음 연습 포인트" : "Next practice focus"}</h3><p>{localizeRecordText(record.nextAction, t)}</p></div></div>}
     <section className="history-review-section" style={{ marginTop: 16 }}>
       <h3>{ko ? "구간별 스트레스 분석" : "Stress by phase"}</h3>
       <p>{ko ? "전체 연습 시간을 네 구간으로 나눈 요약입니다. 그래프 범위는 0~100%입니다." : "The session is divided into four equal phases. Chart range: 0–100%."}</p>
@@ -122,7 +125,9 @@ export function SessionHistory() {
   const selected = records.find((record) => record.id === selectedId);
   const average = useMemo(() => records.length ? records.reduce((sum, record) => sum + Number(record.stressAverage), 0) / records.length : 0, [records]);
   const videoCount = records.filter((record) => record.videoUrl).length;
-  const latestPeak = records[0]?.timeline.length ? Math.max(...records[0].timeline) : 0;
+  const latestPeak = records[0]?.agentReport?.observationReport?.peakSegment
+    ? Math.round(records[0].agentReport.observationReport.peakSegment.stressScore * 100)
+    : records[0]?.timeline.length ? Math.max(...records[0].timeline) : 0;
   async function handleDelete(record: SessionHistoryRecord) {
     const message = ko
       ? `“${record.title}” 기록을 삭제할까요? 저장된 영상도 함께 삭제되며 되돌릴 수 없습니다.`

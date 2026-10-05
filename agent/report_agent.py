@@ -11,10 +11,11 @@ import os
 import re
 from textwrap import dedent
 from typing import Callable
+from statistics import median
 
 from .report_schema import Evidence, ReviewRequest, Synthesis
-from .session_analyzer import analyze_session, describe_observations, metric
-from .decision_agent import build_memory, run_agent
+from .session_analyzer import MEASUREMENT_INFO, RESEARCHABLE_IDS, _independent_count, analyze_session, describe_observations, metric
+from .decision_agent import _prior_candidate, build_memory, run_agent
 
 # 1. 설정값과 시간 표기 도우미
 logger = logging.getLogger(__name__)
@@ -313,46 +314,99 @@ def _analysis_status(request: ReviewRequest, summary: dict,
     return "no_significant_finding"
 
 
-def _empty_report_message(status: str, ko: bool, has_candidates: bool) -> str:
-    if status == "no_significant_finding":
-        return ("분석은 정상적으로 완료되었습니다. 이번 발표에서는 뚜렷하게 개선이 필요한 항목이 확인되지 않았습니다. "
-                "관측된 결과만으로 특정 특징을 개선 대상으로 정하지 않았습니다." if ko else
-                "Analysis completed. No clear improvement item was identified in this presentation. "
-                "The observations did not justify selecting a specific feature to improve.")
-    if has_candidates:
-        return ("분석은 정상적으로 완료되었습니다. 일부 변화가 관측되었지만 측정 품질이나 반복 관측 등 근거가 "
-                "충분하지 않아 신뢰할 수 있는 개선 포인트로 확정하지 않았습니다." if ko else
-                "Analysis completed. Some changes were observed, but measurement quality, repetition, "
-                "or supporting evidence was insufficient to confirm a reliable improvement item.")
-    return ("분석은 정상적으로 완료되었습니다. 이번 발표에서는 신뢰할 수 있는 개선 포인트를 특정하기에 "
-            "관측 자료가 충분하지 않았습니다." if ko else
-            "Analysis completed. There was not enough usable observation data to identify a reliable improvement item.")
-
-
-def _observed_summary(observations: dict, status: str, ko: bool,
-                      has_candidates: bool, decision_unavailable: bool) -> str:
-    """Lead with measured session facts; keep coaching eligibility separate."""
+def _observed_summary(observations: dict, ko: bool) -> str:
+    """Describe an actual interval comparison without judging delivery quality."""
     peak = observations["peakSegment"]
-    if observations["observedMs"] and peak:
+    patterns = observations["patterns"]
+    if peak and patterns:
+        pattern = patterns[0]
+        label = pattern["label"].split(" / ")[0 if ko else 1]
+        unit = f" {pattern['unit']}" if pattern["unit"] else ""
         if ko:
-            factual = (f"관측된 {observations['observedMs'] / 1000:.0f}초 구간의 평균 모델 스트레스 점수는 "
-                       f"{observations['averageStressScore'] * 100:.0f}/100입니다. "
-                       f"가장 높은 관측 구간은 {_clock(peak['startMs'])}–{_clock(peak['endMs'])} "
-                       f"({peak['stressScore'] * 100:.0f}/100)입니다. ")
+            return (f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])} 구간에서 모델 스트레스 점수가 "
+                    f"이번 발표 중 가장 높았습니다. 같은 구간의 {label}는 {pattern['value']:.2f}{unit}로, "
+                    f"다른 분석 구간의 중앙값 {pattern['comparisonValue']:.2f}{unit}와 차이가 있었습니다.")
         else:
-            factual = (f"Across {observations['observedMs'] / 1000:.0f} observed seconds, the mean model stress "
-                       f"score was {observations['averageStressScore'] * 100:.0f}/100. "
-                       f"The highest observed interval was {_clock(peak['startMs'])}–{_clock(peak['endMs'])} "
-                       f"({peak['stressScore'] * 100:.0f}/100). ")
-    else:
-        factual = ("분석 가능한 음성·영상 구간이 없습니다. " if ko else
-                   "No usable audio or video interval was available. ")
-    if decision_unavailable:
-        outcome = ("Agent 판단이 중단되어 개선점은 확정하지 못했습니다." if ko else
-                   "The Agent could not finish evaluating an improvement item.")
-    else:
-        outcome = _empty_report_message(status, ko, has_candidates)
-    return factual + outcome
+            return (f"The model stress score was highest at {_clock(peak['startMs'])}–{_clock(peak['endMs'])}. "
+                    f"{label} measured {pattern['value']:.2f}{unit} there, compared with a median of "
+                    f"{pattern['comparisonValue']:.2f}{unit} in other analysis windows.")
+    if peak:
+        if not observations["features"]:
+            return (f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])} 구간의 모델 스트레스 점수가 이번 발표에서 가장 높았습니다. "
+                    "비교할 음성·영상 측정값은 수집되지 않았습니다." if ko else
+                    f"The model stress score was highest at {_clock(peak['startMs'])}–{_clock(peak['endMs'])}. "
+                    "No audio or video features were available for comparison.")
+        return (f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])} 구간의 모델 스트레스 점수가 이번 발표에서 가장 높았습니다. "
+                "음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다." if ko else
+                f"The model stress score was highest at {_clock(peak['startMs'])}–{_clock(peak['endMs'])}. "
+                "The measured audio and video features showed no clear interval difference.")
+    return ("분석 가능한 음성·영상 구간이 없습니다. 카메라와 마이크 상태를 확인해 주세요." if ko else
+            "No usable audio or video interval was available. Check the camera and microphone.")
+
+
+def _practice_focus(observations: dict, ko: bool) -> str:
+    pattern = next(iter(observations["patterns"]), None)
+    peak = observations["peakSegment"]
+    if pattern:
+        label = pattern["label"].split(" / ")[0 if ko else 1]
+        interval = f"{_clock(pattern['startMs'])}–{_clock(pattern['endMs'])}"
+        if pattern["id"] == "gaze":
+            return (f"{interval} 구간의 영상을 보며 시선이 실제로 어디를 향했는지 확인하세요. "
+                    "같은 대목을 카메라를 보며 한 번 더 녹화하고 비교해 보세요." if ko else
+                    f"Watch {interval} to see where your gaze actually went. "
+                    "Record the same passage once more while looking at the camera, then compare.")
+        if pattern["id"] in {"lip_tension", "brow_tension"}:
+            return (f"{interval} 구간의 영상을 보며 {label} 변화가 어떤 표정·발화와 함께 나타났는지 확인하세요. "
+                    "같은 대목을 다시 녹화해 표정과 전달이 달라지는지 비교해 보세요." if ko else
+                    f"Watch {interval} and check which expression or speech coincided with the change in {label}. "
+                    "Record the same passage again and compare the visible expression and delivery.")
+        return (f"{interval} 구간을 다시 보며 {label} 변화가 전달하려던 강조와 맞는지 확인하세요. "
+                "같은 문장을 한 번 더 녹음해 두 구간의 소리·영상을 비교해 보세요." if ko else
+                f"Review {interval} and check whether the change in {label} matches your intended emphasis. "
+                "Record the same passage once more and compare both takes.")
+    if peak:
+        interval = f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])}"
+        return (f"{interval} 구간의 실제 녹화를 보고 전달이 흐려진 지점이 있는지 표시한 뒤, "
+                "그 부분을 다시 녹화해 비교해 보세요." if ko else
+                f"Review the recording at {interval}, mark any passage that sounds unclear, "
+                "then rerecord and compare that passage.")
+    return ("카메라와 마이크를 확인한 뒤 발표를 다시 녹화해 보세요." if ko else
+            "Check the camera and microphone, then record another presentation.")
+
+
+def _previous_observation(request: ReviewRequest, observations: dict,
+                          prior: dict | None, model_version: str) -> dict | None:
+    """Compare the same feature only when the stored structured memory is comparable."""
+    pattern = next(iter(observations["patterns"]), None)
+    if not pattern or not prior:
+        return None
+    identity = pattern["id"]
+    modality, key = next((pair for pair, entry in MEASUREMENT_INFO.items()
+                          if entry[0] == identity), (None, None))
+    if modality is None:
+        return None
+    prior_records = prior.get("history") if isinstance(prior.get("history"), list) else [prior]
+    previous_records = []
+    for record in prior_records[:5]:
+        if not isinstance(record, dict) or not isinstance(record.get("durationMs"), (int, float)):
+            continue
+        if not .5 <= request.durationMs / max(record["durationMs"], 1) <= 2:
+            continue
+        candidate = _prior_candidate(record, identity, model_version, request.sceneLabel)
+        if candidate and candidate.get("metric") == key:
+            previous_records.append((record, candidate))
+    if not previous_records:
+        return None
+    valid = [segment for segment in request.segments if metric(segment, modality, key) is not None]
+    if _independent_count(valid) < 2:
+        return None
+    current = round(median(metric(segment, modality, key) for segment in valid), 4)
+    previous_value = round(median(item["observedValue"] for _, item in previous_records), 4)
+    return {"metricId": identity, "previousSessionId": previous_records[0][0]["sessionId"],
+            "previousSessionCount": len(previous_records),
+            "previousValue": previous_value, "currentValue": current,
+            "difference": round(current - previous_value, 4),
+            "unit": pattern["unit"], "label": pattern["label"]}
 
 
 # 5. Luxia 응답 처리와 행동·보고서 요청
@@ -561,6 +615,9 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     # 1. Whole-session measurements. 2. Inventory of valid model outputs.
     summary, candidates = analyze_session(request)
     observation_report = describe_observations(request, summary)
+    observation_report["practiceFocus"] = _practice_focus(observation_report, request.language == "ko")
+    observation_report["previousComparison"] = _previous_observation(
+        request, observation_report, prior_memory, model_version)
     # 3. The Agent chooses what to inspect; preprocessing assigns no priority.
     agent_state = (run_agent(request, summary, candidates, rag=rag, decide=decide,
                              prior=prior_memory, model_version=model_version,
@@ -591,6 +648,24 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     evidence = {}
     search_results = {}
     hits_by_issue = {}
+    observation_evidence_ids = []
+    focus = next(iter(observation_report["patterns"]), None)
+    if focus and rag is not None and not priorities and focus["id"] in RESEARCHABLE_IDS:
+        try:
+            query = next(info[2] for info in MEASUREMENT_INFO.values() if info[0] == focus["id"])
+            retriever = getattr(rag, "retrieve_issue_evidence", None)
+            raw = (retriever(focus["id"], query, k=3) if retriever else
+                   rag.retrieve_evidence(query, k=3))
+            for entry in raw:
+                hit = Evidence.model_validate(entry)
+                if (_eligible_evidence(focus["id"], hit)
+                        and hit.applicability == "direct" and focus["id"] in hit.topics):
+                    evidence[hit.id] = hit.model_dump()
+                    observation_evidence_ids.append(hit.id)
+                    if len(observation_evidence_ids) == 2:
+                        break
+        except Exception as error:
+            logger.warning("Observation research unavailable (%s)", type(error).__name__)
     for issue in priorities:
         hits = []
         if agent_state is not None:
@@ -768,8 +843,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
         verification["summaryFallbackUsed"] = True
     analysis_status = _analysis_status(request, summary, candidates, priorities, agent_state)
     summary_text = ((synthesis.summary if synthesis and not summary_fallback_used else fallback_summary) if priorities else
-                    _observed_summary(observation_report, analysis_status, ko, bool(candidates),
-                                      agent_state is not None and agent_state.stop_reason == "decision_unavailable"))
+                    _observed_summary(observation_report, ko))
     verification["claims"] = [{
         "kind": "summary", "claim": summary_text,
         "segmentIds": sorted({row["segmentId"] for issue in priorities
@@ -812,6 +886,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
         "summaryFallbackUsed": summary_fallback_used,
         "summaryText": summary_text,
         "analysis": summary, "observationReport": observation_report,
+        "observationEvidenceIds": observation_evidence_ids,
         "candidateCount": len(candidates), "priorities": priorities,
         "evidence": list(evidence.values()), "limitations": warnings,
         "researchActions": research_actions,

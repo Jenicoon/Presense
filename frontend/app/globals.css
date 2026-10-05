@@ -1324,6 +1324,20 @@ h1, h2, h3 { margin: 0; }
 .coach-data { background: var(--accent-light); border-color: rgba(37,99,235,0.2); }
 .coach-data h3 { color: var(--accent); }
 
+.observation-section { margin-top: 14px; }
+.observation-section > strong { display: block; margin-bottom: 8px; font-size: 12px; }
+.observation-bars { display: grid; gap: 8px; }
+.observation-bar-row { display: grid; grid-template-columns: minmax(90px, 140px) minmax(50px, 1fr) 38px; align-items: center; gap: 8px; font-size: 12px; }
+.observation-bar-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.observation-bar-track { height: 9px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.observation-bar-fill { height: 100%; border-radius: inherit; background: var(--accent); }
+.observation-table-wrap { overflow-x: auto; }
+.observation-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.observation-table th, .observation-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.observation-table th { color: var(--text-secondary); font-weight: 600; }
+.observation-table td:not(:first-child) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.report-panel-title { margin: 8px 0 2px; font-size: 16px; }
+
 /* ─── Report cards ─── */
 .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 

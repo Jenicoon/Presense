@@ -27,7 +27,12 @@ export type AgentReport = {
     stressTimeline: Array<{ startMs: number; endMs: number; stressScore: number }>;
     concepts: Array<{ name: string; meanValue: number; observations: number }>;
     features: Array<{ id: string; label: string; meanValue: number; minValue: number; maxValue: number; observations: number; unit: string }>;
+    patterns?: Array<{ id: string; label: string; startMs: number; endMs: number; value: number; comparisonValue: number; difference: number; unit: string; comparisonCount: number }>;
+    modelWindowCount?: number;
+    practiceFocus?: string;
+    previousComparison?: { metricId: string; previousSessionId: string; previousSessionCount?: number; previousValue: number; currentValue: number; difference: number; unit: string; label: string } | null;
   };
+  observationEvidenceIds?: string[];
   priorities: Array<{
     id: string;
     label: string;
@@ -49,6 +54,7 @@ export function agentNextPractice(report: AgentReport, ko: boolean): string {
   const finding = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
   const recommendation = finding?.practiceSuggestion || finding?.reviewAction || finding?.recommendation;
   if (recommendation) return recommendation;
+  if (report.observationReport?.practiceFocus) return report.observationReport.practiceFocus;
   if (!report.observationReport?.peakSegment) {
     return ko ? "카메라와 마이크를 확인한 뒤 다시 발표를 녹화해 보세요." :
       "Check the camera and microphone, then record another presentation.";

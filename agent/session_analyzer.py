@@ -174,6 +174,34 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
                              "maxValue": round(max(values), 4),
                              "observations": len(values),
                              "unit": "Hz" if key in {"f0_mean", "f0_std"} else ""})
+
+    patterns = []
+    if peak:
+        for (modality, key), (identity, label, _) in MEASUREMENT_INFO.items():
+            focus_value = metric(peak, modality, key)
+            others = [metric(segment, modality, key) for segment in usable
+                      if segment.segmentId != peak.segmentId]
+            others = [value for value in others if value is not None]
+            if focus_value is None or not others:
+                continue
+            reference = median(others)
+            delta = focus_value - reference
+            if abs(delta) < 1e-6:
+                continue
+            scale = max(abs(reference), {"f0_mean": 100, "f0_std": 20}.get(key, .15))
+            if abs(delta) / scale < .1:
+                continue
+            patterns.append({"id": identity, "label": label,
+                             "startMs": peak.startMs, "endMs": peak.endMs,
+                             "value": round(focus_value, 4),
+                             "comparisonValue": round(reference, 4),
+                             "difference": round(delta, 4),
+                             "unit": "Hz" if key in {"f0_mean", "f0_std"} else "",
+                             "comparisonCount": len(others),
+                             "relativeChange": abs(delta) / scale})
+    patterns.sort(key=lambda row: (-row["relativeChange"], row["id"]))
+    for pattern in patterns:
+        pattern.pop("relativeChange")
     return {
         "observedMs": summary["observedMs"], "coverage": summary["coverage"],
         "averageStressScore": summary["averageStress"],
@@ -182,4 +210,5 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
                         if peak else None),
         "stressTimeline": summary["timeline"],
         "concepts": concepts, "features": features,
+        "patterns": patterns[:2], "modelWindowCount": len(usable),
     }

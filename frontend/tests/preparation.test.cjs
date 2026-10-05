@@ -87,6 +87,28 @@ function loadFunction(name, env) {
   return new Function(...Object.keys(env), `${code}; return ${name};`)(...Object.values(env));
 }
 
+test('report response makes the session summary use the same model average and peak', async () => {
+  let report = { averageStress: 0.45, peakValue: 60, peakBin: 0, peakPhase: 'Open' };
+  let received;
+  const request = { sessionId: 'same', durationMs: 40000 };
+  const generate = loadFunction('requestAgentReport', {
+    reportRequestRef: { current: request }, sessionIdRef: { current: 'same' },
+    setAgentReportLoading() {}, setAgentReportError() {},
+    generateAgentReport: async () => ({ observationReport: {
+      averageStressScore: 0.71,
+      peakSegment: { startMs: 19000, endMs: 29000, stressScore: 0.78 },
+    } }),
+    setAgentReport: (value) => { received = value; },
+    setReport: (update) => { report = update(report); },
+    PHASES: ['Open', 'Build', 'Core', 'Close'], lang: 'ko',
+  });
+  await generate();
+  assert.equal(received.observationReport.averageStressScore, report.averageStress);
+  assert.equal(report.peakValue, 78);
+  assert.equal(report.peakBin, 5);
+  assert.equal(report.peakPhase, 'Build');
+});
+
 test('video collection fills its 16-frame window in 10 seconds', async () => {
   let tick, interval;
   const frames = { current: [] };

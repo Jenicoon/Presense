@@ -88,6 +88,7 @@ def load_recent_memory(supabase_url: str, publishable_key: str, token: str,
         rows = response.json()
         if not isinstance(rows, list):
             return None
+        memories = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -96,7 +97,9 @@ def load_recent_memory(supabase_url: str, publishable_key: str, token: str,
             if isinstance(memory, dict) and memory.get("sessionId") == report.get("sessionId"):
                 validated = _validated_memory(memory)
                 if validated is not None:
-                    return validated
+                    memories.append(validated)
+        if memories:
+            return {**memories[0], "history": memories}
     except (requests.RequestException, ValueError, TypeError) as error:
         logger.warning("Previous agent memory unavailable (%s)", type(error).__name__)
     return None

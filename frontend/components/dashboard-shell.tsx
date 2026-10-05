@@ -718,6 +718,16 @@ export function DashboardShell() {
       const result = await generateAgentReport(request);
       if (sessionIdRef.current !== request.sessionId) return;
       setAgentReport(result);
+      const observation = result.observationReport;
+      if (observation?.averageStressScore !== null && observation?.averageStressScore !== undefined && observation.peakSegment) {
+        const peakBin = Math.min(11, Math.floor(observation.peakSegment.startMs / request.durationMs * 12));
+        setReport((current) => current && ({ ...current,
+          averageStress: observation.averageStressScore!,
+          peakValue: Math.round(observation.peakSegment!.stressScore * 100),
+          peakBin,
+          peakPhase: PHASES[Math.floor(peakBin / 3)],
+        }));
+      }
     } catch (error) {
       if (sessionIdRef.current !== request.sessionId) return;
       setAgentReportError(error instanceof Error ? error.message : (lang === "ko" ? "보고서를 생성하지 못했습니다." : "Could not generate the report."));
@@ -744,7 +754,10 @@ export function DashboardShell() {
       return;
     }
 
-    const sessionTimeline = buildSessionTimeline(stressHistoryRef.current);
+    const reportSegments = reportSegmentsRef.current;
+    const sessionTimeline = SIGNAL_SOURCE === "live" && reportSegments.length
+      ? buildSessionTimeline(reportSegments.map((item) => item.stressScore))
+      : buildSessionTimeline(stressHistoryRef.current);
     const avg = sessionTimeline.reduce((s, v) => s + v, 0) / sessionTimeline.length / 100;
     const { peakValue, peakBin, peakPhase, mostStressfulPhase } = summarizeTimeline(sessionTimeline);
     setTimeline(sessionTimeline);
@@ -1128,7 +1141,7 @@ export function DashboardShell() {
                 <Waves size={16} color="var(--text-secondary)" />
               </div>
               <StressChart series={timeline} />
-              <p className="signal-note">{lang === "ko" ? `첫 지점은 이번 세션의 시작 전 준비 기준값(${Math.round(report.startBaseline * 100)}%)이며, 요약 통계에도 포함됩니다.` : `The first point is this session's pre-start baseline (${Math.round(report.startBaseline * 100)}%), included in summary statistics.`}</p>
+              {SIGNAL_SOURCE !== "live" && <p className="signal-note">{lang === "ko" ? `첫 지점은 이번 세션의 시작 전 준비 기준값(${Math.round(report.startBaseline * 100)}%)이며, 요약 통계에도 포함됩니다.` : `The first point is this session's pre-start baseline (${Math.round(report.startBaseline * 100)}%), included in summary statistics.`}</p>}
               {recordedVideoUrl && (
                 <div className="session-video-review">
                   <video ref={sessionVideoRef} controls playsInline src={recordedVideoUrl} />
@@ -1173,10 +1186,10 @@ export function DashboardShell() {
                   <h3>{t("report.peakPoint")}</h3>
                   <p>{peakText(report)}</p>
                 </div>
-                <div className="coach-card coach-ok">
+                {!agentReport && <div className="coach-card coach-ok">
                   <h3>{t("report.nextStep")}</h3>
-                  <p>{agentReport ? agentNextPractice(agentReport, lang === "ko") : t("report.nextActionText")}</p>
-                </div>
+                  <p>{t("report.nextActionText")}</p>
+                </div>}
               </div>
             </div>
           </div>
@@ -1207,11 +1220,11 @@ export function DashboardShell() {
                   <div className="rc-value" style={{ fontSize: 16, lineHeight: 1.3 }}>{reportPhaseText}</div>
                   <div className="rc-desc">{t("report.mostStressfulPhaseDesc")}</div>
                 </div>
-                <div className="report-card">
+                {!agentReport && <div className="report-card">
                   <div className="rc-label">{t("report.nextStep")}</div>
-                  <div className="rc-value" style={{ fontSize: 14, lineHeight: 1.4 }}>{agentReport ? agentNextPractice(agentReport, lang === "ko") : t("report.nextActionText")}</div>
+                  <div className="rc-value" style={{ fontSize: 14, lineHeight: 1.4 }}>{t("report.nextActionText")}</div>
                   <div className="rc-desc">{t("report.nextStepDesc")}</div>
-                </div>
+                </div>}
               </div>
 
               <div className="report-meta">
@@ -1224,10 +1237,9 @@ export function DashboardShell() {
                 {agentReportLoading && <p role="status">{lang === "ko" ? "구간별 분석 보고서를 생성하고 있습니다…" : "Generating the segment analysis report…"}</p>}
                 {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
                 {agentReport && <>
-                  <div className="coach-card coach-data"><h3>{lang === "ko" ? "AI 분석 보고서" : "AI analysis report"}</h3><p>{agentReport.summaryText}</p></div>
+                  <h3 className="report-panel-title">{lang === "ko" ? "AI 분석 보고서" : "AI analysis report"}</h3>
                   <AgentObservationReport report={agentReport} ko={lang === "ko"} />
                   {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}<AgentEvidence report={agentReport} ids={item.evidenceIds} ko={lang === "ko"} /></div>)}
-                  {agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
                   {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}
               </div>}

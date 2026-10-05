@@ -363,15 +363,16 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["status"], "complete")
         self.assertEqual(report["analysisStatus"], "insufficient_evidence")
         self.assertEqual(report["synthesisStatus"], "not_required")
-        self.assertIn("분석은 정상적으로 완료", report["summaryText"])
-        self.assertIn("측정 품질이나 반복 관측", report["summaryText"])
+        self.assertIn("평균 목소리 높이", report["summaryText"])
+        self.assertIn("170.00 Hz", report["summaryText"])
         self.assertIn("00:30–00:40", report["summaryText"])
         self.assertEqual(report["observationReport"]["peakSegment"]["segmentId"], "measured")
         self.assertTrue(report["observationReport"]["concepts"])
         self.assertTrue(report["observationReport"]["features"])
         self.assertEqual(report["priorities"], [])
         self.assertEqual(report["claimVerification"]["claims"][0]["status"], "outcome_explanation")
-        self.assertEqual(rag.queries, [])
+        self.assertEqual([item[0] for item in rag.queries], ["pitch_change"])
+        self.assertEqual(report["observationEvidenceIds"], ["pitch_change:1:0"])
         self.assertNotIn("AI 종합 분석이 설정되지", " ".join(report["limitations"]))
 
     def test_clean_session_agent_sees_measurements_and_reports_no_significant_finding(self):
@@ -384,7 +385,7 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["analysisStatus"], "no_significant_finding")
         self.assertEqual(report["status"], "complete")
         self.assertEqual(report["synthesisStatus"], "not_required")
-        self.assertIn("뚜렷하게 개선이 필요한 항목이 확인되지 않았습니다", report["summaryText"])
+        self.assertIn("음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다", report["summaryText"])
         self.assertEqual(report["priorities"], [])
 
     def test_unavailable_decision_service_does_not_fake_a_completed_analysis(self):
@@ -392,7 +393,23 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["agentRun"]["stopReason"], "decision_unavailable")
         self.assertEqual(report["status"], "limited")
         self.assertEqual(report["priorities"], [])
-        self.assertIn("Agent 판단이 중단", report["summaryText"])
+        self.assertIn("00:30–00:40", report["summaryText"])
+
+    def test_observation_report_uses_comparable_previous_record(self):
+        prior = {"sessionId": "previous", "modelVersion": "test-model",
+                 "metricDefinitionVersion": "session-analysis-v4", "sceneLabel": "camera",
+                 "durationMs": 50000, "candidates": [{"candidateId": "brow_tension",
+                 "metric": "brow_tension", "observedValue": .2,
+                 "observationCount": 2, "measurementQuality": 1.0}]}
+        report = generate_report(self.request(), agent_mode=True,
+                                 decide=lambda _: {"action": "finish", "priorityCandidateIds": []},
+                                 prior_memory=prior, model_version="test-model")
+        comparison = report["observationReport"]["previousComparison"]
+        self.assertEqual(comparison["previousSessionId"], "previous")
+        self.assertEqual(comparison["previousSessionCount"], 1)
+        self.assertEqual(comparison["metricId"], "brow_tension")
+        self.assertEqual(comparison["currentValue"], .1)
+        self.assertIn("00:30–00:40", report["observationReport"]["practiceFocus"])
         self.assertIn("00:30–00:40", report["summaryText"])
 
     def test_invalid_later_decisions_preserve_checked_measurements_without_advice(self):
@@ -420,7 +437,7 @@ class DecisionAgentTests(unittest.TestCase):
         report = generate_report(request, agent_mode=True)
         self.assertEqual(report["analysis"]["coverage"], 1)
         self.assertEqual(report["analysisStatus"], "insufficient_evidence")
-        self.assertIn("관측 자료가 충분하지 않았습니다", report["summaryText"])
+        self.assertIn("비교할 음성·영상 측정값은 수집되지 않았습니다", report["summaryText"])
 
     def test_low_quality_concept_request_is_rejected_before_fallback_finish(self):
         windows = [segment(f"base-{n}", n * 10000, (n + 1) * 10000, .3, pitch=120)
@@ -799,6 +816,30 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertNotIn("action", memory["focusGoal"])
         self.assertEqual(get.call_args.kwargs["params"]["user_id"], "eq.user-1")
         self.assertEqual(get.call_args.kwargs["headers"]["Authorization"], "Bearer secret")
+
+    def test_memory_load_preserves_multiple_valid_structured_sessions(self):
+        def report(identity, value):
+            return {"sessionId": identity, "agentMemory": {
+                "sessionId": identity, "modelVersion": "v1", "metricDefinitionVersion": "session-analysis-v4",
+                "sceneLabel": "camera", "durationMs": 50000,
+                "candidates": [{"candidateId": "brow_tension", "metric": "brow_tension",
+                                "observedValue": value, "observationCount": 2,
+                                "measurementQuality": 1.0}], "focusGoal": None}}
+        class Response:
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return [{"agent_report": report("recent", .2)},
+                        {"agent_report": report("older", .4)}]
+        with patch("server.agent_memory.requests.get", return_value=Response()):
+            prior = load_recent_memory("https://example.supabase.co", "public", "secret", "user-1")
+        self.assertEqual([item["sessionId"] for item in prior["history"]], ["recent", "older"])
+        report_result = generate_report(self.request(), agent_mode=True,
+                                        decide=lambda _: {"action": "finish", "priorityCandidateIds": []},
+                                        prior_memory=prior, model_version="v1")
+        comparison = report_result["observationReport"]["previousComparison"]
+        self.assertEqual(comparison["previousSessionCount"], 2)
+        self.assertEqual(comparison["previousValue"], .3)
 
     def test_generated_memory_survives_storage_loader_and_next_session(self):
         first_request = self.request()
