@@ -1,0 +1,13 @@
+{
+  "source_model": "facebook/wav2vec2-base",
+  "target_features": "cbm_w2v_feats.npy",
+  "student_sha256": "e0e80e32e0f64dbae7ce4c178a6c9d82ef0dd860c27ef9dfa7471cfe3fb93af3",
+  "method": "train-subject ridge reconstruction of original audio feature space",
+  "ridge_alpha": 0.0001,
+  "train_count": 457,
+  "validation_count": 121,
+  "heldout_mae": 0.0044304275700207014,
+  "heldout_r2": 0.9988611538355073,
+  "heldout_cosine": 0.9997584524458656,
+  "sample_order_sha256": "0dc7d1e64605da16a2223c328af820337d11acdb5003659e9a00fd7354a6aec3"
+}

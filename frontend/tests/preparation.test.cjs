@@ -27,6 +27,9 @@ function setup(respond = async () => ({ stressScore: 0.4, confidence: 0.6 }), ov
     setLiveStatus: () => {}, setPreparationPhase: (phase) => phases.push(phase),
     setModelConnected: () => {}, SIGNAL_SOURCE: 'live',
     inferMultimodalFrame: respond, applyFrame: (frame) => results.push(frame),
+    sessionStartedAtRef: { current: performance.now() - 11_000 },
+    reportSegmentsRef: { current: [] },
+    toReportSegment: (frame, index, endMs) => ({ frame, index, endMs }),
     ...overrides,
   };
   return { request: new Function(...Object.keys(env), `${js}; return requestLiveFrame;`)(...Object.values(env)), results, phases, refs };

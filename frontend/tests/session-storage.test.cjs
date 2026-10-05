@@ -11,7 +11,8 @@ const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../lib/sup
 function setup(options = {}) {
   const events = [];
   const row = { id: 'record', title: 'Practice', session_date: '2026-09-09', duration_seconds: 30,
-    result: 'Stable', stress_average: 0.4, diagnosis: 'Analysis', timeline: [20, 40], video_path: 'user/video.webm' };
+    result: 'Stable', stress_average: 0.4, diagnosis: 'Analysis', timeline: [20, 40], video_path: 'user/video.webm',
+    agent_report: options.agentReport ?? null };
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: 'user' } }, error: null }) },
     storage: { from: () => ({
@@ -63,6 +64,15 @@ test('analysis-only save does not upload video', async () => {
   await api.savePracticeSession({ ...input, video: null });
   assert.equal(events[0][0], 'presentation_records');
   assert.equal(events[0][1].video_path, null);
+});
+test('generated report is stored with its session and returned in history', async () => {
+  const report = { schemaVersion: '1.0', sessionId: 'session-report', summaryText: 'Observed voice change.', priorities: [] };
+  const { api, events } = setup({ agentReport: report });
+  await api.savePracticeSession({ ...input, id: report.sessionId, agentReport: report, video: null });
+  assert.equal(events[0][1].id, report.sessionId);
+  assert.deepEqual(events[0][1].agent_report, report);
+  const [record] = await api.loadSessionHistory();
+  assert.deepEqual(record.agentReport, report);
 });
 test('summary failure after persistence is a warning, not a failed save', async () => {
   const { api } = setup({ summaryThrows: true });

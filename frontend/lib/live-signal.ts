@@ -12,6 +12,10 @@ export type LiveInferenceFrame = {
   /** Max class probability of the binary softmax output, 0.5..1 (Progress Report §2.3). */
   confidence: number;
   timestampMs: number;
+  concepts?: Record<string, number>;
+  audioFeatures?: Record<string, number | string | boolean>;
+  videoFeatures?: Record<string, number | string | boolean>;
+  quality?: { faceDetected: boolean; audioValid: boolean };
 };
 
 export type SignalSource = "simulated" | "live";
@@ -60,6 +64,10 @@ export async function inferMultimodalFrame(
     stressScore: data.stressScore,
     confidence: data.confidence,
     timestampMs: Date.now(),
+    concepts: data.concepts ?? {},
+    audioFeatures: data.audioFeatures ?? {},
+    videoFeatures: data.videoFeatures ?? {},
+    quality: data.quality ?? { faceDetected: false, audioValid: false },
   };
 }
 

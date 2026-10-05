@@ -76,4 +76,8 @@ def predict(video_frames: np.ndarray, audio_samples: np.ndarray, task_name: str 
         "concepts": concepts,
         "audioFeatures": audio_features,
         "videoFeatures": video_features,
+        "quality": {
+            "faceDetected": bool(video_features.get("face_detected", False)),
+            "audioValid": bool(np.sqrt(np.mean(np.square(audio_samples.astype(np.float64)))) > 1e-4),
+        },
     }

@@ -1,89 +1,30 @@
-# PreSense Inference Server
+# PreSense inference and report server
 
-Wraps the End-to-End **Student** model from [`models/models_e2e.py`](../models/models_e2e.py)
-and exposes it to the frontend as a real-time stress/confidence endpoint
-(Progress Report §1.2.2, §1.3.5, §3.3).
+The FastAPI server exposes authenticated live inference, Agent chat, and a post-presentation report.
 
-## What it does
+## Run locally
 
-- Loads `E2EStudentModel` (ResNet18 + Wav2Vec2 encoders + classifier head).
-- Receives a webcam frame from the frontend, runs a real forward pass, and
-  returns `{ stressScore, confidence }`.
-- Audio is sent as a zero waveform for now (valid silent-sample fallback); the
-  video path is fully real.
-
-## ⚠️ About accuracy
-
-The ResNet18 / Wav2Vec2 encoders use **pretrained** weights, so features are
-real — but the **classifier head is untrained** until you provide a checkpoint.
-Without one, `stressScore` is essentially arbitrary. This is expected: the repo
-ships model *code*, not trained weights (`checkpoints/` is gitignored).
-
-The server auto-loads `checkpoints/student_kd/student_kd_best.pt` if present (its
-key structure — `video_enc` + `audio_enc` + `classifier`, no physio/LSTM — is
-verified to match `E2EStudentModel`). Override with another file via:
+From the repository root:
 
 ```bash
-export PRESENSE_CHECKPOINT=/path/to/student.pt   # Windows: $env:PRESENSE_CHECKPOINT="..."
-```
-
-Note: `hybrid_teacher_best.pt` is the Teacher (has physio + LSTM) — do **not**
-use it here; it won't match the Student architecture.
-
-The loader accepts either a raw `state_dict` or `{"model": state_dict}` and uses
-`strict=False`, so partial checkpoints still load.
-
-## Run
-
-```bash
+./.venv/bin/pip install -r server/requirements.txt
 cd server
-pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 8000
+../.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
 ```
 
-First start downloads ResNet18 (~45 MB) and Wav2Vec2-base (~360 MB).
+Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `LUXIA_API_KEY` in `server/.env`. Keep the Luxia key on the server. Set `NEXT_PUBLIC_SIGNAL_SOURCE=live` and `NEXT_PUBLIC_INFERENCE_URL=http://localhost:8000` in `frontend/.env.local`. The same Supabase project must be used on both sides.
 
-## Connect the frontend
+Apply `frontend/supabase/migrations/20261006_agent_report.sql` before saving generated reports. It adds the `presentation_records.agent_report` JSON column used for history and prior-session Agent memory.
 
-Create `frontend/.env.local`:
-
-```
-NEXT_PUBLIC_SIGNAL_SOURCE=live
-NEXT_PUBLIC_INFERENCE_URL=http://localhost:8000
-```
-
-Restart `next dev`. Leave `NEXT_PUBLIC_SIGNAL_SOURCE` unset (or `simulated`) to
-keep the built-in demo signal.
-
-## Protect the inference endpoint
-
-`POST /infer` requires a valid Supabase user access token. The frontend attaches
-the signed-in user's token, and the server verifies it using the project's JWT
-signing keys. Set these values in `server/.env` (use the same project URL and
-publishable key configured for the frontend; never use a service-role key here):
-
-```dotenv
-SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_PUBLISHABLE_KEY=<publishable-key>
-LUXIA_API_KEY=<luxia-api-key>
-```
-
-`LUXIA_API_KEY` stays on the inference server. The workspace sidebar opens an
-AI Agent panel on any authenticated page. It loads up to five recent sessions
-from Supabase, lets the user select one for focused discussion, and sends their
-summary data with authenticated chat requests to `POST /agent/chat`. The report
-can also open the panel with the just-finished session. The browser never
-receives the Luxia key. Restart the server after changing `server/.env`.
-
-The Netlify production origin `https://hyupresense.netlify.app` is allowed by
-default. Add other exact browser origins, comma-separated, with
-`PRESENSE_ALLOWED_ORIGINS` if needed. CORS is not authentication; `/infer`
-validates the bearer token independently.
+The model loads its Student and CBM checkpoints from `weights/`. The audio projection files and manifest in that directory must match `student_kd_best.pt`; a mismatch prevents model initialization. The paper index is optional for basic report generation. To build it locally, use `python -m agent.download_papers` followed by `python -m agent.index_papers` from the repository root.
 
 ## Endpoints
 
-| Method | Path      | Body                  | Returns                                   |
-| ------ | --------- | --------------------- | ----------------------------------------- |
-| GET    | `/health` | —                     | `{ status, checkpointLoaded }`            |
-| POST   | `/infer`  | multipart `frame` img | `{ stressScore, confidence, checkpointLoaded }` |
-| POST   | `/agent/chat` | message, optional report, recent sessions and chat history | `{ reply }` |
+| Method | Path | Input | Result |
+| --- | --- | --- | --- |
+| GET | `/health` | — | Model health |
+| POST | `/infer` | 16 frames and 16 kHz Float32 PCM audio | Stress score, model features, quality flags |
+| POST | `/agent/report` | Session metadata and model analysis segments | Structured report with summary, findings, limitations, and memory |
+| POST | `/agent/chat` | Question and recent session summaries | Coaching reply |
+
+The three POST endpoints require a valid Supabase bearer token. The frontend calls `/agent/report` after a live presentation ends, then saves the returned report with the session. If report generation fails, the presenter can retry before saving.

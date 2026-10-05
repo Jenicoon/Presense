@@ -20,11 +20,13 @@ create table if not exists public.presentation_records (
   scene_label text not null default '',
   timeline jsonb not null default '[]'::jsonb,
   video_path text,
+  agent_report jsonb,
   created_at timestamptz not null default timezone('utc', now())
 );
 
 alter table public.presentation_records add column if not exists timeline jsonb not null default '[]'::jsonb;
 alter table public.presentation_records add column if not exists video_path text;
+alter table public.presentation_records add column if not exists agent_report jsonb;
 
 insert into storage.buckets (id, name, public)
 values ('session-videos', 'session-videos', false)

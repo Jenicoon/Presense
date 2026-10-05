@@ -14,19 +14,27 @@ import cv2
 import jwt
 import numpy as np
 import requests
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from PIL import Image
 from pydantic import BaseModel, Field
 
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 from inference import get_engine, health, predict
+from agent.report_schema import ReviewRequest
+from agent.report_agent import generate_report, luxia_decide_action, luxia_synthesize
+from server.agent_memory import load_recent_memory, model_version
 
 app = FastAPI(title="PreSense Multimodal Inference Server")
 logger = logging.getLogger("presense.auth")
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3011",
+    "http://127.0.0.1:3011",
     "https://hyupresense.netlify.app",
 ]
 allowed_origins.extend(
@@ -61,7 +69,6 @@ class AgentReport(BaseModel):
     peakPhase: str
     mostStressfulPhase: str
     confidence: float
-    noticeable: bool
 
 
 class AgentHistoryMessage(BaseModel):
@@ -232,7 +239,7 @@ def chat_with_agent(
             f"Current unsaved session: starting stress {body.report.startBaseline:.0%}; "
             f"average {body.report.averageStress:.0%}; peak {body.report.peakValue}%; "
             f"peak phase {body.report.peakPhase}; highest-average phase {body.report.mostStressfulPhase}; "
-            f"model confidence {body.report.confidence:.0%}; noticeable pressure {body.report.noticeable}."
+            f"model confidence {body.report.confidence:.0%}. These are model scores, not a high-stress classification."
         )
     for index, session in enumerate(body.sessions, start=1):
         focus = " [selected session]" if session.id == body.focusSessionId else ""
@@ -274,6 +281,33 @@ def chat_with_agent(
     if not reply:
         raise HTTPException(status_code=502, detail="AI Agent returned an empty response.")
     return {"reply": reply}
+
+
+@lru_cache(maxsize=1)
+def _report_rag():
+    """Open the prebuilt local paper index; indexing runs offline."""
+    from agent.rag_db import PaperRAG
+    return PaperRAG(sync=False)
+
+
+@app.post("/agent/report")
+def create_agent_report(
+    body: ReviewRequest,
+    _user: dict = Depends(require_authenticated_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict:
+    """Run a bounded post-session agent and retain verifiable memory in its report."""
+    try:
+        rag = _report_rag()
+    except Exception as error:
+        logger.warning("Paper index unavailable (%s)", type(error).__name__)
+        rag = None
+    prior = load_recent_memory(supabase_url, supabase_publishable_key,
+                               credentials.credentials if credentials else "", _user.get("sub"))
+    return generate_report(body, rag=rag,
+                           synthesize=luxia_synthesize if luxia_api_key else None,
+                           decide=luxia_decide_action if luxia_api_key else None,
+                           prior_memory=prior, model_version=model_version(), agent_mode=True)
 
 
 @app.post("/infer")

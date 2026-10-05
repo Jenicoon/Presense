@@ -51,6 +51,16 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     <button type="button" className="modal-close" onClick={onClose} aria-label="Close session review"><X size={18} /></button>
     <div className="diagnosis-modal-eyebrow">{ko ? "세션 리뷰" : "Session review"}</div>
     <h2 id="history-review-title" className="diagnosis-modal-title">{record.title}</h2>
+    {record.agentReport && <section className="history-review-section">
+      <h3>{ko ? "Agent 보고서" : "Agent report"}</h3>
+      <p>{record.agentReport.summaryText}</p>
+      <div className="history-review-coaching">{record.agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}>
+        <h3>{item.label}</h3><p>{item.observationText}</p>
+        {(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}
+        {item.ranges?.length > 0 && <small>{item.ranges.map((range) => `${Math.round(range.startMs / 1000)}–${Math.round(range.endMs / 1000)}s`).join(", ")}</small>}
+      </div>)}</div>
+      {record.agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
+    </section>}
     <div className="history-review-meta"><span><CalendarDays size={13} /> {record.date} · {record.duration}</span><span className={`severity-pill ${severity(Number(record.stressAverage))}`}>{ko ? "평균 스트레스" : "Average stress"} {record.stressAverage}</span></div>
     <div className="history-review-video">
       {record.videoUrl ? <><video ref={videoRef} controls playsInline preload="metadata" src={record.videoUrl} onError={() => setPlaybackError(true)} />{playbackError && <p role="alert" className="error-msg">{ko ? "영상 재생에 실패했습니다. 페이지를 새로고침해 재시도해 주세요." : "Playback failed. Refresh the page to retry."}</p>}</> : <div className="history-video-empty"><Film size={24} /><strong>{record.videoPath ? (ko ? "영상 불러오기 실패" : "Could not load video") : (ko ? "저장된 영상이 없습니다" : "No saved video")}</strong><span>{record.videoPath ? (ko ? "영상 경로는 저장되어 있지만 접근할 수 없습니다. 저장소 권한을 확인해 주세요." : "The video path exists but cannot be accessed. Check storage permissions.") : (ko ? "이 기록에는 영상 경로가 없습니다. 당시 녹화 또는 업로드가 완료되지 않았을 수 있습니다." : "This record has no video path. Recording or upload may not have completed.")}</span>{record.videoError && <small>{record.videoError}</small>}</div>}

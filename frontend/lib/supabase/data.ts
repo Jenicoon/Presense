@@ -3,6 +3,7 @@ import {
   buildDefaultSectionSettings,
 } from "@/lib/app-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { AgentReport } from "@/lib/agent-report";
 
 export type PresentationRecord = {
   id: string;
@@ -28,6 +29,7 @@ export type SessionHistoryRecord = PresentationRecord & {
   videoUrl: string | null;
   videoPath: string | null;
   videoError?: string;
+  agentReport: AgentReport | null;
 };
 
 export type PersistedSettings = {
@@ -36,6 +38,7 @@ export type PersistedSettings = {
 };
 
 type SavePracticeSessionInput = {
+  id?: string;
   title?: string;
   durationSeconds: number;
   averageStress: number;
@@ -45,6 +48,7 @@ type SavePracticeSessionInput = {
   sceneLabel: string;
   timeline: number[];
   video: Blob | null;
+  agentReport?: AgentReport | null;
 };
 
 const LOCAL_HISTORY_KEY = "presense-local-session-history";
@@ -206,10 +210,17 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
 
   let { data, error } = await supabase
     .from("presentation_records")
-    .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label, timeline, video_path")
+    .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label, timeline, video_path, agent_report")
     .order("session_date", { ascending: false });
-  // Existing projects may not have run the video/timeline migration yet.
-  // Keep their older session history visible instead of rendering a blank page.
+  // Older projects may not have run the new report migration yet.
+  if (error && (error.code === "42703" || error.code === "PGRST204")) {
+    const withoutReport = await supabase
+      .from("presentation_records")
+      .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label, timeline, video_path")
+      .order("session_date", { ascending: false });
+    data = withoutReport.data as typeof data;
+    error = withoutReport.error;
+  }
   if (error && (error.code === "42703" || error.code === "PGRST204")) {
     const legacy = await supabase
       .from("presentation_records")
@@ -246,6 +257,7 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
       videoUrl,
       videoPath: row.video_path ?? null,
       videoError,
+      agentReport: row.agent_report && typeof row.agent_report === "object" ? row.agent_report as AgentReport : null,
     };
   }));
 }
@@ -303,6 +315,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
       timeline: input.timeline,
       videoUrl: null,
       videoPath: null,
+      agentReport: input.agentReport ?? null,
     };
     const existing = await loadSessionHistory();
     window.localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify([localRecord, ...existing]));
@@ -324,7 +337,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
 
   const sessionDate = new Date().toISOString();
   const title = input.title?.trim() || `${input.sceneLabel} Practice`;
-  const recordId = crypto.randomUUID();
+  const recordId = input.id ?? crypto.randomUUID();
   let videoPath: string | null = null;
   if (input.video) {
     if (!input.video.size) throw new Error("녹화 영상이 비어 있습니다. 다시 녹화해 주세요.");
@@ -350,6 +363,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     scene_label: input.sceneLabel,
     timeline: input.timeline,
     video_path: videoPath,
+    ...(input.agentReport ? { agent_report: input.agentReport } : {}),
   };
   const { error: recordError } = await supabase.from("presentation_records").insert(recordInput);
 

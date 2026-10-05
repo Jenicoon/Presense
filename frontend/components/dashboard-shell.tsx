@@ -22,6 +22,7 @@ import { initialTimeline, postSessionHighlights, practiceScenes, samplePresentat
 import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
+import { generateAgentReport, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
 import { StressChart } from "@/components/stress-chart";
 
 type SessionState = "idle" | "starting" | "live" | "ended" | "error";
@@ -213,6 +214,10 @@ export function DashboardShell() {
   const recordingActiveRef = useRef(false);
   const preparationFrameRef = useRef<LiveInferenceFrame | null>(null);
   const startBaselineRef = useRef(0);
+  const sessionStartedAtRef = useRef(0);
+  const sessionIdRef = useRef("");
+  const reportSegmentsRef = useRef<ReportSegment[]>([]);
+  const reportRequestRef = useRef<{ sessionId: string; durationMs: number; language: "ko" | "en"; sceneLabel: string; segments: ReportSegment[] } | null>(null);
 
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -230,6 +235,9 @@ export function DashboardShell() {
   const [voiceDetected, setVoiceDetected] = useState(false);
   const [timeline, setTimeline] = useState(initialTimeline);
   const [report, setReport] = useState<ReportSummary | null>(null);
+  const [agentReport, setAgentReport] = useState<AgentReport | null>(null);
+  const [agentReportLoading, setAgentReportLoading] = useState(false);
+  const [agentReportError, setAgentReportError] = useState("");
   const [selectedScene, setSelectedScene] = useState<SceneId>("camera");
   const [deck, setDeck] = useState<DeckFile | null>(SAMPLE_DECK);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -565,6 +573,7 @@ export function DashboardShell() {
       inferenceAbortRef.current = controller;
       timeout = setTimeout(() => controller.abort(), 90_000);
       setLiveStatus("analyzing");
+      const captureEndMs = preparation ? 0 : Math.floor(performance.now() - sessionStartedAtRef.current);
       const frame = await inferMultimodalFrame([...frameBufferRef.current], audio, "Speaking", controller.signal);
       if (generation !== analysisGenerationRef.current) return;
       if (preparation && recordingActiveRef.current) return;
@@ -572,7 +581,12 @@ export function DashboardShell() {
         preparationFrameRef.current = frame;
         setPreparationPhase("ready");
       }
-      else applyFrame(frame);
+      else {
+        applyFrame(frame);
+        if (captureEndMs >= 10_000 && Number.isFinite(frame.stressScore)) {
+          reportSegmentsRef.current.push(toReportSegment(frame, reportSegmentsRef.current.length, captureEndMs));
+        }
+      }
       setModelConnected(true);
       setLiveStatus("ok");
     } catch {
@@ -610,6 +624,12 @@ export function DashboardShell() {
       setSessionState("starting");
       setErrorMessage("");
       setReport(null);
+      setAgentReport(null);
+      setAgentReportError("");
+      setAgentReportLoading(false);
+      reportRequestRef.current = null;
+      reportSegmentsRef.current = [];
+      sessionIdRef.current = crypto.randomUUID();
       setElapsed(0);
       setTimeline(initialTimeline);
       setStressScore(baseline.stressScore);
@@ -641,6 +661,7 @@ export function DashboardShell() {
       startCollection(stream);
       await audioContextRef.current?.resume();
       startSessionRecording(stream);
+      sessionStartedAtRef.current = performance.now();
       setSessionState("live");
       if (SIGNAL_SOURCE === "live") void requestLiveFrame();
 
@@ -673,6 +694,23 @@ export function DashboardShell() {
       : `${r.peakValue}% around the ${r.peakPhase} phase`;
   }
 
+  async function requestAgentReport() {
+    const request = reportRequestRef.current;
+    if (!request) return;
+    setAgentReportLoading(true);
+    setAgentReportError("");
+    try {
+      const result = await generateAgentReport(request);
+      if (sessionIdRef.current !== request.sessionId) return;
+      setAgentReport(result);
+    } catch (error) {
+      if (sessionIdRef.current !== request.sessionId) return;
+      setAgentReportError(error instanceof Error ? error.message : (lang === "ko" ? "보고서를 생성하지 못했습니다." : "Could not generate the report."));
+    } finally {
+      if (sessionIdRef.current === request.sessionId) setAgentReportLoading(false);
+    }
+  }
+
   function handleStopSession() {
     if (!recordingActiveRef.current) return;
     stopSessionRecording();
@@ -683,7 +721,7 @@ export function DashboardShell() {
     // New generation, new buffers, no previous session responses or baseline.
     void startPreview();
 
-    if (stressHistoryRef.current.length === 0) {
+    if (stressHistoryRef.current.length <= 1) {
       setTimeline([]);
       setReport(null);
       setSaveDialogOpen(false);
@@ -709,6 +747,24 @@ export function DashboardShell() {
     };
 
     setReport(nextReport);
+    setAgentReport(null);
+    setAgentReportError("");
+    if (SIGNAL_SOURCE === "live") {
+      const segments = [...reportSegmentsRef.current];
+      if (segments.length) {
+        reportRequestRef.current = {
+          sessionId: sessionIdRef.current,
+          durationMs: Math.max(1, Math.floor(performance.now() - sessionStartedAtRef.current)),
+          language: lang,
+          sceneLabel: activeScene.label,
+          segments,
+        };
+        void requestAgentReport();
+      } else {
+        reportRequestRef.current = null;
+        setAgentReportError(lang === "ko" ? "보고서용 구간 분석 결과가 없습니다. 발표를 조금 더 길게 진행해 주세요." : "No segment analysis is available for the report. Try a longer presentation.");
+      }
+    }
     setSessionTitle(`${t(`scene.${selectedScene}.label`, activeScene.label)} ${t("save.defaultSuffix")}`);
     setSaved(false);
     setSaveStatus("");
@@ -717,6 +773,7 @@ export function DashboardShell() {
 
   async function handleSaveSession() {
     if (!report || saved || savingRef.current) return;
+    if (SIGNAL_SOURCE === "live" && (!agentReport || agentReportLoading)) return;
     if (saveVideo && recordingFinalizing) return;
     if (saveVideo && (!recordedVideo || recordedVideo.size === 0)) {
       setSaveStatus(lang === "ko" ? "저장할 영상이 없습니다. 영상을 다시 녹화하거나 영상 저장 선택을 해제해 주세요." : "No recording is available. Record again or uncheck video saving.");
@@ -730,17 +787,21 @@ export function DashboardShell() {
     }
 
     // Stored in English for stable, language-independent dashboard data.
-    const englishResult = report.noticeable
+    const englishResult = agentReport ? (agentReport.status === "complete" ? "AI report complete" : "AI report limited") : report.noticeable
       ? `Noticeable ${report.mostStressfulPhase.toLowerCase()}-section pressure`
       : "Mostly stable delivery";
-    const englishDiagnosis = `Starting baseline: ${Math.round(report.startBaseline * 100)}% (includes this session's pre-start preparation; first timeline sample). Peak pressure reached ${report.peakValue}% around the ${report.peakPhase} phase. Deck: ${report.deckName || "No deck used"}.`;
-    const englishNextAction = "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.";
+    const englishDiagnosis = agentReport?.summaryText ?? `Starting baseline: ${Math.round(report.startBaseline * 100)}% (includes this session's pre-start preparation; first timeline sample). Peak pressure reached ${report.peakValue}% around the ${report.peakPhase} phase. Deck: ${report.deckName || "No deck used"}.`;
+    const englishNextAction = agentReport?.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation)?.practiceSuggestion ||
+      agentReport?.priorities.find((item) => item.reviewAction || item.recommendation)?.reviewAction ||
+      agentReport?.priorities.find((item) => item.recommendation)?.recommendation ||
+      (agentReport ? "" : "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.");
 
     savingRef.current = true;
     setSaving(true);
     setSaveStatus("");
     try {
       const result = await savePracticeSession({
+        id: sessionIdRef.current,
         title,
         durationSeconds: elapsed,
         averageStress: report.averageStress,
@@ -750,6 +811,7 @@ export function DashboardShell() {
         sceneLabel: activeScene.label,
         timeline,
         video: saveVideo ? recordedVideo : null,
+        agentReport,
       });
       setSaved(true);
       window.dispatchEvent(new Event("presense:session-saved"));
@@ -1092,7 +1154,7 @@ export function DashboardShell() {
               <div className="coach-stack">
                 <div className="coach-card coach-alert">
                   <h3>{t("report.overallJudgment")}</h3>
-                  <p>{reportStateText}</p>
+                  <p>{agentReport?.summaryText ?? reportStateText}</p>
                 </div>
                 <div className="coach-card coach-data">
                   <h3>{t("report.peakPoint")}</h3>
@@ -1100,7 +1162,7 @@ export function DashboardShell() {
                 </div>
                 <div className="coach-card coach-ok">
                   <h3>{t("report.nextStep")}</h3>
-                  <p>{t("report.nextActionText")}</p>
+                  <p>{agentReport?.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation)?.practiceSuggestion || agentReport?.priorities.find((item) => item.reviewAction || item.recommendation)?.reviewAction || (agentReport ? (lang === "ko" ? "검증된 권고가 없습니다." : "No verified recommendation available.") : t("report.nextActionText"))}</p>
                 </div>
               </div>
             </div>
@@ -1134,7 +1196,7 @@ export function DashboardShell() {
                 </div>
                 <div className="report-card">
                   <div className="rc-label">{t("report.nextStep")}</div>
-                  <div className="rc-value" style={{ fontSize: 14, lineHeight: 1.4 }}>{t("report.nextActionText")}</div>
+                  <div className="rc-value" style={{ fontSize: 14, lineHeight: 1.4 }}>{agentReport?.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation)?.practiceSuggestion || agentReport?.priorities.find((item) => item.reviewAction || item.recommendation)?.reviewAction || (agentReport ? (lang === "ko" ? "검증된 권고가 없습니다." : "No verified recommendation available.") : t("report.nextActionText"))}</div>
                   <div className="rc-desc">{t("report.nextStepDesc")}</div>
                 </div>
               </div>
@@ -1144,6 +1206,16 @@ export function DashboardShell() {
                 <span><strong>{t("report.deck")}:</strong> {report?.deckName || t("setup.noDeck")}</span>
                 <span><strong>{t("report.scene")}:</strong> {activeSceneLabel}</span>
               </div>
+
+              {SIGNAL_SOURCE === "live" && <div className="coach-stack" aria-live="polite">
+                {agentReportLoading && <p role="status">{lang === "ko" ? "구간별 분석 보고서를 생성하고 있습니다…" : "Generating the segment analysis report…"}</p>}
+                {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
+                {agentReport && <>
+                  <div className="coach-card coach-data"><h3>{lang === "ko" ? "Agent 보고서" : "Agent report"}</h3><p>{agentReport.summaryText}</p></div>
+                  {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}</div>)}
+                  {agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
+                </>}
+              </div>}
 
               {/* Save / name this session */}
               <div className="save-session">
@@ -1156,7 +1228,7 @@ export function DashboardShell() {
                     placeholder={t("save.namePlaceholder")}
                     disabled={saved}
                   />
-                  <button type="button" className="btn btn-primary" onClick={handleSaveSession} disabled={saved || saving || (saveVideo && recordingFinalizing) || !sessionTitle.trim()}>
+                  <button type="button" className="btn btn-primary" onClick={handleSaveSession} disabled={saved || saving || (SIGNAL_SOURCE === "live" && (!agentReport || agentReportLoading)) || (saveVideo && recordingFinalizing) || !sessionTitle.trim()}>
                     {saving ? (lang === "ko" ? "저장 중…" : "Saving…") : saved ? t("save.saved") : t("save.button")}
                   </button>
                 </div>
@@ -1206,9 +1278,12 @@ export function DashboardShell() {
               </span>
             </label>
             {saveStatus && !saved && <p role="alert" className="error-msg">{saveStatus}</p>}
+            {SIGNAL_SOURCE === "live" && agentReportLoading && <p role="status">{lang === "ko" ? "보고서를 생성하고 있습니다…" : "Generating report…"}</p>}
+            {SIGNAL_SOURCE === "live" && agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "다시 시도" : "Retry"}</button>}</div>}
+            {agentReport && <p role="status">{lang === "ko" ? "보고서가 준비되었습니다." : "The report is ready."}</p>}
             <div className="save-modal-actions">
               <button type="button" className="btn btn-outline" disabled={saving} onClick={() => setSaveDialogOpen(false)}>{lang === "ko" ? "저장하지 않기" : "Don't save"}</button>
-              <button type="button" className="btn btn-primary" onClick={handleSaveSession} disabled={saving || (saveVideo && recordingFinalizing) || !sessionTitle.trim()}>{saving ? (lang === "ko" ? "저장 중…" : "Saving…") : saveVideo && recordingFinalizing ? (lang === "ko" ? "영상 준비 중…" : "Preparing video…") : (lang === "ko" ? "저장하기" : "Save session")}</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveSession} disabled={saving || (SIGNAL_SOURCE === "live" && (!agentReport || agentReportLoading)) || (saveVideo && recordingFinalizing) || !sessionTitle.trim()}>{saving ? (lang === "ko" ? "저장 중…" : "Saving…") : saveVideo && recordingFinalizing ? (lang === "ko" ? "영상 준비 중…" : "Preparing video…") : (lang === "ko" ? "저장하기" : "Save session")}</button>
             </div>
           </section>
         </div>
