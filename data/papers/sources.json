@@ -1,0 +1,245 @@
+[
+  {
+    "file": "Premkumar_2021_self_guided_VRET.pdf",
+    "title": "The Effectiveness of Self-Guided Virtual-Reality Exposure Therapy for Public-Speaking Anxiety",
+    "year": 2021,
+    "doi": "10.3389/fpsyt.2021.694610",
+    "article_url": "https://www.frontiersin.org/journals/psychiatry/articles/10.3389/fpsyt.2021.694610/full",
+    "pdf_url": "https://www.frontiersin.org/journals/psychiatry/articles/10.3389/fpsyt.2021.694610/pdf",
+    "topics": [
+      "practice"
+    ],
+    "scope": "Public-speaking exposure practice; does not test a particular voice or facial exercise.",
+    "finding_ko": "가상현실 발표 상황에서 반복 노출 연습을 다뤘습니다. 특정 목소리나 표정 교정법을 시험한 연구는 아닙니다.",
+    "evidence_role": "practice_general",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Blasberg_2023_facial_stress.pdf",
+    "title": "You look stressed: A pilot study on facial action unit activity in the context of psychosocial stress",
+    "year": 2023,
+    "doi": "10.1016/j.cpnec.2023.100187",
+    "article_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10422124/",
+    "pdf_url": "https://pure.mpg.de/rest/items/item_3513860/component/file_3513861/content",
+    "topics": [
+      "lip_tension",
+      "face_measurement"
+    ],
+    "scope": "Psychosocial stress task including speaking; brow lowering was not measured. Mouth actions are confounded by speaking.",
+    "finding_ko": "말하기를 포함한 스트레스 과제에서 입 움직임은 발화의 영향을 받을 수 있었습니다. 이 연구는 눈썹 내림을 측정하지 않았습니다.",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Wang_2025_speech_anxiety.pdf",
+    "title": "How Anxiety State Influences Speech Parameters: A Network Analysis Study from a Real Stressed Scenario",
+    "year": 2025,
+    "doi": "10.3390/brainsci15030262",
+    "article_url": "https://www.mdpi.com/2076-3425/15/3/262",
+    "pdf_url": "https://pdfs.semanticscholar.org/181c/f913d6eb6ff2737d469a2990aa16cb50b300.pdf",
+    "topics": [
+      "pitch_change",
+      "pitch_variability"
+    ],
+    "scope": "Associations among acoustic parameters and anxiety; not a test of rehearsal interventions.",
+    "finding_ko": "여러 음성 지표와 불안 상태 사이의 연관성을 분석했습니다. 특정 발표 연습법의 효과는 시험하지 않았습니다."
+  },
+  {
+    "file": "Niebuhr_2019_prosody_training.pdf",
+    "title": "Female Speakers Benefit More Than Male Speakers From Prosodic Charisma Training—A Before-After Analysis of 12-Weeks and 4-h Courses",
+    "year": 2019,
+    "doi": "10.3389/fcomm.2019.00012",
+    "article_url": "https://www.frontiersin.org/journals/communication/articles/10.3389/fcomm.2019.00012/full",
+    "pdf_url": "https://www.frontiersin.org/journals/communication/articles/10.3389/fcomm.2019.00012/pdf",
+    "topics": [
+      "pitch_change",
+      "pitch_variability",
+      "practice"
+    ],
+    "scope": "Business-presentation prosody training with before-after acoustic outcomes; not an anxiety diagnosis.",
+    "applicability": "direct",
+    "finding_ko": "발표 운율 훈련 전후의 음성 지표를 비교했습니다. 한 사람의 불안 정도를 판정하는 연구는 아닙니다.",
+    "finding_ko_by_issue": {
+      "pitch_change": "사업 발표의 운율 훈련 전후에 목소리 높이 등 음성 지표를 비교했습니다. 특정 순간의 목소리 높이만으로 발표를 평가하지는 않았습니다.",
+      "pitch_variability": "사업 발표의 운율 훈련에서 높낮이 패턴을 다루고 훈련 전후 음성 지표를 비교했습니다."
+    },
+    "evidence_role": "practice_specific",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "VallsRates_2023_vr_speaking.pdf",
+    "title": "Encouraging participant embodiment during VR-assisted public speaking training improves persuasiveness and charisma and reduces anxiety in secondary school students",
+    "year": 2023,
+    "doi": "10.3389/frvir.2023.1074062",
+    "article_url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2023.1074062/full",
+    "pdf_url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2023.1074062/pdf",
+    "topics": [
+      "pitch_change",
+      "pitch_variability",
+      "practice"
+    ],
+    "scope": "VR public-speaking training in secondary school students; acoustic prosody measures and outcomes may not generalize to adults.",
+    "finding_ko": "중고생 대상 가상현실 발표 훈련에서 음성 운율을 측정했습니다. 결과를 성인 발표에 그대로 적용할 수는 없습니다.",
+    "evidence_role": "practice_general",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Frontiers_2026_voice_fluency.pdf",
+    "title": "Validating virtual reality for public speaking research and intervention: comparing anxiety, voice, and fluency responses to real and virtual audiences",
+    "year": 2026,
+    "doi": "10.3389/frvir.2026.1755571",
+    "article_url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2026.1755571/full",
+    "pdf_url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2026.1755571/pdf",
+    "topics": [
+      "pitch_change",
+      "pitch_variability",
+      "practice"
+    ],
+    "scope": "Public-speaking voice and fluency across audience conditions; training did not show significant objective voice changes.",
+    "applicability": "direct",
+    "finding_ko": "실제·가상 청중 조건에서 발표 음성과 유창성을 비교했습니다. 훈련 후 객관적 음성 변화가 유의하게 나타나지는 않았습니다.",
+    "finding_ko_by_issue": {
+      "pitch_change": "실제·가상 청중 조건에서 발표자의 평균 목소리 높이를 비교했습니다. 높이 하나로 발표의 좋고 나쁨을 판단한 연구는 아닙니다.",
+      "pitch_variability": "발표 중 음높이 변동도 분석했지만, 이 수치만으로 한 구간의 전달력을 평가하지는 않았습니다."
+    },
+    "evidence_role": "measurement",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Frontiers_2021_audience_attention.pdf",
+    "title": "Look at the Audience? A Randomized Controlled Study of Shifting Attention From Self-Focus to Nonsocial vs. Social External Stimuli During Virtual Reality Exposure to Public Speaking in Social Anxiety",
+    "year": 2021,
+    "doi": "10.3389/fpsyt.2021.751272",
+    "article_url": "https://www.frontiersin.org/journals/psychiatry/articles/10.3389/fpsyt.2021.751272/full",
+    "pdf_url": "https://www.frontiersin.org/journals/psychiatry/articles/10.3389/fpsyt.2021.751272/pdf",
+    "topics": [
+      "gaze",
+      "practice"
+    ],
+    "scope": "Clinical social-anxiety VR exposure with eye tracking; not a webcam eye-contact rule for ordinary presentations.",
+    "finding_ko": "사회불안 임상 집단에서 가상현실 발표 중 주의 전환을 시험했습니다. 일반 발표의 웹캠 시선 교정법은 시험하지 않았습니다.",
+    "evidence_role": "practice_general",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Rubin_2022_public_speaking_gaze.pdf",
+    "title": "Selective visual attention during public speaking in an immersive context",
+    "year": 2022,
+    "doi": "10.3758/s13414-021-02430-x",
+    "article_url": "https://link.springer.com/article/10.3758/s13414-021-02430-x",
+    "pdf_url": "https://link.springer.com/content/pdf/10.3758/s13414-021-02430-x.pdf",
+    "topics": [
+      "gaze"
+    ],
+    "scope": "Time-locked audience-action and gaze study in immersive public speaking; eye tracking is not equivalent to webcam gaze estimation.",
+    "finding_ko": "몰입형 발표 상황에서 청중 행동과 발표자의 시선 이동을 시간에 따라 측정했습니다. 웹캠 추정 시선과 같은 측정은 아닙니다.",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Frontiers_2025_eye_tracking_feedback.pdf",
+    "title": "The effects of different variants of eye-tracking-based feedback of attentional processes during virtual social interactions",
+    "year": 2025,
+    "doi": "10.3389/frvir.2025.1556898",
+    "article_url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2025.1556898/full",
+    "pdf_url": "https://www.frontiersin.org/journals/virtual-reality/articles/10.3389/frvir.2025.1556898/pdf",
+    "topics": [
+      "gaze",
+      "practice"
+    ],
+    "scope": "Eye-tracking feedback during VR social interaction; population and intervention differ from webcam presentation coaching.",
+    "finding_ko": "가상현실 사회적 상호작용에서 시선 추적 피드백의 유형을 비교했습니다. 웹캠 발표 코칭과는 조건이 다릅니다.",
+    "evidence_role": "practice_general",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Frontiers_2017_facial_actions.pdf",
+    "title": "Spontaneous Facial Actions Map onto Emotional Experiences in a Non-social Context: Toward a Component-Based Approach",
+    "year": 2017,
+    "doi": "10.3389/fpsyg.2017.00633",
+    "article_url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00633/full",
+    "pdf_url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00633/pdf",
+    "topics": [
+      "brow_tension",
+      "lip_tension",
+      "face_measurement"
+    ],
+    "scope": "Facial action-unit associations outside public speaking; cannot identify the presenter's state from one facial cue.",
+    "finding_ko": "발표가 아닌 상황에서 표정 움직임과 정서 경험의 연관성을 관찰했습니다. 표정 하나로 발표자의 상태를 판정할 수는 없습니다.",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Hoemke_2025_eyebrow_interaction.pdf",
+    "title": "Eyebrow movements as signals of communicative problems in human face-to-face interaction",
+    "year": 2025,
+    "doi": "10.1098/rsos.241632",
+    "article_url": "https://doi.org/10.1098/rsos.241632",
+    "pdf_url": "https://pure.mpg.de/rest/items/item_3389878_4/component/file_3641920/content",
+    "topics": [
+      "brow_tension"
+    ],
+    "scope": "Eyebrow furrows in conversational repair, not presenter stress or a frowning-reduction intervention.",
+    "finding_ko": "대화 중 눈썹 움직임과 의사소통 문제의 관계를 살펴봤습니다. 발표 스트레스나 찡그림 교정법을 시험한 연구는 아닙니다."
+  },
+  {
+    "file": "Frontiers_2021_social_sensing.pdf",
+    "title": "Nonverbal Social Sensing: What Social Sensing Can and Cannot Do for the Study of Nonverbal Behavior From Video",
+    "year": 2021,
+    "doi": "10.3389/fpsyg.2021.606548",
+    "article_url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2021.606548/full",
+    "pdf_url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2021.606548/pdf",
+    "topics": [
+      "brow_tension",
+      "lip_tension",
+      "gaze",
+      "face_measurement"
+    ],
+    "scope": "Methodological review: movement detection is distinct from psychological or social inference.",
+    "finding_ko": "영상에서 움직임을 감지하는 것과 그 사람의 심리 상태를 추론하는 것은 다른 문제라고 정리한 방법론 연구입니다.",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Schmidt_2014_video_feedback.pdf",
+    "title": "Video-based feedback of oral clinical presentations reduces the anxiety of ICU medical students: a multicentre, prospective, randomized study",
+    "year": 2014,
+    "doi": "10.1186/1472-6920-14-103",
+    "article_url": "https://bmcmededuc.biomedcentral.com/articles/10.1186/1472-6920-14-103",
+    "pdf_url": "https://bmcmededuc.biomedcentral.com/counter/pdf/10.1186/1472-6920-14-103.pdf",
+    "topics": [
+      "practice"
+    ],
+    "scope": "Repeated video feedback during clinical oral presentations; not evidence for any one facial or vocal cue.",
+    "finding_ko": "임상 구두 발표에서 반복적인 영상 피드백을 시험했습니다. 특정 표정이나 음성 행동의 교정 효과를 따로 입증하지는 않았습니다.",
+    "evidence_role": "practice_general",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Ringgold_2025_tsst_facial.pdf",
+    "title": "Multimodal stress assessment: Connecting task-related changes in self-reported stress, salivary biomarkers, heart rate, and facial expressions in the context of the stress response to the Trier Social Stress Test",
+    "year": 2025,
+    "doi": "10.1016/j.psyneuen.2025.107560",
+    "article_url": "https://www.sciencedirect.com/science/article/pii/S0306453025002835",
+    "pdf_url": "https://push-zb.helmholtz-munich.de/deliver.php?id=43427",
+    "topics": [
+      "brow_tension",
+      "lip_tension",
+      "face_measurement"
+    ],
+    "scope": "Speaking and arithmetic stress task with facial action-unit measurement; facial movements did not reliably predict individual acute stress responses. No facial-expression correction was tested.",
+    "finding_ko": "말하기 등을 포함한 과제에서 표정 움직임은 개인의 급성 스트레스 지표를 안정적으로 설명하지 못했습니다. 표정 교정은 시험하지 않았습니다.",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Frontiers_2019_speaker_confidence.pdf",
+    "title": "The Look of (Un)confidence: Visual Markers for Inferring Speaker Confidence in Speech",
+    "year": 2019,
+    "doi": "10.3389/fcomm.2019.00063",
+    "article_url": "https://www.frontiersin.org/journals/communication/articles/10.3389/fcomm.2019.00063/full",
+    "pdf_url": "https://www.frontiersin.org/journals/communication/articles/10.3389/fcomm.2019.00063/pdf",
+    "topics": [
+      "brow_tension",
+      "gaze"
+    ],
+    "scope": "Observers judged confidence in answers to general-knowledge questions from muted video; this is not presentation anxiety or a tested facial intervention.",
+    "finding_ko": "무음 답변 영상을 보고 관찰자가 자신감을 어떻게 판단하는지 살펴봤습니다. 발표 불안이나 표정 교정의 효과를 시험한 연구는 아닙니다.",
+    "layout": "two_column_after_first_page"
+  }
+]

@@ -1,3 +1,5 @@
+import hashlib
+import json
 import time
 import torch
 import torch.nn as nn
@@ -123,7 +125,8 @@ class StressInferenceEngine:
         backbone_state = torch.load(backbone_path, map_location='cpu')['model_state_dict']
         cbm_ckpt       = torch.load(cbm_path,      map_location='cpu')
         cbm_state      = cbm_ckpt['cbm_state_dict']
-        residual_w         = cbm_ckpt.get('residual_w', 0.8)
+        residual_w     = cbm_ckpt.get('residual_w', cbm_ckpt.get('lupi_w', 0.8))
+        self.temperature = max(float(cbm_ckpt.get('temperature', 1.0)), 1e-6)
 
         self.model = PreSenseModel(backbone_state, cbm_state, residual_w).to(self.device)
         self.model.eval()
@@ -132,7 +135,8 @@ class StressInferenceEngine:
 
         acc = cbm_ckpt.get('val_acc', 0)
         r2  = cbm_ckpt.get('r2', 0)
-        print(f"✅ PreSenseModel V2 로드  residual_w={residual_w}  val_acc={acc:.4f}  R²={r2:.4f}")
+        print(f"✅ PreSenseModel V2 로드  residual_w={residual_w}  "
+              f"temperature={self.temperature:.4f}  val_acc={acc:.4f}  R²={r2:.4f}")
 
     # ── 피처 추출기 ────────────────────────────────────────────────────────────
 
@@ -153,7 +157,7 @@ class StressInferenceEngine:
         except Exception as e:
             print(f"⚠️  ResNet18 로드 실패: {e}"); self.resnet = None
 
-        # Wav2Vec2 base + Linear(768→256) 프로젝션
+        # Wav2Vec2 base + 기존 Student 학습 표현으로 복원한 투영
         try:
             from transformers import Wav2Vec2Model
             self.wav2vec = Wav2Vec2Model.from_pretrained(
@@ -162,43 +166,34 @@ class StressInferenceEngine:
             for p in self.wav2vec.parameters():
                 p.requires_grad = False
 
-            # PCA 프로젝션 (768→256) 로드
-            pca_comp = _cfg.CHECKPOINTS_DIR / 'binary' / 'audio_pca_components.npy'
-            pca_mean = _cfg.CHECKPOINTS_DIR / 'binary' / 'audio_pca_mean.npy'
-            if pca_comp.exists() and pca_mean.exists():
-                self._audio_pca_comp = torch.tensor(
-                    np.load(pca_comp), dtype=torch.float32).to(self.device)  # (256, 768)
-                self._audio_pca_mean = torch.tensor(
-                    np.load(pca_mean), dtype=torch.float32).to(self.device)  # (768,)
-                self.audio_proj = None
-                print("✅ Wav2Vec2 + PCA 프로젝션 로드")
-            else:
-                self._audio_pca_comp = None
-                self._audio_pca_mean = None
-                self.audio_proj = nn.Linear(768, 256).to(self.device)
-                print("⚠️  PCA 없음 — 랜덤 초기화 (extract_audio_proj.py 실행 필요)")
-
-            # 양자화
-            if self.device in ('mps', 'cuda'):
-                self.wav2vec = self.wav2vec.half()
-                if self._audio_pca_comp is not None:
-                    self._audio_pca_comp = self._audio_pca_comp.half()
-                    self._audio_pca_mean = self._audio_pca_mean.half()
-                elif self.audio_proj is not None:
-                    self.audio_proj = self.audio_proj.half()
-                print("  Wav2Vec2 fp16 적용")
-            elif self.device == 'cpu':
-                self.wav2vec = torch.ao.quantization.quantize_dynamic(
-                    self.wav2vec, {nn.Linear}, dtype=torch.qint8)
-                print("  Wav2Vec2 int8 동적 양자화 적용")
-
-            if self.audio_proj is not None:
-                self.audio_proj.eval()
-                for p in self.audio_proj.parameters():
-                    p.requires_grad = False
+            projection_dir = _WEIGHTS_DIR
+            weight_path = projection_dir / 'audio_projection_weight.npy'
+            bias_path = projection_dir / 'audio_projection_bias.npy'
+            manifest_path = projection_dir / 'audio_projection_manifest.json'
+            if not (weight_path.exists() and bias_path.exists() and manifest_path.exists()):
+                raise FileNotFoundError(
+                    '검증된 오디오 투영이 없습니다. '
+                    'ai/feature_analysis/recover_audio_projection.py를 실행하세요.')
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+            with (_WEIGHTS_DIR / 'student_kd_best.pt').open('rb') as source:
+                student_hash = hashlib.file_digest(source, 'sha256').hexdigest()
+            if (manifest.get('source_model') != 'facebook/wav2vec2-base'
+                    or manifest.get('student_sha256') != student_hash
+                    or float(manifest.get('heldout_r2', 0)) < .995):
+                raise ValueError('오디오 투영 검증 정보가 현재 Student 모델과 맞지 않습니다.')
+            weight, bias = np.load(weight_path), np.load(bias_path)
+            if weight.shape != (256, 768) or bias.shape != (256,) or not (
+                    np.isfinite(weight).all() and np.isfinite(bias).all()):
+                raise ValueError('오디오 투영 가중치 형식이 잘못되었습니다.')
+            self._audio_proj_weight = torch.from_numpy(weight).to(self.device)
+            self._audio_proj_bias = torch.from_numpy(bias).to(self.device)
+            print('✅ Wav2Vec2 + 검증된 오디오 투영 로드')
         except Exception as e:
             print(f"⚠️  Wav2Vec2 로드 실패: {e}")
-            self.wav2vec = None; self.audio_proj = None
+            self.wav2vec = None
+            self._audio_proj_weight = None
+            self._audio_proj_bias = None
+            self.model = None
 
     def _load_geo_scaler(self):
         mean_p = _WEIGHTS_DIR / 'geo_scaler_mean.npy'
@@ -283,17 +278,12 @@ class StressInferenceEngine:
     def _extract_audio_embedding(self, audio_np: np.ndarray) -> torch.Tensor:
         """(160000,) float32 16kHz → (1, 256) Wav2Vec2 임베딩."""
         if self.wav2vec is None:
-            return torch.zeros(1, 256, device=self.device)
+            raise RuntimeError('Wav2Vec2 오디오 추출기가 준비되지 않았습니다.')
 
         audio_t = torch.from_numpy(audio_np.astype(np.float32)).unsqueeze(0).to(self.device)
-        if self.device in ('mps', 'cuda'):
-            audio_t = audio_t.half()
         with torch.no_grad():
             h = self.wav2vec(audio_t).last_hidden_state.mean(dim=1)  # (1, 768)
-            if self._audio_pca_comp is not None:
-                ae = (h - self._audio_pca_mean) @ self._audio_pca_comp.T  # (1, 256)
-            else:
-                ae = self.audio_proj(h)                                    # (1, 256)
+            ae = h @ self._audio_proj_weight.T + self._audio_proj_bias  # (1, 256)
         return ae.float()  # 메인 모델 fp32 입력용
 
     def _extract_ege_maps(self, audio_np: np.ndarray) -> torch.Tensor | None:
@@ -419,7 +409,7 @@ class StressInferenceEngine:
 
     # ── 추론 ──────────────────────────────────────────────────────────────────
 
-    def predict(self, video_np, audio_np):
+    def predict(self, video_np, audio_np, *, record_session=True):
         """
         video_np : (16, H, W, 3) uint8 BGR
         audio_np : (160000,) float32  16kHz
@@ -433,7 +423,7 @@ class StressInferenceEngine:
             concept_contrib  : dict {개념명: 예측값}
         """
         if self.model is None:
-            return 0.5, [0.5, 0.5], '알 수 없음', {}, {}, {}
+            raise RuntimeError('Student-CBM 모델 또는 필수 특징 추출기가 준비되지 않았습니다.')
 
         ff  = self._extract_frame_features(video_np)   # (1, 16, 512)
         ae  = self._extract_audio_embedding(audio_np)  # (1, 256)
@@ -443,7 +433,10 @@ class StressInferenceEngine:
         with torch.no_grad():
             final_logits, c_pred, attn = self.model(ff, ae, geo, self.task_id, ege=ege)
 
-        stress_prob = F.softmax(final_logits, dim=1)[0][1].item()
+        # validation set에서 학습한 temperature로 보정된 클래스 확률
+        probs = F.softmax(final_logits / self.temperature, dim=1)[0]
+        stress_prob = probs[1].item()
+        prediction_confidence = probs.max().item()
         c_pred_np   = c_pred[0].cpu().numpy()  # (7,)
 
         concept_contrib = {
@@ -468,17 +461,19 @@ class StressInferenceEngine:
         audio_feat = self.analyze_audio(audio_np)
         video_feat = self._analyze_video_from_geo(video_np, geo[0].cpu().numpy())
 
-        self.session_log.append({
-            'timestamp':       time.time() - self._session_start,
-            'stress_prob':     stress_prob,
-            'gate_w':          gate_w,
-            'dominant':        dominant,
-            'concept_contrib': concept_contrib.copy(),
-            'audio_feat':      audio_feat.copy() if audio_feat else {},
-            'video_feat':      video_feat.copy() if video_feat else {},
-            'frame':           video_np[-1].copy(),
-            'attn_weights':    attn[0].cpu().numpy().tolist() if attn is not None else [],
-        })
+        if record_session:
+            self.session_log.append({
+                'timestamp':       time.time() - self._session_start,
+                'stress_prob':     stress_prob,
+                'prediction_confidence': prediction_confidence,
+                'gate_w':          gate_w,
+                'dominant':        dominant,
+                'concept_contrib': concept_contrib.copy(),
+                'audio_feat':      audio_feat.copy() if audio_feat else {},
+                'video_feat':      video_feat.copy() if video_feat else {},
+                'frame':           video_np[-1].copy(),
+                'attn_weights':    attn[0].cpu().numpy().tolist() if attn is not None else [],
+            })
 
         return stress_prob, gate_w, dominant, audio_feat, video_feat, concept_contrib
 
@@ -545,11 +540,11 @@ class StressInferenceEngine:
         result = {
             'motion':       round(motion, 4),
             'motion_level': '많음' if motion > 0.05 else '약간' if motion > 0.02 else '적음',
-            'face_detected': bool((geo_raw.sum(axis=1) != 0).any()),
+            'face_detected': bool((np.max(np.abs(geo_raw), axis=1) > 1e-5).any()),
         }
 
         # 유효 프레임만
-        valid = geo_raw[geo_raw.sum(axis=1) != 0]  # (n_valid, 24)
+        valid = geo_raw[np.max(np.abs(geo_raw), axis=1) > 1e-5]  # (n_valid, 24)
         if len(valid) == 0:
             return result
 
