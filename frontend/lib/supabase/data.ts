@@ -25,6 +25,7 @@ export type DiagnosisRecord = {
 };
 
 export type SessionHistoryRecord = PresentationRecord & {
+  durationSeconds: number;
   timeline: number[];
   videoUrl: string | null;
   videoPath: string | null;
@@ -248,6 +249,7 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
       title: row.title,
       date: formatSessionDate(row.session_date),
       duration: formatDuration(row.duration_seconds),
+      durationSeconds: Number(row.duration_seconds),
       result: row.result,
       stressAverage: Number(row.stress_average).toFixed(2),
       diagnosis: row.diagnosis,
@@ -307,6 +309,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
       title: input.title?.trim() || `${input.sceneLabel} Practice`,
       date: formatSessionDate(sessionDate),
       duration: formatDuration(input.durationSeconds),
+      durationSeconds: input.durationSeconds,
       result: input.result,
       stressAverage: input.averageStress.toFixed(2),
       diagnosis: input.diagnosis,

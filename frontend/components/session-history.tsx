@@ -32,6 +32,11 @@ function Timeline({ values, onSelect }: { values: number[]; onSelect?: (index: n
 
 function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord; ko: boolean; t: (key: string, fallback?: string) => string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const durationProbeRef = useRef(false);
+  const probeTimeoutRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (probeTimeoutRef.current !== null) window.clearTimeout(probeTimeoutRef.current);
+  }, []);
   const peak = record.timeline.length ? Math.max(...record.timeline) : 0;
   const [playbackError, setPlaybackError] = useState(false);
   const phases = ko ? ["도입", "전개", "핵심", "마무리"] : ["Open", "Build", "Core", "Close"];
@@ -41,10 +46,35 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
   });
   const peakBin = record.timeline.indexOf(peak);
   const strongest = record.timeline.length ? averages.indexOf(Math.max(...averages.map((v) => v ?? -1))) : -1;
+  function restoreVideoStart(video: HTMLVideoElement) {
+    if (!durationProbeRef.current || !Number.isFinite(video.duration)) return;
+    durationProbeRef.current = false;
+    if (probeTimeoutRef.current !== null) window.clearTimeout(probeTimeoutRef.current);
+    probeTimeoutRef.current = null;
+    video.currentTime = 0;
+  }
+  function checkVideoDuration(video: HTMLVideoElement) {
+    if (!record.videoPath?.toLowerCase().endsWith(".webm")) return;
+    const expected = record.durationSeconds;
+    if (Number.isFinite(video.duration) && (!expected || Math.abs(video.duration - expected) <= Math.max(2, expected * 0.1))) return;
+    durationProbeRef.current = true;
+    video.pause();
+    video.currentTime = 1e10;
+    probeTimeoutRef.current = window.setTimeout(() => {
+      durationProbeRef.current = false;
+      video.currentTime = 0;
+      probeTimeoutRef.current = null;
+    }, 4000);
+  }
   function seekToBin(bin: number) {
     const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration)) return;
-    video.currentTime = ((bin + 0.5) / Math.max(record.timeline.length, 1)) * video.duration;
+    if (!video) return;
+    const expected = record.durationSeconds;
+    const duration = expected && (!Number.isFinite(video.duration)
+      || Math.abs(video.duration - expected) > Math.max(2, expected * 0.1))
+      ? expected : video.duration;
+    if (!duration || !Number.isFinite(duration)) return;
+    video.currentTime = ((bin + 0.5) / Math.max(record.timeline.length, 1)) * duration;
     void video.play().catch(() => undefined);
   }
   return <div className="modal-backdrop" onClick={onClose} role="presentation"><section className="card history-review-modal" role="dialog" aria-modal="true" aria-labelledby="history-review-title" onClick={(event) => event.stopPropagation()}>
@@ -63,7 +93,7 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     </section>}
     <div className="history-review-meta"><span><CalendarDays size={13} /> {record.date} · {record.duration}</span><span className={`severity-pill ${severity(Number(record.stressAverage))}`}>{ko ? "평균 스트레스" : "Average stress"} {record.stressAverage}</span></div>
     <div className="history-review-video">
-      {record.videoUrl ? <><video ref={videoRef} controls playsInline preload="metadata" src={record.videoUrl} onError={() => setPlaybackError(true)} />{playbackError && <p role="alert" className="error-msg">{ko ? "영상 재생에 실패했습니다. 페이지를 새로고침해 재시도해 주세요." : "Playback failed. Refresh the page to retry."}</p>}</> : <div className="history-video-empty"><Film size={24} /><strong>{record.videoPath ? (ko ? "영상 불러오기 실패" : "Could not load video") : (ko ? "저장된 영상이 없습니다" : "No saved video")}</strong><span>{record.videoPath ? (ko ? "영상 경로는 저장되어 있지만 접근할 수 없습니다. 저장소 권한을 확인해 주세요." : "The video path exists but cannot be accessed. Check storage permissions.") : (ko ? "이 기록에는 영상 경로가 없습니다. 당시 녹화 또는 업로드가 완료되지 않았을 수 있습니다." : "This record has no video path. Recording or upload may not have completed.")}</span>{record.videoError && <small>{record.videoError}</small>}</div>}
+      {record.videoUrl ? <><video ref={videoRef} controls playsInline preload="metadata" src={record.videoUrl} onLoadedMetadata={(event) => checkVideoDuration(event.currentTarget)} onDurationChange={(event) => restoreVideoStart(event.currentTarget)} onError={() => setPlaybackError(true)} />{playbackError && <p role="alert" className="error-msg">{ko ? "영상 재생에 실패했습니다. 페이지를 새로고침해 재시도해 주세요." : "Playback failed. Refresh the page to retry."}</p>}</> : <div className="history-video-empty"><Film size={24} /><strong>{record.videoPath ? (ko ? "영상 불러오기 실패" : "Could not load video") : (ko ? "저장된 영상이 없습니다" : "No saved video")}</strong><span>{record.videoPath ? (ko ? "영상 경로는 저장되어 있지만 접근할 수 없습니다. 저장소 권한을 확인해 주세요." : "The video path exists but cannot be accessed. Check storage permissions.") : (ko ? "이 기록에는 영상 경로가 없습니다. 당시 녹화 또는 업로드가 완료되지 않았을 수 있습니다." : "This record has no video path. Recording or upload may not have completed.")}</span>{record.videoError && <small>{record.videoError}</small>}</div>}
     </div>
     <div className="history-review-section"><div className="history-review-section-head"><div><strong>{ko ? "스트레스 진행바" : "Stress timeline"}</strong><span>{record.videoUrl ? (ko ? "구간을 누르면 영상의 해당 시점으로 이동합니다" : "Select a segment to jump to that moment in the video") : (ko ? "영상 없이도 스트레스 구간을 확인할 수 있습니다" : "Stress moments are available without video")}</span></div><strong className="history-peak">{peak ? `${peak}% ${ko ? "최고" : "peak"}` : "–"}</strong></div><Timeline values={record.timeline} onSelect={record.videoUrl ? seekToBin : undefined} /><div className="video-timeline-legend"><span><i className="low" />{ko ? "좋음" : "Good"}</span><span><i className="mid" />{ko ? "보완 필요" : "Needs attention"}</span><span><i className="high" />{ko ? "스트레스 높음" : "High stress"}</span></div></div>
     <div className="history-review-coaching"><div className="coach-card coach-alert"><h3>{ko ? "세션 결과" : "Session result"}</h3><p>{localizeRecordText(record.result, t)}</p></div><div className="coach-card coach-data"><h3>{ko ? "AI 진단" : "AI diagnosis"}</h3><p>{localizeRecordText(record.diagnosis, t)}</p></div><div className="coach-card coach-ok"><h3>{ko ? "다음 연습 포인트" : "Next practice focus"}</h3><p>{localizeRecordText(record.nextAction, t)}</p></div></div>

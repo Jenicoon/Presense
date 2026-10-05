@@ -84,6 +84,7 @@ test('history retains a saved video path and explains signed URL failure', async
   const [record] = await api.loadSessionHistory();
   assert.equal(record.videoPath, 'user/video.webm');
   assert.equal(record.videoUrl, null);
+  assert.equal(record.durationSeconds, 30);
   assert.equal(record.videoError, 'Access denied');
   assert.deepEqual(record.timeline, [20, 40]);
 });

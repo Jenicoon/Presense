@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { fixWebmDuration } from "@fix-webm-duration/fix";
 import {
   BrainCircuit,
   Camera,
@@ -200,6 +201,8 @@ export function DashboardShell() {
   const collectionTickRef = useRef<number | null>(null);
   const collectionBusyRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStartedAtRef = useRef(0);
+  const recordingDurationMsRef = useRef(0);
   const sessionVideoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
@@ -335,21 +338,32 @@ export function DashboardShell() {
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data);
     };
-    recorder.onstop = () => {
-      const video = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
+    recorder.onstop = async () => {
+      const rawVideo = new Blob(chunks, { type: recorder.mimeType || "video/webm" });
       chunks.length = 0;
+      let video = rawVideo;
+      try {
+        if (rawVideo.type.includes("webm") && recordingDurationMsRef.current > 0) {
+          video = await fixWebmDuration(rawVideo, recordingDurationMsRef.current, { logger: false });
+        }
+      } catch {
+        // Keep the recording available if metadata repair is unsupported.
+      }
       setRecordedVideo(video);
       setRecordedVideoUrl(URL.createObjectURL(video));
       setRecordingFinalizing(false);
     };
     mediaRecorderRef.current = recorder;
     recorder.start(1000);
+    recordingStartedAtRef.current = performance.now();
+    recordingDurationMsRef.current = 0;
   }
 
   function stopSessionRecording() {
     const recorder = mediaRecorderRef.current;
     if (recorder?.state === "recording") {
       setRecordingFinalizing(true);
+      recordingDurationMsRef.current = Math.max(1, Math.round(performance.now() - recordingStartedAtRef.current));
       recorder.stop();
     }
     mediaRecorderRef.current = null;
