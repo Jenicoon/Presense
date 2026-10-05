@@ -30,6 +30,7 @@ export type AgentReport = {
   }>;
   limitations: string[];
   analysis: Record<string, unknown>;
+  agentRun?: { stopReason: string };
   [key: string]: unknown;
 };
 

@@ -390,6 +390,21 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["priorities"], [])
         self.assertIn("자동 분석을 완료하지 못했습니다", report["summaryText"])
 
+    def test_invalid_later_decisions_preserve_checked_measurements_without_advice(self):
+        def decide(view):
+            if not view["toolResults"]:
+                return {"action": "analyze_segment", "candidateId": "pitch_change",
+                        "segmentIds": ["high-1", "high-2"]}
+            return {"action": "compare_previous_session", "candidateId": "pitch_change"}
+
+        report = generate_report(self.request(), decide=decide, agent_mode=True)
+        self.assertEqual(report["agentRun"]["stopReason"], "decision_unavailable")
+        self.assertEqual(report["status"], "limited")
+        self.assertEqual([item["id"] for item in report["priorities"]], ["pitch_change"])
+        self.assertIn("평균 목소리 높이", report["summaryText"])
+        self.assertEqual(report["priorities"][0]["recommendation"], "")
+        self.assertEqual(report["priorities"][0]["evidenceIds"], [])
+
     def test_coverage_alone_does_not_mean_measurements_are_sufficient(self):
         windows = [segment(f"missing-{n}", n * 10000, (n + 1) * 10000, .3,
                            audio=False, face=True)

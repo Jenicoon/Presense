@@ -110,6 +110,7 @@ def _decision_view(state: AgentState, rag) -> dict:
                                             and ("analyze_concept", item["id"]) not in state.seen
                                             and (weak is None or item["id"] in weak["sameIntervalAlternatives"])],
             "reviewReadyCandidateIds": review_ready,
+            "finishEligibleCandidateIds": _finish_eligible_ids(state),
             "pendingPriorGoalComparisonId": pending_prior_goal,
             "paperSearchAvailable": rag is not None,
             "weakMeasurementContext": weak,
@@ -344,9 +345,25 @@ def _weak_measurement_context(state: AgentState) -> dict | None:
             "sameIntervalAlternatives": alternatives}
 
 
+def _finish_eligible_ids(state: AgentState) -> list[str]:
+    """Only measurements the agent actually checked and the finish validator accepts."""
+    selected = []
+    for action in state.actions:
+        if action["action"] != "analyze_segment":
+            continue
+        identity = action["candidateId"]
+        item = state.candidate(identity)
+        if (identity not in selected and item["measurementQuality"] >= .8
+                and item["independentObservations"] >= 2
+                and (identity not in {"pitch_change", "pitch_variability"}
+                     or item.get("coherentShiftCount", 2) >= 2)):
+            selected.append(identity)
+    return selected
+
+
 def _safe_next_action(state: AgentState, rag) -> dict:
-    """Fail closed when the decision model is unavailable or keeps erring."""
-    return {"action": "finish", "priorityCandidateIds": []}
+    """Preserve checked measurements without inventing research-backed advice."""
+    return {"action": "finish", "priorityCandidateIds": _finish_eligible_ids(state)[:3]}
 
 
 def _validate_action(raw: dict, state: AgentState, rag) -> dict:
@@ -509,7 +526,8 @@ def run_agent(request: ReviewRequest, summary: dict, candidates: list[dict], rag
                     proposals.append({"proposedAction": _proposal_view(proposed),
                                       "serverValidation": "rejected", "reason": str(error)[:160]})
                     state.decision_errors.append(str(error)[:160])
-                    logger.warning("Agent decision rejected (%s), retry %s", type(error).__name__, attempt + 1)
+                    logger.warning("Agent decision rejected (%s: %s), retry %s",
+                                   type(error).__name__, str(error)[:160], attempt + 1)
                 except Exception as error:
                     proposals.append({"proposedAction": _proposal_view(proposed),
                                       "serverValidation": "unavailable",

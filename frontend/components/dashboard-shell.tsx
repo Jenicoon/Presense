@@ -1214,6 +1214,7 @@ export function DashboardShell() {
                   <div className="coach-card coach-data"><h3>{lang === "ko" ? "AI 분석 보고서" : "AI analysis report"}</h3><p>{agentReport.summaryText}</p></div>
                   {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}</div>)}
                   {agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
+                  {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}
               </div>}
 
@@ -1280,7 +1281,8 @@ export function DashboardShell() {
             {saveStatus && !saved && <p role="alert" className="error-msg">{saveStatus}</p>}
             {SIGNAL_SOURCE === "live" && agentReportLoading && <p role="status">{lang === "ko" ? "보고서를 생성하고 있습니다…" : "Generating report…"}</p>}
             {SIGNAL_SOURCE === "live" && agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "다시 시도" : "Retry"}</button>}</div>}
-            {agentReport && <p role="status">{lang === "ko" ? "보고서가 준비되었습니다." : "The report is ready."}</p>}
+            {agentReport && <p role="status">{agentReport.agentRun?.stopReason === "decision_unavailable" ? (lang === "ko" ? "제한된 보고서가 생성되었습니다." : "A limited report is ready.") : (lang === "ko" ? "보고서가 준비되었습니다." : "The report is ready.")}</p>}
+            {agentReport?.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
             <div className="save-modal-actions">
               <button type="button" className="btn btn-outline" disabled={saving} onClick={() => setSaveDialogOpen(false)}>{lang === "ko" ? "저장하지 않기" : "Don't save"}</button>
               <button type="button" className="btn btn-primary" onClick={handleSaveSession} disabled={saving || (SIGNAL_SOURCE === "live" && (!agentReport || agentReportLoading)) || (saveVideo && recordingFinalizing) || !sessionTitle.trim()}>{saving ? (lang === "ko" ? "저장 중…" : "Saving…") : saveVideo && recordingFinalizing ? (lang === "ko" ? "영상 준비 중…" : "Preparing video…") : (lang === "ko" ? "저장하기" : "Save session")}</button>

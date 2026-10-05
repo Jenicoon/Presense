@@ -37,6 +37,10 @@ frontend/public/samples/
 # Local server logs
 *.log
 
+# Downloaded research PDFs and local search index
+data/papers/*.pdf
+data/rag_db/
+
 # Personal editor settings and project documents
 .obsidian/
 .document/
