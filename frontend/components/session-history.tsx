@@ -52,7 +52,7 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     <div className="diagnosis-modal-eyebrow">{ko ? "세션 리뷰" : "Session review"}</div>
     <h2 id="history-review-title" className="diagnosis-modal-title">{record.title}</h2>
     {record.agentReport && <section className="history-review-section">
-      <h3>{ko ? "Agent 보고서" : "Agent report"}</h3>
+      <h3>{ko ? "AI 분석 보고서" : "AI analysis report"}</h3>
       <p>{record.agentReport.summaryText}</p>
       <div className="history-review-coaching">{record.agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}>
         <h3>{item.label}</h3><p>{item.observationText}</p>

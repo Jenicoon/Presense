@@ -1211,7 +1211,7 @@ export function DashboardShell() {
                 {agentReportLoading && <p role="status">{lang === "ko" ? "구간별 분석 보고서를 생성하고 있습니다…" : "Generating the segment analysis report…"}</p>}
                 {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
                 {agentReport && <>
-                  <div className="coach-card coach-data"><h3>{lang === "ko" ? "Agent 보고서" : "Agent report"}</h3><p>{agentReport.summaryText}</p></div>
+                  <div className="coach-card coach-data"><h3>{lang === "ko" ? "AI 분석 보고서" : "AI analysis report"}</h3><p>{agentReport.summaryText}</p></div>
                   {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}</div>)}
                   {agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
                 </>}

@@ -117,7 +117,7 @@ export const settingsSections: SettingsSection[] = [
     ],
   },
   {
-    title: "AI Agent Preferences",
+    title: "AI ChatBot Preferences",
     items: [
       {
         id: "concise-coaching-tone",
