@@ -13,7 +13,7 @@ from textwrap import dedent
 from typing import Callable
 
 from .report_schema import Evidence, ReviewRequest, Synthesis
-from .session_analyzer import analyze_session, metric
+from .session_analyzer import analyze_session, describe_observations, metric
 from .decision_agent import build_memory, run_agent
 
 # 1. 설정값과 시간 표기 도우미
@@ -329,6 +329,32 @@ def _empty_report_message(status: str, ko: bool, has_candidates: bool) -> str:
             "Analysis completed. There was not enough usable observation data to identify a reliable improvement item.")
 
 
+def _observed_summary(observations: dict, status: str, ko: bool,
+                      has_candidates: bool, decision_unavailable: bool) -> str:
+    """Lead with measured session facts; keep coaching eligibility separate."""
+    peak = observations["peakSegment"]
+    if observations["observedMs"] and peak:
+        if ko:
+            factual = (f"관측된 {observations['observedMs'] / 1000:.0f}초 구간의 평균 모델 스트레스 점수는 "
+                       f"{observations['averageStressScore'] * 100:.0f}/100입니다. "
+                       f"가장 높은 관측 구간은 {_clock(peak['startMs'])}–{_clock(peak['endMs'])} "
+                       f"({peak['stressScore'] * 100:.0f}/100)입니다. ")
+        else:
+            factual = (f"Across {observations['observedMs'] / 1000:.0f} observed seconds, the mean model stress "
+                       f"score was {observations['averageStressScore'] * 100:.0f}/100. "
+                       f"The highest observed interval was {_clock(peak['startMs'])}–{_clock(peak['endMs'])} "
+                       f"({peak['stressScore'] * 100:.0f}/100). ")
+    else:
+        factual = ("분석 가능한 음성·영상 구간이 없습니다. " if ko else
+                   "No usable audio or video interval was available. ")
+    if decision_unavailable:
+        outcome = ("Agent 판단이 중단되어 개선점은 확정하지 못했습니다." if ko else
+                   "The Agent could not finish evaluating an improvement item.")
+    else:
+        outcome = _empty_report_message(status, ko, has_candidates)
+    return factual + outcome
+
+
 # 5. Luxia 응답 처리와 행동·보고서 요청
 # 행동 선택은 decision_agent.run_agent()가 호출하고, 문안 생성은 아래
 # generate_report()가 호출한다. 둘 다 같은 API 전송 함수를 사용한다.
@@ -534,6 +560,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
                     agent_mode: bool = False) -> dict:
     # 1. Whole-session measurements. 2. Inventory of valid model outputs.
     summary, candidates = analyze_session(request)
+    observation_report = describe_observations(request, summary)
     # 3. The Agent chooses what to inspect; preprocessing assigns no priority.
     agent_state = (run_agent(request, summary, candidates, rag=rag, decide=decide,
                              prior=prior_memory, model_version=model_version,
@@ -741,10 +768,8 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
         verification["summaryFallbackUsed"] = True
     analysis_status = _analysis_status(request, summary, candidates, priorities, agent_state)
     summary_text = ((synthesis.summary if synthesis and not summary_fallback_used else fallback_summary) if priorities else
-                    ("자동 분석을 완료하지 못했습니다. 잠시 후 다시 확인해 주세요." if ko else
-                     "Automated analysis could not finish. Please check again later.")
-                    if agent_state is not None and agent_state.stop_reason == "decision_unavailable" else
-                    _empty_report_message(analysis_status, ko, bool(candidates)))
+                    _observed_summary(observation_report, analysis_status, ko, bool(candidates),
+                                      agent_state is not None and agent_state.stop_reason == "decision_unavailable"))
     verification["claims"] = [{
         "kind": "summary", "claim": summary_text,
         "segmentIds": sorted({row["segmentId"] for issue in priorities
@@ -786,7 +811,8 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
         "synthesisStatus": "generated" if synthesis else "not_required" if not priorities else "unavailable",
         "summaryFallbackUsed": summary_fallback_used,
         "summaryText": summary_text,
-        "analysis": summary, "candidateCount": len(candidates), "priorities": priorities,
+        "analysis": summary, "observationReport": observation_report,
+        "candidateCount": len(candidates), "priorities": priorities,
         "evidence": list(evidence.values()), "limitations": warnings,
         "researchActions": research_actions,
         "claimVerification": verification,

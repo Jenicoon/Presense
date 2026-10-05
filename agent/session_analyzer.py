@@ -144,3 +144,42 @@ def analyze_session(request: ReviewRequest):
             "measurementSeries": series,
         })
     return summary, candidates
+
+
+def describe_observations(request: ReviewRequest, summary: dict) -> dict:
+    """Factual model outputs shown even when no coaching finding passes review."""
+    usable = [segment for segment in request.segments
+              if segment.quality.audioValid or segment.quality.faceDetected]
+    peak = max(usable, key=lambda segment: segment.stressScore, default=None)
+    concepts = []
+    names = sorted({name for segment in usable
+                    if segment.quality.audioValid and segment.quality.faceDetected
+                    for name in segment.concepts})
+    for name in names:
+        values = [metric(segment, "concept", name) for segment in usable]
+        values = [value for value in values if value is not None]
+        if values:
+            concepts.append({"name": name, "meanValue": round(sum(values) / len(values), 4),
+                             "observations": len(values)})
+    concepts.sort(key=lambda row: (-row["meanValue"], row["name"]))
+
+    features = []
+    for (modality, key), (identity, label, _) in MEASUREMENT_INFO.items():
+        values = [metric(segment, modality, key) for segment in usable]
+        values = [value for value in values if value is not None]
+        if values:
+            features.append({"id": identity, "label": label,
+                             "meanValue": round(sum(values) / len(values), 4),
+                             "minValue": round(min(values), 4),
+                             "maxValue": round(max(values), 4),
+                             "observations": len(values),
+                             "unit": "Hz" if key in {"f0_mean", "f0_std"} else ""})
+    return {
+        "observedMs": summary["observedMs"], "coverage": summary["coverage"],
+        "averageStressScore": summary["averageStress"],
+        "peakSegment": ({"startMs": peak.startMs, "endMs": peak.endMs,
+                         "stressScore": peak.stressScore, "segmentId": peak.segmentId}
+                        if peak else None),
+        "stressTimeline": summary["timeline"],
+        "concepts": concepts, "features": features,
+    }

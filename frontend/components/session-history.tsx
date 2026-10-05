@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BrainCircuit, CalendarDays, Film, FolderClock, Gauge, LoaderCircle, Play, Sparkles, Trash2, X } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { StressChart } from "@/components/stress-chart";
+import { AgentEvidence, AgentObservationReport } from "@/components/agent-observation-report";
 import { deletePracticeSession, loadSessionHistory, type SessionHistoryRecord } from "@/lib/supabase/data";
 
 function severity(score: number) { return score >= 0.7 ? "sev-high" : score >= 0.5 ? "sev-medium" : "sev-low"; }
@@ -84,9 +85,11 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     {record.agentReport && <section className="history-review-section">
       <h3>{ko ? "AI 분석 보고서" : "AI analysis report"}</h3>
       <p>{record.agentReport.summaryText}</p>
+      <AgentObservationReport report={record.agentReport} ko={ko} />
       <div className="history-review-coaching">{record.agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}>
         <h3>{item.label}</h3><p>{item.observationText}</p>
         {(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}
+        <AgentEvidence report={record.agentReport!} ids={item.evidenceIds} ko={ko} />
         {item.ranges?.length > 0 && <small>{item.ranges.map((range) => `${Math.round(range.startMs / 1000)}–${Math.round(range.endMs / 1000)}s`).join(", ")}</small>}
       </div>)}</div>
       {record.agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}

@@ -23,8 +23,9 @@ import { initialTimeline, postSessionHighlights, practiceScenes, samplePresentat
 import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
-import { generateAgentReport, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
+import { agentNextPractice, generateAgentReport, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
 import { StressChart } from "@/components/stress-chart";
+import { AgentEvidence, AgentObservationReport } from "@/components/agent-observation-report";
 
 type SessionState = "idle" | "starting" | "live" | "ended" | "error";
 type ReportSummary = {
@@ -805,10 +806,8 @@ export function DashboardShell() {
       ? `Noticeable ${report.mostStressfulPhase.toLowerCase()}-section pressure`
       : "Mostly stable delivery";
     const englishDiagnosis = agentReport?.summaryText ?? `Starting baseline: ${Math.round(report.startBaseline * 100)}% (includes this session's pre-start preparation; first timeline sample). Peak pressure reached ${report.peakValue}% around the ${report.peakPhase} phase. Deck: ${report.deckName || "No deck used"}.`;
-    const englishNextAction = agentReport?.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation)?.practiceSuggestion ||
-      agentReport?.priorities.find((item) => item.reviewAction || item.recommendation)?.reviewAction ||
-      agentReport?.priorities.find((item) => item.recommendation)?.recommendation ||
-      (agentReport ? "" : "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.");
+    const englishNextAction = agentReport ? agentNextPractice(agentReport, false) :
+      "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.";
 
     savingRef.current = true;
     setSaving(true);
@@ -1176,7 +1175,7 @@ export function DashboardShell() {
                 </div>
                 <div className="coach-card coach-ok">
                   <h3>{t("report.nextStep")}</h3>
-                  <p>{agentReport?.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation)?.practiceSuggestion || agentReport?.priorities.find((item) => item.reviewAction || item.recommendation)?.reviewAction || (agentReport ? (lang === "ko" ? "검증된 권고가 없습니다." : "No verified recommendation available.") : t("report.nextActionText"))}</p>
+                  <p>{agentReport ? agentNextPractice(agentReport, lang === "ko") : t("report.nextActionText")}</p>
                 </div>
               </div>
             </div>
@@ -1210,7 +1209,7 @@ export function DashboardShell() {
                 </div>
                 <div className="report-card">
                   <div className="rc-label">{t("report.nextStep")}</div>
-                  <div className="rc-value" style={{ fontSize: 14, lineHeight: 1.4 }}>{agentReport?.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation)?.practiceSuggestion || agentReport?.priorities.find((item) => item.reviewAction || item.recommendation)?.reviewAction || (agentReport ? (lang === "ko" ? "검증된 권고가 없습니다." : "No verified recommendation available.") : t("report.nextActionText"))}</div>
+                  <div className="rc-value" style={{ fontSize: 14, lineHeight: 1.4 }}>{agentReport ? agentNextPractice(agentReport, lang === "ko") : t("report.nextActionText")}</div>
                   <div className="rc-desc">{t("report.nextStepDesc")}</div>
                 </div>
               </div>
@@ -1226,7 +1225,8 @@ export function DashboardShell() {
                 {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
                 {agentReport && <>
                   <div className="coach-card coach-data"><h3>{lang === "ko" ? "AI 분석 보고서" : "AI analysis report"}</h3><p>{agentReport.summaryText}</p></div>
-                  {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}</div>)}
+                  <AgentObservationReport report={agentReport} ko={lang === "ko"} />
+                  {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}<AgentEvidence report={agentReport} ids={item.evidenceIds} ko={lang === "ko"} /></div>)}
                   {agentReport.limitations?.map((limitation, index) => <p className="signal-note" key={index}>{limitation}</p>)}
                   {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}

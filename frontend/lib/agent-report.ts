@@ -19,6 +19,15 @@ export type AgentReport = {
   status: "complete" | "limited";
   summaryText: string;
   analysisStatus: string;
+  observationReport?: {
+    observedMs: number;
+    coverage: number;
+    averageStressScore: number | null;
+    peakSegment: { startMs: number; endMs: number; stressScore: number; segmentId: string } | null;
+    stressTimeline: Array<{ startMs: number; endMs: number; stressScore: number }>;
+    concepts: Array<{ name: string; meanValue: number; observations: number }>;
+    features: Array<{ id: string; label: string; meanValue: number; minValue: number; maxValue: number; observations: number; unit: string }>;
+  };
   priorities: Array<{
     id: string;
     label: string;
@@ -26,13 +35,27 @@ export type AgentReport = {
     recommendation: string;
     reviewAction: string;
     practiceSuggestion: string;
+    evidenceIds?: string[];
     ranges: Array<{ startMs: number; endMs: number }>;
   }>;
   limitations: string[];
+  evidence?: Array<{ id: string; title?: string | null; source: string; articleUrl?: string | null; doi?: string | null; findingKo?: string | null }>;
   analysis: Record<string, unknown>;
   agentRun?: { stopReason: string };
   [key: string]: unknown;
 };
+
+export function agentNextPractice(report: AgentReport, ko: boolean): string {
+  const finding = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
+  const recommendation = finding?.practiceSuggestion || finding?.reviewAction || finding?.recommendation;
+  if (recommendation) return recommendation;
+  if (!report.observationReport?.peakSegment) {
+    return ko ? "카메라와 마이크를 확인한 뒤 다시 발표를 녹화해 보세요." :
+      "Check the camera and microphone, then record another presentation.";
+  }
+  return ko ? "모델 점수가 가장 높았던 구간의 실제 영상·음성을 확인하고, 같은 발표를 다시 녹화해 비교해 보세요." :
+    "Review the recording at the highest model-score interval, then record the same talk again for comparison.";
+}
 
 function finiteNumbers(values: Record<string, unknown>): Record<string, number> {
   return Object.fromEntries(Object.entries(values).filter((entry): entry is [string, number] =>

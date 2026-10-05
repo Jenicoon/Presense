@@ -77,6 +77,21 @@ class AgentReportTests(unittest.TestCase):
         self.assertEqual(summary["observedMs"], 0)
         self.assertEqual(candidates, [])
 
+    def test_observation_report_omits_invalid_channel_values(self):
+        request = self.request([
+            segment("valid", 0, 10000, .6, pitch=130, brow=.2),
+            segment("audio-only", 10000, 20000, .8, face=False, pitch=150, brow=.9),
+            segment("invalid", 20000, 30000, .95, audio=False, face=False, pitch=400, brow=.9),
+        ])
+        report = generate_report(request, agent_mode=True, decide=lambda _: {"action": "finish", "priorityCandidateIds": []})
+        observed = report["observationReport"]
+        self.assertEqual(observed["peakSegment"]["segmentId"], "audio-only")
+        self.assertEqual(observed["observedMs"], 20000)
+        self.assertEqual(observed["concepts"][0]["observations"], 1)
+        brow = next(row for row in observed["features"] if row["id"] == "brow_tension")
+        self.assertEqual(brow["observations"], 1)
+        self.assertEqual(brow["meanValue"], .2)
+
     def test_pitch_measurement_is_visible_without_reference_cutoff(self):
         few = [segment("a", 0, 10000, .3), segment("b", 10000, 20000, .3),
                segment("high", 30000, 40000, .8, pitch=160)]

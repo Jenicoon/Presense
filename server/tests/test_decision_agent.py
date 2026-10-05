@@ -365,6 +365,10 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["synthesisStatus"], "not_required")
         self.assertIn("분석은 정상적으로 완료", report["summaryText"])
         self.assertIn("측정 품질이나 반복 관측", report["summaryText"])
+        self.assertIn("00:30–00:40", report["summaryText"])
+        self.assertEqual(report["observationReport"]["peakSegment"]["segmentId"], "measured")
+        self.assertTrue(report["observationReport"]["concepts"])
+        self.assertTrue(report["observationReport"]["features"])
         self.assertEqual(report["priorities"], [])
         self.assertEqual(report["claimVerification"]["claims"][0]["status"], "outcome_explanation")
         self.assertEqual(rag.queries, [])
@@ -388,7 +392,8 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["agentRun"]["stopReason"], "decision_unavailable")
         self.assertEqual(report["status"], "limited")
         self.assertEqual(report["priorities"], [])
-        self.assertIn("자동 분석을 완료하지 못했습니다", report["summaryText"])
+        self.assertIn("Agent 판단이 중단", report["summaryText"])
+        self.assertIn("00:30–00:40", report["summaryText"])
 
     def test_invalid_later_decisions_preserve_checked_measurements_without_advice(self):
         def decide(view):
