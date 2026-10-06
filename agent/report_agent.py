@@ -315,33 +315,89 @@ def _analysis_status(request: ReviewRequest, summary: dict,
 
 
 def _observed_summary(observations: dict, ko: bool) -> str:
-    """Describe an actual interval comparison without judging delivery quality."""
+    """Connect the saved measurements into a readable session review."""
     peak = observations["peakSegment"]
+    if not peak:
+        return ("분석 가능한 음성·영상 구간이 없습니다. 카메라와 마이크 상태를 확인해 주세요." if ko else
+                "No usable audio or video interval was available. Check the camera and microphone.")
+
+    interval = f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])}"
+    peak_score = round(peak["stressScore"] * 100)
+    average = observations.get("averageStressScore")
+    timeline = observations.get("stressTimeline") or []
+    nearly_flat = bool(timeline) and max(row["stressScore"] for row in timeline) - min(
+        row["stressScore"] for row in timeline) < .02
+    if nearly_flat:
+        sentences = [(f"분석 구간의 모델 스트레스 점수는 대체로 {peak_score}/100 안팎으로 비슷했습니다."
+                      if ko else f"Model stress scores were similar across the observed intervals, near {peak_score}/100.")]
+    elif ko:
+        sentences = [f"{interval} 구간의 모델 스트레스 점수는 {peak_score}/100으로 이번 발표에서 가장 높았습니다"
+                     + (f"(분석 구간 평균 {round(average * 100)}/100)." if average is not None else ".")]
+    else:
+        sentences = [f"The model stress score peaked at {peak_score}/100 in {interval}"
+                     + (f" (observed average {round(average * 100)}/100)." if average is not None else ".")]
+
+    phases = [row for row in observations.get("phaseSummaries", [])
+              if row["averageStressScore"] is not None
+              and row["observedMs"] >= (row["endMs"] - row["startMs"]) / 2]
+    if len(phases) >= 2:
+        highest = max(phases, key=lambda row: row["averageStressScore"])
+        lowest = min(phases, key=lambda row: row["averageStressScore"])
+        if round((highest["averageStressScore"] - lowest["averageStressScore"]) * 100) >= 2:
+            names = ["도입", "중반", "마무리"] if ko else ["opening", "middle", "closing"]
+            all_phases = observations["phaseSummaries"]
+            high_name, low_name = names[all_phases.index(highest)], names[all_phases.index(lowest)]
+            sentences.append(
+                f"{high_name} 평균 {round(highest['averageStressScore'] * 100)}/100으로 "
+                f"{low_name} {round(lowest['averageStressScore'] * 100)}/100보다 높았습니다."
+                if ko else
+                f"The {high_name} averaged {round(highest['averageStressScore'] * 100)}/100, "
+                f"above the {low_name} at {round(lowest['averageStressScore'] * 100)}/100.")
+
     patterns = observations["patterns"]
-    if peak and patterns:
-        pattern = patterns[0]
-        label = pattern["label"].split(" / ")[0 if ko else 1]
-        unit = f" {pattern['unit']}" if pattern["unit"] else ""
-        if ko:
-            return (f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])} 구간에서 모델 스트레스 점수가 "
-                    f"이번 발표 중 가장 높았습니다. 같은 구간의 {label}는 {pattern['value']:.2f}{unit}로, "
-                    f"다른 분석 구간의 중앙값 {pattern['comparisonValue']:.2f}{unit}와 차이가 있었습니다.")
-        else:
-            return (f"The model stress score was highest at {_clock(peak['startMs'])}–{_clock(peak['endMs'])}. "
-                    f"{label} measured {pattern['value']:.2f}{unit} there, compared with a median of "
-                    f"{pattern['comparisonValue']:.2f}{unit} in other analysis windows.")
-    if peak:
-        if not observations["features"]:
-            return (f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])} 구간의 모델 스트레스 점수가 이번 발표에서 가장 높았습니다. "
-                    "비교할 음성·영상 측정값은 수집되지 않았습니다." if ko else
-                    f"The model stress score was highest at {_clock(peak['startMs'])}–{_clock(peak['endMs'])}. "
-                    "No audio or video features were available for comparison.")
-        return (f"{_clock(peak['startMs'])}–{_clock(peak['endMs'])} 구간의 모델 스트레스 점수가 이번 발표에서 가장 높았습니다. "
-                "음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다." if ko else
-                f"The model stress score was highest at {_clock(peak['startMs'])}–{_clock(peak['endMs'])}. "
-                "The measured audio and video features showed no clear interval difference.")
-    return ("분석 가능한 음성·영상 구간이 없습니다. 카메라와 마이크 상태를 확인해 주세요." if ko else
-            "No usable audio or video interval was available. Check the camera and microphone.")
+    if patterns:
+        descriptions = []
+        for pattern in patterns[:2]:
+            label = pattern["label"].split(" / ")[0 if ko else 1]
+            unit = f" {pattern['unit']}" if pattern["unit"] else ""
+            descriptions.append(f"{label} {pattern['value']:.2f}{unit}"
+                                + (f"(다른 창 중앙값 {pattern['comparisonValue']:.2f}{unit})" if ko else
+                                   f" (other-window median {pattern['comparisonValue']:.2f}{unit})"))
+        sentences.append((f"같은 구간에서 " if ko else "In that interval, ")
+                         + " · ".join(descriptions) + ("가 관측됐습니다." if ko else " were observed."))
+    elif observations["features"]:
+        features = {row["id"]: row for row in observations["features"]}
+        selected = [features[key] for key in ("pitch_change", "pitch_variability", "gaze") if key in features][:2]
+        values = []
+        for feature in selected:
+            label = feature["label"].split(" / ")[0 if ko else 1]
+            values.append(f"{label} {feature['meanValue']:.2f}"
+                          + (f" {feature['unit']}" if feature["unit"] else ""))
+        sentences.append(("음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다. " if ko else
+                          "The measured audio and video features showed no clear interval difference. ")
+                         + (("발표 전체 관측 평균: " if ko else "Observed session means: ")
+                            + " · ".join(values) + "." if values else ""))
+    else:
+        sentences.append("비교할 음성·영상 측정값은 수집되지 않았습니다." if ko else
+                         "No audio or video features were available for comparison.")
+
+    concepts = observations.get("peakConcepts") or []
+    if concepts:
+        concept = concepts[0]
+        sentences.append((f"같은 구간의 Concept 출력 ‘{concept['name']}’ 값은 {concept['value']:.2f}"
+                          f"(다른 창 중앙값 {concept['comparisonValue']:.2f})였습니다." if ko else
+                          f"The {concept['name']} concept output there was {concept['value']:.2f} "
+                          f"(other-window median {concept['comparisonValue']:.2f})."))
+    elif observations.get("concepts"):
+        concept = observations["concepts"][0]
+        sentences.append((f"발표 전체에서 가장 크게 나온 Concept 출력은 ‘{concept['name']}’ 평균 {concept['meanValue']:.2f}이었습니다."
+                          if ko else f"The largest session-wide concept output was {concept['name']} "
+                          f"at {concept['meanValue']:.2f} on average."))
+    sentences.append(("전체 영상에서 실제 발화와 표정의 흐름을 확인해 보세요." if ko else
+                      "Review the speech and expression across the recording.") if nearly_flat else
+                     (f"{interval} 구간의 실제 발화와 표정을 영상에서 확인해 보세요." if ko else
+                      f"Review the actual speech and expression in {interval} on the recording."))
+    return " ".join(sentences)
 
 
 def _practice_focus(observations: dict, ko: bool) -> str:

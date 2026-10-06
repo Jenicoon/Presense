@@ -23,7 +23,7 @@ import { initialTimeline, postSessionHighlights, practiceScenes, samplePresentat
 import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
-import { agentNextPractice, generateAgentReport, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
+import { agentNextPractice, generateAgentReport, reportDisplaySummary, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
 import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence, AgentObservationReport } from "@/components/agent-observation-report";
 
@@ -818,7 +818,7 @@ export function DashboardShell() {
     const englishResult = agentReport ? (agentReport.status === "complete" ? "AI report complete" : "AI report limited") : report.noticeable
       ? `Noticeable ${report.mostStressfulPhase.toLowerCase()}-section pressure`
       : "Mostly stable delivery";
-    const englishDiagnosis = agentReport?.summaryText ?? `Starting baseline: ${Math.round(report.startBaseline * 100)}% (includes this session's pre-start preparation; first timeline sample). Peak pressure reached ${report.peakValue}% around the ${report.peakPhase} phase. Deck: ${report.deckName || "No deck used"}.`;
+    const englishDiagnosis = agentReport ? reportDisplaySummary(agentReport, lang === "ko") : `Starting baseline: ${Math.round(report.startBaseline * 100)}% (includes this session's pre-start preparation; first timeline sample). Peak pressure reached ${report.peakValue}% around the ${report.peakPhase} phase. Deck: ${report.deckName || "No deck used"}.`;
     const englishNextAction = agentReport ? agentNextPractice(agentReport, false) :
       "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.";
 
@@ -1180,7 +1180,7 @@ export function DashboardShell() {
               <div className="coach-stack">
                 <div className="coach-card coach-alert">
                   <h3>{t("report.overallJudgment")}</h3>
-                  <p>{agentReport?.summaryText ?? reportStateText}</p>
+                  <p>{agentReport ? reportDisplaySummary(agentReport, lang === "ko") : reportStateText}</p>
                 </div>
                 <div className="coach-card coach-data">
                   <h3>{t("report.peakPoint")}</h3>

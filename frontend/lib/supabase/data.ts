@@ -15,6 +15,7 @@ export type PresentationRecord = {
   diagnosis: string;
   nextAction: string;
   sceneLabel: string;
+  agentReport?: AgentReport | null;
 };
 
 export type DiagnosisRecord = {
@@ -102,16 +103,25 @@ export async function loadDashboardData() {
     };
   }
 
-  const [{ data: recordRows, error: recordError }, { data: diagnosisRows, error: diagnosisError }] = await Promise.all([
+  const [recordResult, { data: diagnosisRows, error: diagnosisError }] = await Promise.all([
     supabase
       .from("presentation_records")
-      .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label")
+      .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label, agent_report")
       .order("session_date", { ascending: false }),
     supabase
       .from("diagnosis_history")
       .select("id, label, value, detail, created_at")
       .order("created_at", { ascending: false }),
   ]);
+
+  let { data: recordRows, error: recordError } = recordResult;
+  if (recordError && (recordError.code === "42703" || recordError.code === "PGRST204")) {
+    const legacy = await supabase.from("presentation_records")
+      .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label")
+      .order("session_date", { ascending: false });
+    recordRows = legacy.data as typeof recordRows;
+    recordError = legacy.error;
+  }
 
   if (recordError) {
     throw recordError;
@@ -132,6 +142,7 @@ export async function loadDashboardData() {
       diagnosis: row.diagnosis,
       nextAction: row.next_action ?? "",
       sceneLabel: row.scene_label ?? "",
+      agentReport: row.agent_report && typeof row.agent_report === "object" ? row.agent_report as AgentReport : null,
     })) as PresentationRecord[],
     diagnosisHistory: (diagnosisRows ?? []).map((row) => ({
       id: row.id,

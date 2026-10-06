@@ -73,6 +73,8 @@ test('generated report is stored with its session and returned in history', asyn
   assert.deepEqual(events[0][1].agent_report, report);
   const [record] = await api.loadSessionHistory();
   assert.deepEqual(record.agentReport, report);
+  const dashboard = await api.loadDashboardData();
+  assert.deepEqual(dashboard.presentationRecords[0].agentReport, report);
 });
 test('summary failure after persistence is a warning, not a failed save', async () => {
   const { api } = setup({ summaryThrows: true });

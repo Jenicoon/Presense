@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Activity, BrainCircuit, CalendarDays, Clock, FolderClock, MoreHorizontal, Play, SlidersHorizontal, Sparkles, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { useLang } from "@/lib/i18n";
+import { reportDisplaySummary } from "@/lib/agent-report";
 import { loadDashboardData, type DiagnosisRecord, type PresentationRecord } from "@/lib/supabase/data";
 
 type Translate = (key: string, fallback?: string) => string;
@@ -102,7 +103,7 @@ function DiagnosisModal({ diagnosis, onClose }: { diagnosis: DiagnosisRecord; on
 }
 
 function ReviewModal({ record, onClose, severityClass }: { record: PresentationRecord; onClose: () => void; severityClass: (r: string) => string }) {
-  const { t } = useLang();
+  const { lang, t } = useLang();
   const stressValue = parseFloat(record.stressAverage);
   const stressPercent = Math.round(stressValue * 100);
   const stressColor = stressPercent > 65 ? "#ef4444" : stressPercent > 45 ? "#f59e0b" : "#22c55e";
@@ -193,7 +194,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
           <div className="coach-stack" style={{ gap: 8 }}>
             <div className="coach-card coach-alert">
               <h3>{t("modal.overallJudgment")}</h3>
-              <p>{record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
+              <p>{record.agentReport ? reportDisplaySummary(record.agentReport, lang === "ko") : record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
             </div>
             {record.nextAction && (
               <div className="coach-card coach-ok">

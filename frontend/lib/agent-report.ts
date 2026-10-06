@@ -52,6 +52,62 @@ export type AgentReport = {
   [key: string]: unknown;
 };
 
+/** Expand older, generic saved summaries using measurements already stored in the report. */
+export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
+  const original = report.summaryText;
+  if (!original.includes(ko ? "음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다" :
+    "The measured audio and video features showed no clear interval difference")) return original;
+  const observed = report.observationReport;
+  const peak = observed?.peakSegment;
+  if (!observed || !peak) return original;
+  const time = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+  const interval = `${time(peak.startMs)}–${time(peak.endMs)}`;
+  const mean = observed.averageStressScore;
+  const scores = (observed.stressTimeline ?? []).map((item) => item.stressScore);
+  const nearlyFlat = scores.length > 0 && Math.max(...scores) - Math.min(...scores) < .02;
+  const sentences = [nearlyFlat
+    ? ko ? `분석 구간의 모델 스트레스 점수는 대체로 ${Math.round(peak.stressScore * 100)}/100 안팎으로 비슷했습니다.` :
+      `Model stress scores were similar across the observed intervals, near ${Math.round(peak.stressScore * 100)}/100.`
+    : ko
+    ? `${interval} 구간의 모델 스트레스 점수는 ${Math.round(peak.stressScore * 100)}/100으로 이번 발표에서 가장 높았습니다${mean == null ? "." : ` (분석 구간 평균 ${Math.round(mean * 100)}/100).`}`
+    : `The model stress score peaked at ${Math.round(peak.stressScore * 100)}/100 in ${interval}${mean == null ? "." : ` (observed average ${Math.round(mean * 100)}/100).`}`];
+  const phases = (observed.phaseSummaries ?? []).filter((phase) => phase.averageStressScore !== null &&
+    phase.observedMs >= (phase.endMs - phase.startMs) / 2);
+  if (phases.length >= 2) {
+    const highest = phases.reduce((a, b) => (a.averageStressScore ?? 0) >= (b.averageStressScore ?? 0) ? a : b);
+    const lowest = phases.reduce((a, b) => (a.averageStressScore ?? 0) <= (b.averageStressScore ?? 0) ? a : b);
+    if (Math.round(((highest.averageStressScore ?? 0) - (lowest.averageStressScore ?? 0)) * 100) >= 2) {
+      const labels = ko ? ["도입", "중반", "마무리"] : ["opening", "middle", "closing"];
+      const rows = observed.phaseSummaries ?? [];
+      sentences.push(ko
+        ? `${labels[rows.indexOf(highest)]} 평균 ${Math.round((highest.averageStressScore ?? 0) * 100)}/100으로 ${labels[rows.indexOf(lowest)]} ${Math.round((lowest.averageStressScore ?? 0) * 100)}/100보다 높았습니다.`
+        : `The ${labels[rows.indexOf(highest)]} averaged ${Math.round((highest.averageStressScore ?? 0) * 100)}/100, above the ${labels[rows.indexOf(lowest)]} at ${Math.round((lowest.averageStressScore ?? 0) * 100)}/100.`);
+    }
+  }
+  const features = observed.features ?? [];
+  const selected = ["pitch_change", "pitch_variability", "gaze"].map((id) => features.find((item) => item.id === id)).filter((item) => item !== undefined).slice(0, 2);
+  if (selected.length) sentences.push((ko ? "음성·영상 특징의 구간 차이는 작았습니다. 발표 전체 관측 평균: " :
+    "Audio and video features changed little across intervals. Observed session means: ") +
+    selected.map((item) => `${item.label.split(" / ")[ko ? 0 : 1] || item.label} ${item.meanValue.toFixed(2)}${item.unit ? ` ${item.unit}` : ""}`).join(" · ") + ".");
+  const concept = observed.peakConcepts?.[0] ?? observed.concepts?.[0];
+  if (concept) {
+    if ("value" in concept) sentences.push(ko
+      ? `같은 구간의 Concept 출력 ‘${concept.name}’ 값은 ${concept.value.toFixed(2)} (다른 창 중앙값 ${concept.comparisonValue.toFixed(2)})였습니다.`
+      : `The ${concept.name} concept output there was ${concept.value.toFixed(2)} (other-window median ${concept.comparisonValue.toFixed(2)}).`);
+    else sentences.push(ko
+      ? `발표 전체에서 가장 크게 나온 Concept 출력은 ‘${concept.name}’ 평균 ${concept.meanValue.toFixed(2)}이었습니다.`
+      : `The largest session-wide concept output was ${concept.name} at ${concept.meanValue.toFixed(2)} on average.`);
+  }
+  sentences.push(nearlyFlat ? (ko ? "전체 영상에서 실제 발화와 표정의 흐름을 확인해 보세요." :
+    "Review the speech and expression across the recording.") :
+    (ko ? `${interval} 구간의 실제 발화와 표정을 영상에서 확인해 보세요.` :
+      `Review the actual speech and expression in ${interval} on the recording.`));
+  return sentences.join(" ");
+}
+
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
   const finding = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
   const recommendation = finding?.practiceSuggestion || finding?.reviewAction || finding?.recommendation;

@@ -91,6 +91,21 @@ class AgentReportTests(unittest.TestCase):
         self.assertEqual(observed["peakConcepts"][0]["value"], .8)
         self.assertEqual(observed["peakConcepts"][0]["comparisonValue"], .4)
 
+    def test_summary_connects_peak_phase_feature_and_concept(self):
+        windows = [segment("opening", 0, 10000, .2),
+                   segment("middle", 10000, 20000, .7, pitch=160),
+                   segment("closing", 20000, 30000, .4)]
+        windows[1]["concepts"]["음성 피치"] = .8
+        report = generate_report(self.request(windows, duration=30000), agent_mode=True,
+                                 decide=lambda _: {"action": "finish", "priorityCandidateIds": []})
+        text = report["summaryText"]
+        self.assertIn("00:10–00:20", text)
+        self.assertIn("70/100", text)
+        self.assertIn("중반 평균", text)
+        self.assertIn("평균 목소리 높이 160.00 Hz", text)
+        self.assertIn("Concept 출력 ‘음성 피치’ 값은 0.80", text)
+        self.assertNotIn("긴장이 발견", text)
+
     def test_observation_report_omits_invalid_channel_values(self):
         request = self.request([
             segment("valid", 0, 10000, .6, pitch=130, brow=.2),

@@ -386,6 +386,12 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["status"], "complete")
         self.assertEqual(report["synthesisStatus"], "not_required")
         self.assertIn("음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다", report["summaryText"])
+        self.assertIn("30/100", report["summaryText"])
+        self.assertIn("평균 목소리 높이 120.00 Hz", report["summaryText"])
+        self.assertIn("Concept 출력", report["summaryText"])
+        self.assertIn("실제 발화와 표정", report["summaryText"])
+        self.assertIn("비슷했습니다", report["summaryText"])
+        self.assertNotIn("이번 발표에서 가장 높았습니다", report["summaryText"])
         self.assertEqual(report["priorities"], [])
 
     def test_unavailable_decision_service_does_not_fake_a_completed_analysis(self):

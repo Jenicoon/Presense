@@ -6,6 +6,7 @@ import { BrainCircuit, CalendarDays, Film, FolderClock, Gauge, LoaderCircle, Pla
 import { useLang } from "@/lib/i18n";
 import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence, AgentObservationReport } from "@/components/agent-observation-report";
+import { reportDisplaySummary } from "@/lib/agent-report";
 import { deletePracticeSession, loadSessionHistory, type SessionHistoryRecord } from "@/lib/supabase/data";
 
 function severity(score: number) { return score >= 0.7 ? "sev-high" : score >= 0.5 ? "sev-medium" : "sev-low"; }
@@ -88,7 +89,7 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     <h2 id="history-review-title" className="diagnosis-modal-title">{record.title}</h2>
     {record.agentReport && <section className="history-review-section">
       <h3>{ko ? "AI 분석 보고서" : "AI analysis report"}</h3>
-      <p>{record.agentReport.summaryText}</p>
+      <p>{reportDisplaySummary(record.agentReport, ko)}</p>
       <AgentObservationReport report={record.agentReport} ko={ko} />
       <div className="history-review-coaching">{record.agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}>
         <h3>{item.label}</h3><p>{item.observationText}</p>
