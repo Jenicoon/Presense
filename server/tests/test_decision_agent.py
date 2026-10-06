@@ -410,6 +410,19 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(comparison["metricId"], "brow_tension")
         self.assertEqual(comparison["currentValue"], .1)
         self.assertIn("00:30–00:40", report["observationReport"]["practiceFocus"])
+
+    def test_report_lists_related_paper_as_context_without_unverified_coaching(self):
+        class ContextRag:
+            def retrieve_issue_evidence(self, issue_id, query, k=5):
+                return [{"id": "brow:context:0", "source": "brow-paper.pdf", "page": 3,
+                         "chunk": 0, "text": "Eyebrow movement was measured in speaking interaction.",
+                         "distance": .2, "topics": ["brow_tension"], "applicability": "related",
+                         "findingKo": "발화 중 눈썹 움직임을 관찰했습니다."}]
+        report = generate_report(self.request(), rag=ContextRag(), agent_mode=True,
+                                 decide=lambda _: {"action": "finish", "priorityCandidateIds": []})
+        self.assertEqual(report["observationEvidenceIds"], ["brow:context:0"])
+        self.assertEqual(report["evidence"][0]["applicability"], "related")
+        self.assertEqual(report["priorities"], [])
         self.assertIn("00:30–00:40", report["summaryText"])
 
     def test_invalid_later_decisions_preserve_checked_measurements_without_advice(self):

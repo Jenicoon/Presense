@@ -1326,16 +1326,23 @@ h1, h2, h3 { margin: 0; }
 
 .observation-section { margin-top: 14px; }
 .observation-section > strong { display: block; margin-bottom: 8px; font-size: 12px; }
+.observation-phase-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+.observation-phase-grid > div { display: grid; gap: 2px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.observation-phase-grid strong { font-size: 12px; }
+.observation-phase-grid span { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.observation-phase-grid small { font-size: 11px; color: var(--text-secondary); }
+.observation-scale { display: flex; justify-content: space-between; margin: 8px 38px 3px min(140px, 30%); color: var(--text-secondary); font-size: 11px; }
 .observation-bars { display: grid; gap: 8px; }
 .observation-bar-row { display: grid; grid-template-columns: minmax(90px, 140px) minmax(50px, 1fr) 38px; align-items: center; gap: 8px; font-size: 12px; }
 .observation-bar-row b { text-align: right; font-variant-numeric: tabular-nums; }
 .observation-bar-track { height: 9px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .observation-bar-fill { height: 100%; border-radius: inherit; background: var(--accent); }
 .observation-table-wrap { overflow-x: auto; }
-.observation-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.observation-table { width: 100%; min-width: 580px; border-collapse: collapse; font-size: 12px; }
 .observation-table th, .observation-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; }
 .observation-table th { color: var(--text-secondary); font-weight: 600; }
 .observation-table td:not(:first-child) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.observation-table td:last-child { min-width: 210px; white-space: normal; font-variant-numeric: normal; line-height: 1.5; }
 .report-panel-title { margin: 8px 0 2px; font-size: 16px; }
 
 /* ─── Report cards ─── */

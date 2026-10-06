@@ -8,7 +8,7 @@ from agent.build_demo_report import sample_request
 from agent.decision_agent import run_agent
 from agent.report_agent import _parse_json_object, _parse_luxia_content, generate_report
 from agent.report_schema import ReviewRequest
-from agent.session_analyzer import analyze_session
+from agent.session_analyzer import analyze_session, describe_observations
 
 
 def segment(identity, start, end, stress, *, audio=True, face=True, pitch=100, brow=.1, confidence=None):
@@ -76,6 +76,20 @@ class AgentReportTests(unittest.TestCase):
         summary, candidates = analyze_session(request)
         self.assertEqual(summary["observedMs"], 0)
         self.assertEqual(candidates, [])
+
+    def test_report_describes_session_phases_and_peak_concepts(self):
+        windows = [segment("opening", 0, 10000, .2),
+                   segment("middle", 10000, 20000, .7, pitch=160),
+                   segment("closing", 20000, 30000, .4)]
+        windows[1]["concepts"]["음성 피치"] = .8
+        request = self.request(windows, duration=30000)
+        summary, _ = analyze_session(request)
+        observed = describe_observations(request, summary)
+        self.assertEqual([row["averageStressScore"] for row in observed["phaseSummaries"]],
+                         [.2, .7, .4])
+        self.assertEqual(observed["peakConcepts"][0]["name"], "음성 피치")
+        self.assertEqual(observed["peakConcepts"][0]["value"], .8)
+        self.assertEqual(observed["peakConcepts"][0]["comparisonValue"], .4)
 
     def test_observation_report_omits_invalid_channel_values(self):
         request = self.request([

@@ -650,20 +650,22 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     hits_by_issue = {}
     observation_evidence_ids = []
     focus = next(iter(observation_report["patterns"]), None)
-    if focus and rag is not None and not priorities and focus["id"] in RESEARCHABLE_IDS:
+    if (focus and rag is not None and focus["id"] in RESEARCHABLE_IDS
+            and (not priorities or (agent_state is not None and not any(agent_state.hits.values())))):
         try:
             query = next(info[2] for info in MEASUREMENT_INFO.values() if info[0] == focus["id"])
             retriever = getattr(rag, "retrieve_issue_evidence", None)
-            raw = (retriever(focus["id"], query, k=3) if retriever else
-                   rag.retrieve_evidence(query, k=3))
+            raw = (retriever(focus["id"], query, k=5) if retriever else
+                   rag.retrieve_evidence(query, k=5))
+            eligible = []
             for entry in raw:
                 hit = Evidence.model_validate(entry)
-                if (_eligible_evidence(focus["id"], hit)
-                        and hit.applicability == "direct" and focus["id"] in hit.topics):
-                    evidence[hit.id] = hit.model_dump()
-                    observation_evidence_ids.append(hit.id)
-                    if len(observation_evidence_ids) == 2:
-                        break
+                if _eligible_evidence(focus["id"], hit) and focus["id"] in hit.topics:
+                    eligible.append(hit)
+            eligible.sort(key=lambda hit: (hit.applicability != "direct", hit.distance))
+            for hit in eligible[:2]:
+                evidence[hit.id] = hit.model_dump()
+                observation_evidence_ids.append(hit.id)
         except Exception as error:
             logger.warning("Observation research unavailable (%s)", type(error).__name__)
     for issue in priorities:

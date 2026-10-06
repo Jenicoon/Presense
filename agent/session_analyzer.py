@@ -202,6 +202,33 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
     patterns.sort(key=lambda row: (-row["relativeChange"], row["id"]))
     for pattern in patterns:
         pattern.pop("relativeChange")
+
+    phase_summaries = []
+    for index in range(3):
+        start, end = request.durationMs * index // 3, request.durationMs * (index + 1) // 3
+        observed = weighted = 0
+        for cell in summary["timeline"]:
+            overlap = max(0, min(end, cell["endMs"]) - max(start, cell["startMs"]))
+            observed += overlap
+            weighted += overlap * cell["stressScore"]
+        phase_summaries.append({"startMs": start, "endMs": end,
+                                "observedMs": observed,
+                                "averageStressScore": round(weighted / observed, 4) if observed else None})
+
+    peak_concepts = []
+    if peak and peak.quality.audioValid and peak.quality.faceDetected:
+        for name in peak.concepts:
+            value = metric(peak, "concept", name)
+            other_values = [metric(segment, "concept", name) for segment in usable
+                            if segment.segmentId != peak.segmentId]
+            other_values = [other for other in other_values if other is not None]
+            if value is not None and other_values:
+                reference = median(other_values)
+                if abs(value - reference) >= .05:
+                    peak_concepts.append({"name": name, "value": round(value, 4),
+                                          "comparisonValue": round(reference, 4),
+                                          "difference": round(value - reference, 4)})
+    peak_concepts.sort(key=lambda row: (-abs(row["difference"]), row["name"]))
     return {
         "observedMs": summary["observedMs"], "coverage": summary["coverage"],
         "averageStressScore": summary["averageStress"],
@@ -211,4 +238,5 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
         "stressTimeline": summary["timeline"],
         "concepts": concepts, "features": features,
         "patterns": patterns[:2], "modelWindowCount": len(usable),
+        "phaseSummaries": phase_summaries, "peakConcepts": peak_concepts[:2],
     }

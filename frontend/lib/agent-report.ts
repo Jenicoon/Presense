@@ -31,6 +31,8 @@ export type AgentReport = {
     modelWindowCount?: number;
     practiceFocus?: string;
     previousComparison?: { metricId: string; previousSessionId: string; previousSessionCount?: number; previousValue: number; currentValue: number; difference: number; unit: string; label: string } | null;
+    phaseSummaries?: Array<{ startMs: number; endMs: number; observedMs: number; averageStressScore: number | null }>;
+    peakConcepts?: Array<{ name: string; value: number; comparisonValue: number; difference: number }>;
   };
   observationEvidenceIds?: string[];
   priorities: Array<{
@@ -44,7 +46,7 @@ export type AgentReport = {
     ranges: Array<{ startMs: number; endMs: number }>;
   }>;
   limitations: string[];
-  evidence?: Array<{ id: string; title?: string | null; source: string; articleUrl?: string | null; doi?: string | null; findingKo?: string | null }>;
+  evidence?: Array<{ id: string; title?: string | null; source: string; articleUrl?: string | null; doi?: string | null; findingKo?: string | null; page?: number | null; applicability?: "direct" | "related" }>;
   analysis: Record<string, unknown>;
   agentRun?: { stopReason: string };
   [key: string]: unknown;
