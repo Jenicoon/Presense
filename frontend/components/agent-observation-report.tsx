@@ -56,7 +56,7 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
         <p>{ko ? "각 막대는 0–1 눈금으로 표시합니다. 값이 클수록 모델이 해당 이름의 패턴을 더 강하게 출력한 것이며, 높고 낮음 자체가 발표의 좋고 나쁨을 뜻하지 않습니다." : "Each bar uses a fixed 0–1 scale. A larger output means the model estimated more of that named pattern; higher or lower is not a presentation-quality grade."}</p>
         <div className="observation-scale"><span>0</span><span>1</span></div>
         <div className="observation-bars">{observed.concepts.map((item) => <div className="observation-bar-row" key={item.name}>
-          <span>{item.name}</span><div className="observation-bar-track" role="progressbar" aria-label={item.name} aria-valuemin={0} aria-valuemax={1} aria-valuenow={conceptBarPercent(item.meanValue) / 100}><div className="observation-bar-fill" style={{ width: `${conceptBarPercent(item.meanValue)}%` }} /></div><b>{item.meanValue.toFixed(2)}</b>
+          <span>{item.name}</span><div className="observation-bar-track" role="progressbar" aria-label={item.name} aria-valuemin={0} aria-valuemax={1} aria-valuenow={conceptBarPercent(item.meanValue) / 100}><div className="observation-bar-fill" style={{ width: `${conceptBarPercent(item.meanValue)}%` }} /></div><b className={item.meanValue > 1 ? "observation-value-over-range" : undefined}>{item.meanValue.toFixed(2)}</b>
         </div>)}</div>
         {observed.concepts.some((item) => item.meanValue < 0 || item.meanValue > 1) && <p>{ko ? "0 미만·1 초과 출력은 막대 끝에 맞춰 표시하고, 오른쪽 숫자는 원래 값을 유지합니다." : "Outputs outside 0–1 are clipped on the bar; the number retains the original value."}</p>}
       </div>}

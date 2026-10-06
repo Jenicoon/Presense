@@ -166,6 +166,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "modal.stressPhaseBreakdown": { ko: "단계별 스트레스 분석", en: "Stress Phase Breakdown" },
   "modal.aiDiagnosis": { ko: "AI 진단", en: "AI Diagnosis" },
   "modal.overallJudgment": { ko: "종합 판단", en: "Overall Judgment" },
+  "modal.viewDetails": { ko: "상세 보기", en: "View details" },
   "modal.peakPressureAnalysis": { ko: "최고 압박 분석", en: "Peak Pressure Analysis" },
   "modal.noDiagnosis": { ko: "기록된 진단이 없습니다.", en: "No diagnosis recorded." },
   "modal.recommendedNextStep": { ko: "추천 다음 단계", en: "Recommended Next Step" },

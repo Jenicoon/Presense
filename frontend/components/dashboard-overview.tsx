@@ -193,10 +193,6 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
           <div className="coach-stack" style={{ gap: 8 }}>
             <div className="coach-card coach-alert">
               <h3>{t("modal.overallJudgment")}</h3>
-              <p>{localizeDiagnosis(record.result, t)}</p>
-            </div>
-            <div className="coach-card coach-data">
-              <h3>{t("modal.peakPressureAnalysis")}</h3>
               <p>{record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
             </div>
             {record.nextAction && (
@@ -216,6 +212,11 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
           <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7, background: "var(--surface-2, var(--border))", borderRadius: 8, padding: "12px 14px" }}>
             {t(`modal.coach.${stressTier}`)}
           </div>
+        </div>
+        <div className="dashboard-review-actions">
+          <Link href={`/history?session=${encodeURIComponent(record.id)}`} className="btn btn-primary">
+            {t("modal.viewDetails")}
+          </Link>
         </div>
       </div>
     </div>

@@ -489,6 +489,7 @@ h1, h2, h3 { margin: 0; }
 .diagnosis-modal-title { margin-bottom: 12px; padding-right: 28px; font-size: 21px; }
 .diagnosis-modal-value { margin-bottom: 16px; color: #7c3aed; font-size: 16px; font-weight: 700; }
 .diagnosis-modal-detail { color: var(--text-secondary); font-size: 14px; line-height: 1.7; white-space: pre-line; }
+.dashboard-review-actions { display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
 
 .kpi-top {
   display: flex;
@@ -1335,6 +1336,7 @@ h1, h2, h3 { margin: 0; }
 .observation-bars { display: grid; gap: 8px; }
 .observation-bar-row { display: grid; grid-template-columns: minmax(90px, 140px) minmax(50px, 1fr) 38px; align-items: center; gap: 8px; font-size: 12px; }
 .observation-bar-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.observation-bar-row .observation-value-over-range { color: var(--accent-alert); }
 .observation-bar-track { height: 9px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .observation-bar-fill { height: 100%; border-radius: inherit; background: var(--accent); }
 .observation-table-wrap { overflow-x: auto; }

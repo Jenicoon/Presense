@@ -121,13 +121,24 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
 export function SessionHistory() {
   const { lang, t } = useLang(); const ko = lang === "ko";
   const [records, setRecords] = useState<SessionHistoryRecord[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [selectedId, setSelectedId] = useState("");
-  useEffect(() => { void loadSessionHistory().then(setRecords).catch((reason) => setError(reason instanceof Error ? reason.message : "Failed to load history.")).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    setSelectedId(new URLSearchParams(window.location.search).get("session") ?? "");
+    void loadSessionHistory().then(setRecords).catch((reason) => setError(reason instanceof Error ? reason.message : "Failed to load history.")).finally(() => setLoading(false));
+  }, []);
   const selected = records.find((record) => record.id === selectedId);
   const average = useMemo(() => records.length ? records.reduce((sum, record) => sum + Number(record.stressAverage), 0) / records.length : 0, [records]);
   const videoCount = records.filter((record) => record.videoUrl).length;
   const latestPeak = records[0]?.agentReport?.observationReport?.peakSegment
     ? Math.round(records[0].agentReport.observationReport.peakSegment.stressScore * 100)
     : records[0]?.timeline.length ? Math.max(...records[0].timeline) : 0;
+  function closeReview() {
+    setSelectedId("");
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("session")) {
+      url.searchParams.delete("session");
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }
   async function handleDelete(record: SessionHistoryRecord) {
     const message = ko
       ? `“${record.title}” 기록을 삭제할까요? 저장된 영상도 함께 삭제되며 되돌릴 수 없습니다.`
@@ -146,6 +157,6 @@ export function SessionHistory() {
     <div className="kpi-row"><div className="kpi-card"><div className="kpi-top"><div className="kpi-icon"><FolderClock size={16} /></div></div><div className="kpi-value">{records.length}</div><div className="kpi-label">{ko ? "저장된 세션" : "Saved sessions"}</div><div className="kpi-sub">{ko ? "기록에서 다시 볼 수 있습니다" : "Available in your history"}</div></div><div className="kpi-card"><div className="kpi-top"><div className="kpi-icon" style={{ background: "var(--accent-ok-light)", color: "var(--accent-ok)" }}><Gauge size={16} /></div></div><div className="kpi-value">{average.toFixed(2)}</div><div className="kpi-label">{ko ? "평균 스트레스" : "Average stress"}</div><div className="kpi-sub">{ko ? "전체 기록 기준" : "Across all saved sessions"}</div></div><div className="kpi-card"><div className="kpi-top"><div className="kpi-icon" style={{ background: "rgba(245,158,11,0.1)", color: "var(--accent-warn)" }}><Film size={16} /></div></div><div className="kpi-value">{videoCount}</div><div className="kpi-label">{ko ? "저장된 영상" : "Saved videos"}</div><div className="kpi-sub">{ko ? "선택한 경우에만 보관" : "Kept only when selected"}</div></div><div className="kpi-card"><div className="kpi-top"><div className="kpi-icon" style={{ background: "rgba(139,92,246,0.1)", color: "#7c3aed" }}><Sparkles size={16} /></div></div><div className="kpi-value">{latestPeak ? `${latestPeak}%` : "–"}</div><div className="kpi-label">{ko ? "최근 최고 스트레스" : "Latest peak stress"}</div><div className="kpi-sub">{ko ? "최근 세션 기준" : "For the latest session"}</div></div></div>
     {loading ? <p className="state-loading"><LoaderCircle size={16} /> {ko ? "기록을 불러오는 중..." : "Loading history..."}</p> : null}{error ? <p className="error-msg">{error}</p> : null}{!loading && !error && records.length === 0 ? <div className="state-empty history-platform-empty"><BrainCircuit size={24} /><strong>{ko ? "아직 저장된 세션이 없습니다" : "No saved sessions yet"}</strong><span>{ko ? "연습 종료 후 저장하면 이곳에 표시됩니다." : "Save a session after practice and it will appear here."}</span></div> : null}
     {records.length > 0 ? <div className="card history-table-card"><div className="history-panel-header"><div className="panel-head-left"><span className="panel-title">{ko ? "세션 기록" : "Session records"}</span><span className="panel-subtitle">{ko ? "저장된 분석 결과" : "Saved analysis results"}</span></div><CalendarDays size={16} color="var(--text-secondary)" /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>{ko ? "날짜" : "Date"}</th><th>{ko ? "세션" : "Session"}</th><th>{ko ? "시간" : "Duration"}</th><th>{ko ? "평균 스트레스" : "Avg. stress"}</th><th>{ko ? "영상" : "Video"}</th><th>{ko ? "보기" : "Review"}</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td className="td-mono">{record.date}</td><td style={{ fontWeight: 500 }}>{record.title}<small className="history-scene">{record.sceneLabel}</small></td><td className="td-mono">{record.duration}</td><td><span className={`severity-pill ${severity(Number(record.stressAverage))}`}>{record.stressAverage}</span></td><td>{record.videoUrl ? <Film size={15} color="var(--accent)" /> : <span className="history-muted">–</span>}</td><td><div className="history-table-actions"><button type="button" className="table-action" onClick={() => setSelectedId(record.id)}>{ko ? "상세 보기" : "View details"}</button><button type="button" className="history-delete" onClick={() => void handleDelete(record)} aria-label={ko ? "기록 삭제" : "Delete record"}><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div></div> : null}
-    {selected ? <ReviewModal record={selected} ko={ko} t={t} onClose={() => setSelectedId("")} /> : null}
+    {selected ? <ReviewModal record={selected} ko={ko} t={t} onClose={closeReview} /> : null}
   </main>;
 }
