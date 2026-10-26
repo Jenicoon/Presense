@@ -38,13 +38,19 @@ class SegmentAnalysis(Contract):
         return self
 
 
+class PracticeContext(Contract):
+    sessionId: str = Field(min_length=1, max_length=100)
+    practiceId: str = Field(min_length=1, max_length=100)
+
+
 class ReviewRequest(Contract):
     sessionId: str = Field(min_length=1, max_length=100)
     durationMs: int = Field(gt=0, le=14_400_000)
     language: Literal["ko", "en"] = "ko"
     source: Literal["live"] = "live"
     sceneLabel: str | None = Field(default=None, max_length=120)
-    segments: list[SegmentAnalysis] = Field(min_length=1, max_length=7200)
+    practiceContext: PracticeContext | None = None
+    segments: list[SegmentAnalysis] = Field(min_length=0, max_length=7200)
 
     @model_validator(mode="after")
     def valid_session(self):

@@ -192,17 +192,21 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
         item["referenceValue"] = median(earlier) if len(earlier) >= 2 else None
         item["measurementQuality"] = round(len(valid) / len(selected), 4)
         item["independentObservations"] = _independent_count(valid)
+        independent_valid = []
+        for row in sorted(valid, key=lambda r: (r.endMs, r.startMs)):
+            if not independent_valid or row.startMs >= independent_valid[-1].endMs:
+                independent_valid.append(row)
         confidence = [row.predictionConfidence for row in valid if row.predictionConfidence is not None]
         item["predictionConfidence"] = round(median(confidence), 4) if confidence else None
         if item["id"] in {"pitch_change", "pitch_variability"}:
             item["coherentShiftCount"] = _coherent_shift_count(
-                [metric(row, item["modality"], item["metric"]) for row in valid],
+                [metric(row, item["modality"], item["metric"]) for row in independent_valid],
                 item["referenceValue"])
         item["observations"] = [{"segmentId": row.segmentId, "startMs": row.startMs,
                                  "endMs": row.endMs, "value": metric(row, item["modality"], item["metric"]),
                                  "stressScore": row.stressScore,
                                  "conceptValues": row.concepts if row.quality.audioValid and row.quality.faceDetected else {}}
-                                for row in valid[:3]]
+                                for row in independent_valid[:3]]
     ranges = item["ranges"]
     observations = [row for row in item["observations"]
                     if any(row["startMs"] < span["endMs"] and row["endMs"] > span["startMs"]
@@ -345,6 +349,17 @@ def _weak_measurement_context(state: AgentState) -> dict | None:
             "sameIntervalAlternatives": alternatives}
 
 
+def _supported_change(item: dict) -> bool:
+    values = [row["value"] for row in item["observations"] if row.get("value") is not None]
+    reference = item.get("referenceValue")
+    series = [row["value"] for row in item.get("measurementSeries", []) if row.get("value") is not None]
+    if not values or not series: return False
+    floor = {"f0_mean": 100, "f0_std": 20}.get(item["metric"], .15)
+    base = reference if reference is not None else median(series)
+    change = max(abs(v-base) for v in values) if reference is not None else max(series)-min(series)
+    return change >= max(abs(base), floor) * .1
+
+
 def _finish_eligible_ids(state: AgentState) -> list[str]:
     """Only measurements the agent actually checked and the finish validator accepts."""
     selected = []
@@ -353,7 +368,7 @@ def _finish_eligible_ids(state: AgentState) -> list[str]:
             continue
         identity = action["candidateId"]
         item = state.candidate(identity)
-        if (identity not in selected and item["measurementQuality"] >= .8
+        if (identity not in selected and _supported_change(item) and item["measurementQuality"] >= .8
                 and item["independentObservations"] >= 2
                 and (identity not in {"pitch_change", "pitch_variability"}
                      or item.get("coherentShiftCount", 2) >= 2)):
@@ -380,6 +395,8 @@ def _validate_action(raw: dict, state: AgentState, rag) -> dict:
             item = state.candidate(identity)
             if not ({("analyze_segment", identity), ("compare_previous_session", identity)} & state.seen):
                 raise ValueError("candidate_measurement_not_checked")
+            if not _supported_change(item):
+                raise ValueError("candidate_has_no_observed_change")
             if item["measurementQuality"] < .8:
                 raise ValueError("candidate_quality_below_0_8")
             if item["independentObservations"] < 2:
@@ -608,3 +625,36 @@ def build_memory(report: dict, state: AgentState) -> dict:
             "sceneLabel": state.request.sceneLabel, "durationMs": state.request.durationMs,
             "candidates": entries,
             "focusGoal": goal}
+
+
+def measurement_decider(request, candidates):
+    """Conservative review heuristic when a language model is not configured.
+
+    Two disjoint earlier references and two later changed observations are
+    required. The 10% relative deviation is a review threshold, not a clinical
+    or presentation quality cutoff. Every selected range is checked again.
+    """
+    plans=[]
+    for item in candidates:
+        if item["id"] not in RESEARCHABLE_IDS: continue
+        measured=[r for r in sorted(request.segments,key=lambda s:s.endMs) if metric(r,item["modality"],item["metric"]) is not None]
+        independent=[]
+        for row in measured:
+            if not independent or row.startMs>=independent[-1].endMs: independent.append(row)
+        if len(independent)<4: continue
+        reference=median(metric(r,item["modality"],item["metric"]) for r in independent[:2])
+        floor={"f0_mean":100,"f0_std":20}.get(item["metric"],.15)
+        changed=[r for r in independent[2:] if abs(metric(r,item["modality"],item["metric"])-reference)>=max(abs(reference),floor)*.1]
+        if len(changed)<2: continue
+        direction=1 if metric(changed[0],item["modality"],item["metric"])>reference else -1
+        changed=[r for r in changed if (metric(r,item["modality"],item["metric"])-reference)*direction>0]
+        if len(changed)<2: continue
+        prominence=max(abs(metric(r,item["modality"],item["metric"])-reference) for r in changed)/max(abs(reference),floor)
+        plans.append((prominence,item["id"],[r.segmentId for r in changed[:12]]))
+    plans.sort(reverse=True)
+    def decide(view):
+        done={r["candidateId"] for r in view["toolResults"] if r["action"]=="analyze_segment"}
+        for _,identity,ids in plans[:3]:
+            if identity not in done: return {"action":"analyze_segment","candidateId":identity,"segmentIds":ids}
+        return {"action":"finish","priorityCandidateIds":view["finishEligibleCandidateIds"][:3]}
+    return decide

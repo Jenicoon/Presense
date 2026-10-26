@@ -101,6 +101,7 @@ test('report response makes the session summary use the same model average and p
     setAgentReport: (value) => { received = value; },
     setReport: (update) => { report = update(report); },
     PHASES: ['Open', 'Build', 'Core', 'Close'], lang: 'ko',
+    attemptContextRef: {current:null}, window: {dispatchEvent() {}}, CustomEvent: class {},
   });
   await generate();
   assert.equal(received.observationReport.averageStressScore, report.averageStress);
@@ -184,4 +185,36 @@ test('stopping clears media and baseline, invalidates requests, and stops timers
   assert.deepEqual(env.frameBufferRef.current, []);
   assert.equal(env.collectionTickRef.current, null);
   assert.equal(env.tickRef.current, null);
+});
+
+
+test('a 30-second live recording retains multiple arrived windows including identical outputs', async()=>{
+  const segments=[]; const sessionStart=performance.now()-10_000;
+  const state=setup(async()=>({stressScore:segments.length===1?.8:.3,confidence:.8,quality:{audioValid:true,faceDetected:true}}), {
+    reportSegmentsRef:{current:segments}, sessionStartedAtRef:{current:sessionStart},
+    toReportSegment:(frame,index,endMs)=>({segmentId:`capture-${index}`,startMs:endMs-10000,endMs,stressScore:frame.stressScore})
+  });
+  for(const elapsed of [10000,20000,30000]) {
+    // The handler records capture time before inference returns.
+    const old=performance.now;
+    Object.defineProperty(performance,'now',{value:()=>sessionStart+elapsed,configurable:true});
+    await state.request();
+    Object.defineProperty(performance,'now',{value:old,configurable:true});
+  }
+  assert.deepEqual(segments.map(s=>s.stressScore),[.3,.8,.3]);
+  assert.deepEqual(segments.map(s=>[s.startMs,s.endMs]),[[0,10000],[10000,20000],[20000,30000]]);
+});
+
+test('microphone analysis can run with a silent output sink and still retain captured PCM',()=>{
+  let processor;const sinks=[];const chunks=[];const audioContextRef={current:null};let seconds=0;
+  class AudioContext {
+    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    setSinkId(sink){sinks.push(sink);return Promise.resolve();}
+    createAnalyser(){return {frequencyBinCount:256,getByteFrequencyData(){}};}
+    createMediaStreamSource(){return {connect(){}};}
+    createScriptProcessor(){processor={connect(){}};return processor;}
+  }
+  const start=loadFunction('startAudioMeter',{audioContextRef,window:{AudioContext},setAudioRunning(){},setVoiceDetected(){},audioChunksRef:{current:chunks},setAudioSeconds:v=>seconds=v,audioSampleRateRef:{current:48000},analyserRef:{current:null},audioProcessorRef:{current:null},setAudioLevel(){},rafRef:{current:null},requestAnimationFrame:()=>1});
+  start({});processor.onaudioprocess({inputBuffer:{getChannelData:()=>new Float32Array(48000).fill(.1)}});
+  assert.deepEqual(sinks,[{type:'none'}]);assert.equal(chunks[0].length,48000);assert.equal(seconds,1);
 });

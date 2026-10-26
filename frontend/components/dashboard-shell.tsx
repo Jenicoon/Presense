@@ -24,8 +24,10 @@ import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveIn
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
 import { agentNextPractice, generateAgentReport, reportDisplaySummary, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
+import { SessionAgentReport } from "@/components/session-agent-report";
+import { practiceKey, type PracticeContext } from "@/lib/coaching";
 import { StressChart } from "@/components/stress-chart";
-import { AgentEvidence, AgentObservationReport } from "@/components/agent-observation-report";
+import { AgentObservationReport } from "@/components/agent-observation-report";
 
 type SessionState = "idle" | "starting" | "live" | "ended" | "error";
 type ReportSummary = {
@@ -76,7 +78,7 @@ function summarizeTimeline(bins: number[]) {
     const slice = bins.slice(p * 3, p * 3 + 3);
     return slice.reduce((s, v) => s + v, 0) / Math.max(slice.length, 1);
   });
-  const peakValue = Math.max(...bins);
+  const peakValue = bins.length ? Math.max(...bins) : 0;
   const peakBin = bins.indexOf(peakValue);
   const peakPhase = PHASES[Math.min(PHASES.length - 1, Math.floor(peakBin / 3))];
   const mostStressfulPhase = PHASES[phaseAvgs.indexOf(Math.max(...phaseAvgs))];
@@ -220,6 +222,7 @@ export function DashboardShell() {
   const startBaselineRef = useRef(0);
   const sessionStartedAtRef = useRef(0);
   const sessionIdRef = useRef("");
+  const attemptContextRef = useRef<PracticeContext | null>(null);
   const reportSegmentsRef = useRef<ReportSegment[]>([]);
   const reportRequestRef = useRef<{ sessionId: string; durationMs: number; language: "ko" | "en"; sceneLabel: string; segments: ReportSegment[] } | null>(null);
 
@@ -437,6 +440,10 @@ export function DashboardShell() {
   function startAudioMeter(stream: MediaStream) {
     if (audioContextRef.current) return;
     const ctx = new window.AudioContext();
+    // Analysis does not need a speaker. A silent sink also keeps capture running
+    // when the OS has no available output device (supported browsers only).
+    const analysisContext=ctx as AudioContext & {setSinkId?: (sink:{type:"none"})=>Promise<void>};
+    void analysisContext.setSinkId?.({type:"none"}).catch(()=>undefined);
     ctx.onstatechange = () => setAudioRunning(ctx.state === "running");
     setAudioRunning(ctx.state === "running");
     const analyser = ctx.createAnalyser();
@@ -574,6 +581,7 @@ export function DashboardShell() {
     inferInFlightRef.current = true;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
+      if (!preparation && performance.now()-sessionStartedAtRef.current < 10_000) return;
       if (frameBufferRef.current.length < 16) { setLiveStatus("collecting"); return; }
       const audio = getRecentAudioPcm();
       if (audio.length === 0) { setLiveStatus("audio"); return; }
@@ -645,6 +653,7 @@ export function DashboardShell() {
       reportRequestRef.current = null;
       reportSegmentsRef.current = [];
       sessionIdRef.current = crypto.randomUUID();
+      try { attemptContextRef.current = user ? JSON.parse(window.localStorage.getItem(practiceKey(user.id)) ?? "null") : null; } catch { attemptContextRef.current = null; }
       setElapsed(0);
       setTimeline(initialTimeline);
       setStressScore(baseline.stressScore);
@@ -703,6 +712,9 @@ export function DashboardShell() {
 
   // Localized "peak pressure" phrase for the report / chat.
   function peakText(r: ReportSummary | null) {
+    const peak=agentReport?.observationReport?.peakSegment;
+    if(peak) return `${(peak.startMs/1000).toFixed(1)}–${(peak.endMs/1000).toFixed(1)}s · ${peak.stressScore.toFixed(3)}`;
+    if(SIGNAL_SOURCE === "live") return "—";
     if (!r) return t("agent.stressFallback");
     return lang === "ko"
       ? `${r.peakPhase} 단계 부근 ${r.peakValue}%`
@@ -728,6 +740,11 @@ export function DashboardShell() {
           peakPhase: PHASES[Math.floor(peakBin / 3)],
         }));
       }
+      if(attemptContextRef.current) {
+        window.dispatchEvent(new CustomEvent("presense:open-agent",{detail:{sessionId:attemptContextRef.current.sessionId,attemptSessionId:request.sessionId}}));
+      } else {
+        window.dispatchEvent(new CustomEvent("presense:open-agent",{detail:{sessionId:request.sessionId}}));
+      }
     } catch (error) {
       if (sessionIdRef.current !== request.sessionId) return;
       setAgentReportError(error instanceof Error ? error.message : (lang === "ko" ? "보고서를 생성하지 못했습니다." : "Could not generate the report."));
@@ -736,9 +753,14 @@ export function DashboardShell() {
     }
   }
 
-  function handleStopSession() {
+  async function handleStopSession() {
     if (!recordingActiveRef.current) return;
     stopSessionRecording();
+    recordingActiveRef.current = false;
+    if(tickRef.current) { window.clearInterval(tickRef.current); tickRef.current=null; }
+    setSessionState("starting");
+    const until = performance.now()+92_000;
+    while(inferInFlightRef.current && performance.now()<until) await new Promise(resolve=>window.setTimeout(resolve,100));
     stopAnalysis();
     setSessionState("ended");
     setPreparationPhase("collecting");
@@ -746,7 +768,7 @@ export function DashboardShell() {
     // New generation, new buffers, no previous session responses or baseline.
     void startPreview();
 
-    if (stressHistoryRef.current.length <= 1) {
+    if (SIGNAL_SOURCE !== "live" && stressHistoryRef.current.length <= 1) {
       setTimeline([]);
       setReport(null);
       setSaveDialogOpen(false);
@@ -757,8 +779,8 @@ export function DashboardShell() {
     const reportSegments = reportSegmentsRef.current;
     const sessionTimeline = SIGNAL_SOURCE === "live" && reportSegments.length
       ? buildSessionTimeline(reportSegments.map((item) => item.stressScore))
-      : buildSessionTimeline(stressHistoryRef.current);
-    const avg = sessionTimeline.reduce((s, v) => s + v, 0) / sessionTimeline.length / 100;
+      : SIGNAL_SOURCE === "live" ? [] : buildSessionTimeline(stressHistoryRef.current);
+    const avg = sessionTimeline.length ? sessionTimeline.reduce((s, v) => s + v, 0) / sessionTimeline.length / 100 : 0;
     const { peakValue, peakBin, peakPhase, mostStressfulPhase } = summarizeTimeline(sessionTimeline);
     setTimeline(sessionTimeline);
 
@@ -779,18 +801,16 @@ export function DashboardShell() {
     setAgentReportError("");
     if (SIGNAL_SOURCE === "live") {
       const segments = [...reportSegmentsRef.current];
-      if (segments.length) {
+      {
         reportRequestRef.current = {
           sessionId: sessionIdRef.current,
-          durationMs: Math.max(1, Math.floor(performance.now() - sessionStartedAtRef.current)),
+          durationMs: Math.max(1, recordingDurationMsRef.current || Math.floor(elapsed*1000)),
           language: lang,
           sceneLabel: activeScene.label,
           segments,
+          ...(attemptContextRef.current ? {practiceContext:attemptContextRef.current} : {}),
         };
         void requestAgentReport();
-      } else {
-        reportRequestRef.current = null;
-        setAgentReportError(lang === "ko" ? "보고서용 구간 분석 결과가 없습니다. 발표를 조금 더 길게 진행해 주세요." : "No segment analysis is available for the report. Try a longer presentation.");
       }
     }
     setSessionTitle(`${t(`scene.${selectedScene}.label`, activeScene.label)} ${t("save.defaultSuffix")}`);
@@ -819,8 +839,7 @@ export function DashboardShell() {
       ? `Noticeable ${report.mostStressfulPhase.toLowerCase()}-section pressure`
       : "Mostly stable delivery";
     const englishDiagnosis = agentReport ? reportDisplaySummary(agentReport, lang === "ko") : `Starting baseline: ${Math.round(report.startBaseline * 100)}% (includes this session's pre-start preparation; first timeline sample). Peak pressure reached ${report.peakValue}% around the ${report.peakPhase} phase. Deck: ${report.deckName || "No deck used"}.`;
-    const englishNextAction = agentReport ? agentNextPractice(agentReport, false) :
-      "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.";
+    const englishNextAction = agentReport ? agentNextPractice(agentReport, false) : "Review the observed intervals before choosing a practice goal.";
 
     savingRef.current = true;
     setSaving(true);
@@ -829,8 +848,8 @@ export function DashboardShell() {
       const result = await savePracticeSession({
         id: sessionIdRef.current,
         title,
-        durationSeconds: elapsed,
-        averageStress: report.averageStress,
+        durationSeconds: Math.ceil(recordingDurationMsRef.current/1000) || elapsed,
+        averageStress: agentReport ? (typeof agentReport.analysis.averageStress === "number" ? agentReport.analysis.averageStress : null) : report.averageStress,
         result: englishResult,
         diagnosis: englishDiagnosis,
         nextAction: englishNextAction,
@@ -854,7 +873,7 @@ export function DashboardShell() {
 
   function openAgentForReport() {
     if (!report) return;
-    window.dispatchEvent(new CustomEvent("presense:open-agent", { detail: saved ? {} : { report } }));
+    window.dispatchEvent(new CustomEvent("presense:open-agent", { detail: { sessionId: sessionIdRef.current } }));
   }
 
   function seekToTimelineBin(bin: number) {
@@ -863,6 +882,20 @@ export function DashboardShell() {
     video.currentTime = ((bin + 0.5) / 12) * video.duration;
     void video.play().catch(() => undefined);
   }
+
+  useEffect(() => {
+    function seek(event: Event) {
+      const detail=(event as CustomEvent<{sessionId:string;startMs:number;handled?:boolean}>).detail;
+      const {sessionId,startMs}=detail;
+      if(sessionId!==sessionIdRef.current) return;
+      const video=sessionVideoRef.current;
+      if(video) { detail.handled=true; video.currentTime=startMs/1000; video.scrollIntoView({behavior:"smooth",block:"center"}); void video.play().catch(()=>undefined); }
+    }
+    function start() { if(preparationComplete && preparationPhase === "ready") void handleStartSession(); else { document.getElementById("practice-start-area")?.scrollIntoView({behavior:"smooth"}); if(!preparationComplete) preparationDialogRef.current?.showModal(); } }
+    function stop() { void handleStopSession(); }
+    window.addEventListener("presense:seek-video",seek);window.addEventListener("presense:coach-start",start);window.addEventListener("presense:coach-stop",stop);
+    return ()=>{window.removeEventListener("presense:seek-video",seek);window.removeEventListener("presense:coach-start",start);window.removeEventListener("presense:coach-stop",stop);};
+  });
 
   function renderStageVisual() {
     if (selectedScene === "camera") {
@@ -943,21 +976,27 @@ export function DashboardShell() {
   const activeSceneDesc = t(`scene.${activeScene.id}.desc`, activeScene.description);
 
   // Localized report display values (report holds structured data).
-  const reportAvgText = report ? `${report.averageStress.toFixed(2)} / 1.00` : "";
-  const reportPeakPointText = report ? `${report.peakValue}% · ${t("report.binLabel")} ${report.peakBin + 1} (${report.peakPhase})` : "";
-  const reportPhaseText = report ? `${report.mostStressfulPhase} ${t("phase.suffix")}` : "";
-  const reportStateText = report
+  const observedAverage=agentReport?.analysis.averageStress;
+  const reportAvgText = SIGNAL_SOURCE === "live" ? (typeof observedAverage === "number" ? observedAverage.toFixed(3) : "—") : report ? `${report.averageStress.toFixed(2)} / 1.00` : "";
+  const peakObservation=agentReport?.observationReport?.peakSegment;
+  const reportPeakPointText = peakObservation ? `${peakObservation.stressScore.toFixed(3)} · ${(peakObservation.startMs/1000).toFixed(1)}–${(peakObservation.endMs/1000).toFixed(1)}s` : SIGNAL_SOURCE === "live" ? "—" : report ? `${report.peakValue}/100` : "—";
+  const observedCells=(agentReport?.analysis.timeline ?? []) as {startMs:number;endMs:number;stressScore:number}[];
+  const actualDuration=Number(agentReport?.analysis.durationMs ?? 0);
+  const actualPhases=PHASES.map((name,i)=>{let time=0,total=0;for(const c of observedCells){const length=Math.max(0,Math.min(c.endMs,actualDuration*(i+1)/4)-Math.max(c.startMs,actualDuration*i/4));time+=length;total+=length*c.stressScore;}return {name,value:time?total/time:null};});
+  const reportPhaseText = SIGNAL_SOURCE === "live" ? actualPhases.filter(p=>p.value!==null).sort((a,b)=>(b.value??0)-(a.value??0))[0]?.name ?? "—" : report ? `${report.mostStressfulPhase} ${t("phase.suffix")}` : "";
+  const reportStateText = SIGNAL_SOURCE === "live" ? (lang === "ko" ? "분석 결과를 확인하고 있습니다." : "Checking the analysis results.") : report
     ? report.noticeable
       ? lang === "ko"
         ? `${report.mostStressfulPhase} 구간의 압박이 두드러집니다`
         : `Noticeable ${report.mostStressfulPhase.toLowerCase()}-section pressure`
       : t("report.stateStable")
     : "";
-  const reportConfidenceText = report && report.confidence > 0 ? `${Math.round(report.confidence * 100)}%` : "—";
+  const observedConfidence=agentReport?.rawSegments?.filter(s=>s.quality.audioValid || s.quality.faceDetected).map(s=>s.predictionConfidence).filter((v):v is number=>typeof v === "number") ?? [];
+  const reportConfidenceText = SIGNAL_SOURCE === "live" ? (observedConfidence.length ? `${Math.round(observedConfidence.reduce((a,b)=>a+b,0)/observedConfidence.length*100)}%` : "—") : report && report.confidence > 0 ? `${Math.round(report.confidence * 100)}%` : "—";
 
   return (
     <main className="page-content">
-      <div className="page-top">
+      <div className="page-top" id="practice-start-area">
         <div>
           <h1 className="page-title">{t("practice.title")}</h1>
           <p className="page-subtitle">{t("practice.subtitle")}</p>
@@ -1140,7 +1179,7 @@ export function DashboardShell() {
                 </div>
                 <Waves size={16} color="var(--text-secondary)" />
               </div>
-              <StressChart series={timeline} />
+              {SIGNAL_SOURCE !== "live" && <StressChart series={timeline} />}
               {SIGNAL_SOURCE !== "live" && <p className="signal-note">{lang === "ko" ? `첫 지점은 이번 세션의 시작 전 준비 기준값(${Math.round(report.startBaseline * 100)}%)이며, 요약 통계에도 포함됩니다.` : `The first point is this session's pre-start baseline (${Math.round(report.startBaseline * 100)}%), included in summary statistics.`}</p>}
               {recordedVideoUrl && (
                 <div className="session-video-review">
@@ -1148,7 +1187,7 @@ export function DashboardShell() {
                   <div className="video-timeline-label">
                     {lang === "ko" ? "구간을 누르면 해당 영상 위치로 이동합니다" : "Select a segment to jump to that moment"}
                   </div>
-                  <div className="video-timeline" aria-label="Stress timeline linked to video">
+                  {SIGNAL_SOURCE !== "live" && <div className="video-timeline" aria-label="Model signal timeline linked to video">
                     {timeline.map((value, bin) => (
                       <button
                         key={bin}
@@ -1156,14 +1195,15 @@ export function DashboardShell() {
                         className={value >= 70 ? "high" : value >= 50 ? "mid" : "low"}
                         style={{ flex: Math.max(value, 20) }}
                         onClick={() => seekToTimelineBin(bin)}
-                        title={`${lang === "ko" ? "스트레스" : "Stress"} ${value}%`}
+                        title={`${lang === "ko" ? "모델 점수" : "Model score"} ${value}%`}
                       />
                     ))}
                   </div>
+                  }
                   <div className="video-timeline-legend">
-                    <span><i className="low" />{lang === "ko" ? "좋음" : "Good"}</span>
-                    <span><i className="mid" />{lang === "ko" ? "보완 필요" : "Needs attention"}</span>
-                    <span><i className="high" />{lang === "ko" ? "스트레스 높음" : "High stress"}</span>
+                    <span><i className="low" />{lang === "ko" ? "낮은 모델 점수" : "Lower model score"}</span>
+                    <span><i className="mid" />{lang === "ko" ? "중간 모델 점수" : "Middle model score"}</span>
+                    <span><i className="high" />{lang === "ko" ? "높은 모델 점수" : "Higher model score"}</span>
                   </div>
                 </div>
               )}
@@ -1238,8 +1278,8 @@ export function DashboardShell() {
                 {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
                 {agentReport && <>
                   <h3 className="report-panel-title">{lang === "ko" ? "AI 분석 보고서" : "AI analysis report"}</h3>
+                  <SessionAgentReport report={agentReport} language={lang} onSeek={recordedVideoUrl ? (ms)=>{const video=sessionVideoRef.current;if(video) {video.currentTime=ms/1000;void video.play().catch(()=>undefined);}} : undefined} />
                   <AgentObservationReport report={agentReport} ko={lang === "ko"} />
-                  {agentReport.priorities.map((item) => <div className="coach-card coach-data" key={item.id}><h3>{item.label}</h3><p>{item.observationText}</p>{(item.practiceSuggestion || item.reviewAction || item.recommendation) && <p>{item.practiceSuggestion || item.reviewAction || item.recommendation}</p>}<AgentEvidence report={agentReport} ids={item.evidenceIds} ko={lang === "ko"} /></div>)}
                   {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}
               </div>}
@@ -1292,7 +1332,7 @@ export function DashboardShell() {
             </button>
             <span className="save-modal-eyebrow">{lang === "ko" ? "세션 완료" : "Session complete"}</span>
             <h2 id="save-session-title">{lang === "ko" ? "이번 세션을 저장할까요?" : "Save this session?"}</h2>
-            <p>{lang === "ko" ? "영상이 없어도 분석 결과와 스트레스 타임라인은 기록에 저장됩니다." : "Your analysis and stress timeline are saved even without a video."}</p>
+            <p>{lang === "ko" ? "영상이 없어도 분석 결과와 모델 신호 타임라인은 기록에 저장됩니다." : "Your analysis and model signal timeline are saved even without a video."}</p>
             <label className="save-modal-field">
               <span>{lang === "ko" ? "세션 이름" : "Session name"}</span>
               <input value={sessionTitle} onChange={(event) => setSessionTitle(event.target.value)} placeholder={t("save.namePlaceholder")} />
@@ -1337,6 +1377,7 @@ export function DashboardShell() {
           : (lang === "ko" ? "준비 데이터를 모으고 있어요. 문장을 다 읽었다면 잠시 기다려주세요." : "Collecting preparation data. If you have finished reading, please wait.")}</p>
         <div className="save-modal-actions">
           <a className="btn btn-outline" href="/dashboard">{lang === "ko" ? "나가기" : "Leave"}</a>
+          {!audioRunning && <button type="button" className="btn btn-outline" onClick={()=>{const context=audioContextRef.current;if(context)void context.resume().catch(()=>setAudioRunning(false));else void startPreview();}}>{lang === "ko" ? "마이크 활성화" : "Enable microphone"}</button>}
           {preparationPhase === "error" && <button type="button" className="btn btn-outline" onClick={() => setPreparationPhase("collecting")}>{lang === "ko" ? "다시 확인" : "Retry"}</button>}
           <button type="button" className="btn btn-primary" disabled={preparationPhase !== "ready"} onClick={() => {
             setPreparationComplete(true);

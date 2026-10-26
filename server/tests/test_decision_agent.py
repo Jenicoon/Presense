@@ -395,7 +395,8 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(report["priorities"], [])
 
     def test_unavailable_decision_service_does_not_fake_a_completed_analysis(self):
-        report = generate_report(self.request(), agent_mode=True)
+        def unavailable(_): raise RuntimeError("Provider unavailable")
+        report = generate_report(self.request(), agent_mode=True, decide=unavailable)
         self.assertEqual(report["agentRun"]["stopReason"], "decision_unavailable")
         self.assertEqual(report["status"], "limited")
         self.assertEqual(report["priorities"], [])

@@ -261,7 +261,7 @@ def _invalid_generated_text(item, issue: dict, evidence: dict, ko: bool) -> list
 def _observation_text(issue: dict, ko: bool) -> str:
     if not issue["observations"]:
         return ""
-    span = issue["ranges"][0]
+    span = issue["observations"][0]
     clock = f"{_clock(span['startMs'])}-{_clock(span['endMs'])}"
     value = issue["observations"][0]["value"]
     reference = issue.get("referenceValue")
@@ -674,10 +674,13 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     observation_report["practiceFocus"] = _practice_focus(observation_report, request.language == "ko")
     observation_report["previousComparison"] = _previous_observation(
         request, observation_report, prior_memory, model_version)
+    if agent_mode and decide is None:
+        from .decision_agent import measurement_decider
+        decide = measurement_decider(request, candidates)
     # 3. The Agent chooses what to inspect; preprocessing assigns no priority.
     agent_state = (run_agent(request, summary, candidates, rag=rag, decide=decide,
                              prior=prior_memory, model_version=model_version,
-                             decision_provider="luxia" if decide is luxia_decide_action else "callback")
+                             decision_provider="luxia" if decide is luxia_decide_action else "measurement_rules" if agent_mode and getattr(decide, "__name__", "") == "decide" else "callback")
                    if agent_mode or decide is not None else None)
     priorities = ([{key: value for key, value in agent_state.candidate(identity).items()
                     if key != "measurementSeries"} for identity in agent_state.selected_ids]
@@ -959,4 +962,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
                        and action["result"].get("comparable")]
         report["sessionComparison"] = comparisons[0] if comparisons else None
         report["agentMemory"] = build_memory(report, agent_state)
+    report["rawSegments"] = [s.model_dump() for s in request.segments]
+    report["modelVersion"] = model_version
+    report["metricDefinitionVersion"] = "session-analysis-v4"
     return report

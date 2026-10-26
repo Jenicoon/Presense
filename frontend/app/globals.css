@@ -1940,3 +1940,30 @@ h1, h2, h3 { margin: 0; }
   .interview-panel-card { min-height: 120px; }
   .live-cue { display: none; }
 }
+
+/* Coaching keeps the existing report, cards and chat shell. */
+.coach-components { display: grid; gap: 10px; margin-top: 12px; white-space: normal; }
+.coach-choices { display:flex; gap:8px; flex-wrap:wrap; }
+.coach-choices .btn { white-space: normal; height:auto; min-height:36px; padding:8px 12px; text-align:left; }
+.coach-video { text-align:left; cursor:pointer; color:var(--text-primary); }
+.coach-comparison-ids { overflow-wrap:anywhere; font-size:11px; }
+.coach-components article { min-width:0; }
+.coach-components p { margin:8px 0; }
+.agent-panel-message.agent { overflow-wrap:anywhere; }
+.actual-timeline { gap:1px; margin:12px 0; }
+.actual-timeline button { min-width:0; border:0; padding:0; height:26px; cursor:pointer; }
+.actual-timeline .gap { background:var(--border); opacity:.5; cursor:default; }
+.session-agent-report { display:grid; gap:12px; margin:16px 0; }
+.session-agent-report .coach-card { display:grid; gap:8px; }
+.session-agent-report .report-card strong { font-size:16px; }
+.coach-stage { color:var(--text-secondary); font-size:12px; }
+
+/* Keep measurement tables scrollable inside the existing narrow layouts. */
+.main-area, .dash-grid > *, .coach-stack, .coach-card { min-width: 0; }
+.observation-table-wrap { max-width: 100%; overflow-x: auto; }
+@media (max-width: 720px) {
+  .main-header { padding: 12px 16px; gap: 8px; }
+  .search-bar { min-width: 0; flex: 1; }
+  .search-bar input { min-width: 0; }
+  .header-actions { flex-shrink: 0; }
+}

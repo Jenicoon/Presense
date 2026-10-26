@@ -35,7 +35,15 @@ export type AgentReport = {
     peakConcepts?: Array<{ name: string; value: number; comparisonValue: number; difference: number }>;
   };
   observationEvidenceIds?: string[];
+  rawSegments?: ReportSegment[];
+  coachingAvailable?: boolean;
+  previousCoaching?: { previousSessionId:string;goalLabel:string;comparable:boolean;lastOutcome:string|null };
   priorities: Array<{
+    metric?: string;
+    modality?: string;
+    independentObservations?: number;
+    assessment?: { independentObservations: number };
+    observations?: Array<{segmentId: string; startMs: number; endMs: number; value: number; stressScore: number; conceptValues: Record<string,number>}>;
     id: string;
     label: string;
     observationText: string;
@@ -109,6 +117,9 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
 }
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
+  if(report.priorities.length === 0) return Number(report.analysis?.coverage ?? 0)<.5
+    ? (ko ? "분석 자료가 부족합니다. 카메라와 마이크를 확인한 뒤 관측 자료를 더 모아 주세요." : "Analysis data is limited. Check the camera and microphone and collect more observations.")
+    : (ko ? "반복적으로 확인된 주요 문제가 없어 별도의 교정 과제를 만들지 않았습니다. 잘 유지한 부분은 영상과 함께 직접 확인하세요." : "No repeatedly observed major issue was found, so no corrective exercise was assigned. Review the recording to identify what you maintained well.");
   const finding = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
   const recommendation = finding?.practiceSuggestion || finding?.reviewAction || finding?.recommendation;
   if (recommendation) return recommendation;
@@ -152,6 +163,7 @@ export async function generateAgentReport(input: {
   language: "ko" | "en";
   sceneLabel: string;
   segments: ReportSegment[];
+  practiceContext?: { sessionId: string; practiceId: string };
 }): Promise<AgentReport> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) throw new Error("보고서를 생성하려면 로그인해 주세요.");

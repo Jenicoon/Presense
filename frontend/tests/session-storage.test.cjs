@@ -90,3 +90,5 @@ test('history retains a saved video path and explains signed URL failure', async
   assert.equal(record.videoError, 'Access denied');
   assert.deepEqual(record.timeline, [20, 40]);
 });
+
+test('a report with no usable observations stores null rather than a fabricated zero',async()=>{const {api,events}=setup();await api.savePracticeSession({...input,video:null,averageStress:null});assert.equal(events[0][1].stress_average,null);});

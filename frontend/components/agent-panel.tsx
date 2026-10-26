@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrainCircuit, Maximize2, Minimize2, RefreshCw, Send, X } from "lucide-react";
-import { INFERENCE_URL } from "@/lib/live-signal";
+import { actCoach, restoreCoach, activeCoachKey, practiceKey, type CoachAction, type CoachState, type CoachMessage } from "@/lib/coaching";
+import { CoachComponents } from "@/components/coach-components";
 import { useLang } from "@/lib/i18n";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loadAgentSessions, type PresentationRecord } from "@/lib/supabase/data";
 
 export type CurrentAgentReport = {
@@ -17,24 +17,27 @@ export type CurrentAgentReport = {
   noticeable: boolean;
 };
 
-type AgentMessage = { role: "user" | "agent"; text: string };
-type OpenAgentDetail = { report?: CurrentAgentReport };
+type AgentMessage = CoachMessage;
+type OpenAgentDetail = { report?: CurrentAgentReport; sessionId?: string; findingId?: string; attemptSessionId?: string };
 
 const OPEN_KEY = "presense-agent-open";
 const EXPANDED_KEY = "presense-agent-expanded";
-const CHAT_KEY_PREFIX = "presense-agent-chat:";
 
 export function AgentPanel({ userId }: { userId: string | null }) {
   const { lang, t } = useLang();
   const [open, setOpen] = useState(false);
+  const [preferencesLoaded,setPreferencesLoaded]=useState(false);
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<PresentationRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState(false);
   const [focusSessionId, setFocusSessionId] = useState<string | null>(null);
   const [currentReport, setCurrentReport] = useState<CurrentAgentReport | null>(null);
+  const [coachState, setCoachState] = useState<CoachState | null>(null);
+  const [revision, setRevision] = useState<number | undefined>();
+  const [previousAction, setPreviousAction] = useState<CoachAction | undefined>();
+  const activeSessionRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -60,48 +63,58 @@ export function AgentPanel({ userId }: { userId: string | null }) {
   useEffect(() => {
     setOpen(window.sessionStorage.getItem(OPEN_KEY) === "1");
     setExpanded(window.sessionStorage.getItem(EXPANDED_KEY) === "1");
+    setPreferencesLoaded(true);
   }, []);
 
-  useEffect(() => { window.sessionStorage.setItem(EXPANDED_KEY, expanded ? "1" : "0"); }, [expanded]);
+  useEffect(() => { if(preferencesLoaded) window.sessionStorage.setItem(EXPANDED_KEY, expanded ? "1" : "0"); }, [expanded,preferencesLoaded]);
 
   useEffect(() => {
     if (!userId) {
-      setMessages([]);
-      setLoadedUserId(null);
+      setMessages([]); activeSessionRef.current=null;setCoachState(null);setRevision(undefined);
       return;
     }
-    try {
-      const stored = JSON.parse(window.sessionStorage.getItem(`${CHAT_KEY_PREFIX}${userId}`) ?? "[]");
-      setMessages(Array.isArray(stored) ? stored.filter((item) =>
-        (item.role === "user" || item.role === "agent") && typeof item.text === "string"
-      ).slice(-20) : []);
-    } catch {
-      setMessages([]);
-    }
-    setLoadedUserId(userId);
+    setMessages([]); setCoachState(null); setRevision(undefined);
+    const active = window.localStorage.getItem(activeCoachKey(userId));
+    activeSessionRef.current = active;
+    if(active) { setFocusSessionId(active); void restoreCoach(active).then(data=>{
+      if(activeSessionRef.current!==active) return;
+      setMessages(data.messages); setCoachState(data.conversationState); setRevision(data.revision);
+    }).catch(()=>setError(lang === "ko" ? "저장된 코칭을 불러오지 못했습니다. 세션 보고서에서 다시 열어 주세요." : "Could not restore coaching. Reopen it from the session report.")); }
   }, [userId]);
 
   useEffect(() => {
-    if (userId && loadedUserId === userId) {
-      window.sessionStorage.setItem(`${CHAT_KEY_PREFIX}${userId}`, JSON.stringify(messages.slice(-20)));
-    }
-  }, [loadedUserId, messages, userId]);
-
-  useEffect(() => {
+    if(!preferencesLoaded) return;
     window.sessionStorage.setItem(OPEN_KEY, open ? "1" : "0");
     if (open) {
       void refreshSessions();
       window.setTimeout(() => inputRef.current?.focus(), 0);
     }
-  }, [open, refreshSessions]);
+  }, [open, refreshSessions,preferencesLoaded]);
 
   useEffect(() => {
     function handleOpen(event: Event) {
       const detail = (event as CustomEvent<OpenAgentDetail>).detail;
       setCurrentReport(detail?.report ?? null);
       setOpen(true);
+      if(detail?.sessionId && userId) {
+        const id=detail.sessionId; activeSessionRef.current=id; setFocusSessionId(id);
+        setMessages([]); setCoachState(null); setRevision(undefined);
+        window.localStorage.setItem(activeCoachKey(userId),id);
+        setBusy(true);setError("");
+        void restoreCoach(id).then(async data=>{
+          if(activeSessionRef.current!==id) return;
+          setMessages(data.messages);setCoachState(data.conversationState);setRevision(data.revision);
+          if(detail.attemptSessionId || detail.findingId || data.messages.length===0) {
+            const response=await actCoach({sessionId:id, action:detail.attemptSessionId?"finish_recording":detail.findingId?"explain_finding":"review", language:lang, findingId:detail.findingId, attemptSessionId:detail.attemptSessionId, revision:data.revision});
+            if(activeSessionRef.current!==id) return;
+            setCoachState(response.conversationState);setRevision(response.revision);
+            setMessages(previous=>[...previous,{role:"agent",text:response.message,response}]);
+            if(detail.attemptSessionId) window.localStorage.removeItem(practiceKey(userId));
+          }
+        }).catch(failure=>setError(failure instanceof Error?failure.message:t("agent.requestFailed"))).finally(()=>setBusy(false));
+      }
     }
-    function handleSaved() { setCurrentReport(null); void refreshSessions(); }
+    function handleSaved() { void refreshSessions(); }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
@@ -113,64 +126,39 @@ export function AgentPanel({ userId }: { userId: string | null }) {
       window.removeEventListener("presense:session-saved", handleSaved);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [refreshSessions]);
+  }, [refreshSessions, userId, lang, t]);
 
   useEffect(() => {
     const container = messagesRef.current;
     if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages, open, busy]);
 
-  async function sendMessage() {
+  async function sendMessage(action: CoachAction = "ask", findingId?: string) {
     const question = input.trim();
-    if (!question || busy || sessionsLoading) return;
-    setInput("");
-    setError("");
-    setBusy(true);
-    setMessages((previous) => [...previous, { role: "user", text: question }]);
-
+    const id=activeSessionRef.current || focusSessionId;
+    if(busy || (action === "ask" && !question)) return;
+    if(!id) { setError(lang === "ko" ? "먼저 분석 보고서가 있는 세션을 선택해 주세요." : "Select a session with an analysis report first."); return; }
+    setInput(""); setError(""); setBusy(true);
+    if(question) setMessages(previous=>[...previous,{role:"user",text:question}]);
     try {
-      const supabase = getSupabaseBrowserClient();
-      if (!supabase || !userId) throw new Error(t("agent.signIn"));
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) throw new Error(t("agent.signIn"));
+      const response=await actCoach({sessionId:id,action,language:lang,message:question,findingId,revision,conversationState:coachState ?? undefined,previousAction});
+      if(activeSessionRef.current!==id) return;
+      setCoachState(response.conversationState);setRevision(response.revision);setPreviousAction(action);
+      setMessages(previous=>[...previous,{role:"agent",text:response.message,response}]);
+      if((action==="start_recording" || action==="retry_practice") && userId && response.conversationState.activePracticeId) {
+        window.localStorage.setItem(practiceKey(userId),JSON.stringify({sessionId:id,practiceId:response.conversationState.activePracticeId}));
+        if(window.location.pathname!=="/practice") window.location.assign(`/practice?coaching=${encodeURIComponent(id)}`);
+        else window.dispatchEvent(new CustomEvent("presense:coach-start",{detail:response.conversationState}));
+      }
+      if(action==="finish_recording") window.dispatchEvent(new CustomEvent("presense:coach-stop",{detail:{sessionId:id}}));
+    } catch(failure) { setError(failure instanceof Error?failure.message:t("agent.requestFailed"));
+      // Recover authoritative state after another tab won a revision race.
+      try { const restored=await restoreCoach(id);setCoachState(restored.conversationState);setRevision(restored.revision); } catch {}
+    } finally { setBusy(false); }
+  }
 
-      const response = await fetch(`${INFERENCE_URL.replace(/\/$/, "")}/agent/chat`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: question.slice(0, 1200),
-          language: lang,
-          report: currentReport,
-          sessions: sessions.slice(0, 5).map((record) => ({
-            id: record.id,
-            title: record.title.slice(0, 160),
-            date: record.date,
-            duration: record.duration,
-            result: record.result.slice(0, 240),
-            stressAverage: Number(record.stressAverage),
-            diagnosis: record.diagnosis.slice(0, 700),
-            nextAction: record.nextAction.slice(0, 500),
-            sceneLabel: record.sceneLabel.slice(0, 120),
-          })),
-          focusSessionId,
-          history: messages.slice(-8).map((message) => ({
-            role: message.role === "agent" ? "assistant" : "user",
-            content: message.text.slice(0, 1000),
-          })),
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : t("agent.requestFailed"));
-      if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error(t("agent.emptyReply"));
-      setMessages((previous) => [...previous, { role: "agent", text: data.reply.trim() }]);
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : t("agent.requestFailed"));
-    } finally {
-      setBusy(false);
-    }
+  function selectSession(id: string) {
+    window.dispatchEvent(new CustomEvent("presense:open-agent",{detail:{sessionId:id}}));
   }
 
   return (
@@ -204,9 +192,9 @@ export function AgentPanel({ userId }: { userId: string | null }) {
             {!sessionsLoading && !sessionsError && sessions.length === 0 && <p className="agent-context-note">{t("agent.noSessions")}</p>}
             {sessions.length > 0 && (
               <div className="agent-session-list">
-                <button type="button" className={!focusSessionId ? "selected" : ""} onClick={() => setFocusSessionId(null)}>{t("agent.allRecent")}</button>
+                <button type="button" className={!focusSessionId ? "selected" : ""} onClick={() => { const latest=sessions[0]; if(latest) selectSession(latest.id); }}>{t("agent.allRecent")}</button>
                 {sessions.map((session) => (
-                  <button key={session.id} type="button" className={focusSessionId === session.id ? "selected" : ""} onClick={() => setFocusSessionId(session.id)} title={`${session.title} · ${session.date}`}>
+                  <button key={session.id} type="button" className={focusSessionId === session.id ? "selected" : ""} onClick={() => selectSession(session.id)} title={`${session.title} · ${session.date}`}>
                     <span>{session.title}</span><small>{session.date}</small>
                   </button>
                 ))}
@@ -216,7 +204,8 @@ export function AgentPanel({ userId }: { userId: string | null }) {
 
           <div className="agent-panel-messages" role="log" aria-live="polite" ref={messagesRef}>
             {messages.length === 0 && <div className="agent-panel-welcome"><BrainCircuit size={25} /><p>{t("agent.welcome")}</p></div>}
-            {messages.map((message, index) => <div key={index} className={`agent-panel-message ${message.role}`}>{message.text}</div>)}
+            {coachState && <p className="coach-stage">{lang === "ko" ? "진행 단계" : "Coaching stage"}: {({session_review:lang==="ko"?"보고서 검토":"Review", finding_selected:lang==="ko"?"발견 확인":"Finding", practice_created:lang==="ko"?"연습 준비":"Practice ready", recording:lang==="ko"?"녹화":"Recording", evaluating:lang==="ko"?"분석 중":"Evaluating", comparison_ready:lang==="ko"?"비교 완료":"Comparison ready", next_goal:lang==="ko"?"다음 목표":"Next goal", completed:lang==="ko"?"완료":"Completed"})[coachState.stage]}</p>}
+            {messages.map((message, index) => <div key={index} className={`agent-panel-message ${message.role}`}>{message.text}{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id)=>void sendMessage(action,id)} />}</div>)}
             {busy && <div className="agent-panel-message agent pending">{t("agent.thinking")}</div>}
           </div>
 

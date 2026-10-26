@@ -43,7 +43,7 @@ type SavePracticeSessionInput = {
   id?: string;
   title?: string;
   durationSeconds: number;
-  averageStress: number;
+  averageStress: number | null;
   result: string;
   diagnosis: string;
   nextAction: string;
@@ -138,7 +138,7 @@ export async function loadDashboardData() {
       date: formatSessionDate(row.session_date),
       duration: formatDuration(row.duration_seconds),
       result: row.result,
-      stressAverage: Number(row.stress_average).toFixed(2),
+      stressAverage: row.stress_average == null ? "—" : Number(row.stress_average).toFixed(2),
       diagnosis: row.diagnosis,
       nextAction: row.next_action ?? "",
       sceneLabel: row.scene_label ?? "",
@@ -163,7 +163,7 @@ export async function loadAgentSessions(): Promise<PresentationRecord[]> {
     .from("presentation_records")
     .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label")
     .order("session_date", { ascending: false })
-    .limit(5);
+    .limit(20);
   if (error) throw error;
 
   return (data ?? []).map((row) => ({
@@ -172,7 +172,7 @@ export async function loadAgentSessions(): Promise<PresentationRecord[]> {
     date: formatSessionDate(row.session_date),
     duration: formatDuration(row.duration_seconds),
     result: row.result,
-    stressAverage: Number(row.stress_average).toFixed(2),
+    stressAverage: row.stress_average == null ? "—" : Number(row.stress_average).toFixed(2),
     diagnosis: row.diagnosis,
     nextAction: row.next_action ?? "",
     sceneLabel: row.scene_label ?? "",
@@ -262,7 +262,7 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
       duration: formatDuration(row.duration_seconds),
       durationSeconds: Number(row.duration_seconds),
       result: row.result,
-      stressAverage: Number(row.stress_average).toFixed(2),
+      stressAverage: row.stress_average == null ? "—" : Number(row.stress_average).toFixed(2),
       diagnosis: row.diagnosis,
       nextAction: row.next_action ?? "",
       sceneLabel: row.scene_label ?? "",
@@ -316,13 +316,13 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     if (input.video) throw new Error("영상 저장에는 서버 연결이 필요합니다.");
     const sessionDate = new Date().toISOString();
     const localRecord: SessionHistoryRecord = {
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
       title: input.title?.trim() || `${input.sceneLabel} Practice`,
       date: formatSessionDate(sessionDate),
       duration: formatDuration(input.durationSeconds),
       durationSeconds: input.durationSeconds,
       result: input.result,
-      stressAverage: input.averageStress.toFixed(2),
+      stressAverage: input.averageStress?.toFixed(2) ?? "—",
       diagnosis: input.diagnosis,
       nextAction: input.nextAction,
       sceneLabel: input.sceneLabel,
@@ -396,7 +396,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     {
       user_id: user.id,
       label: "Average stress",
-      value: input.averageStress.toFixed(2),
+      value: input.averageStress?.toFixed(2) ?? "—",
       detail: input.diagnosis,
     },
     {

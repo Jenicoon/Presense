@@ -15,7 +15,7 @@ export function StressChart({ series }: { series: number[] }) {
   }));
   return <figure className="stress-line-chart">
     <svg viewBox="0 0 650 242" role="img" aria-labelledby={titleId}>
-      <title id={titleId}>{lang === "ko" ? "구간별 스트레스 추이, 0~100%" : "Stress over the session, 0–100%"}</title>
+      <title id={titleId}>{lang === "ko" ? "구간별 모델 점수, 0–100" : "Model score over the session, 0–100"}</title>
       {[0, 25, 50, 75, 100].map((value) => {
         const y = top + height * (1 - value / 100);
         return <g key={value}>
@@ -29,9 +29,9 @@ export function StressChart({ series }: { series: number[] }) {
       </g>)}
       <polyline className="stress-line-path" points={points.map(({ x, y }) => `${x},${y}`).join(" ")} />
       {points.map(({ x, y, value }, index) => <circle key={index} className="stress-line-point" cx={x} cy={y} r="4">
-        <title>{`${phases[Math.min(3, Math.floor(index * 4 / series.length))]} · ${index + 1}/${series.length}: ${value}%`}</title>
+        <title>{`${phases[Math.min(3, Math.floor(index * 4 / series.length))]} · ${index + 1}/${series.length}: ${value}/100`}</title>
       </circle>)}
     </svg>
-    <figcaption>{lang === "ko" ? "가로축: 연습 진행 구간 · 세로축: 스트레스 지수 (%)" : "Horizontal: session progress · Vertical: stress score (%)"}</figcaption>
+    <figcaption>{lang === "ko" ? "가로축: 연습 진행 구간 · 세로축: 모델 점수 (0–100)" : "Horizontal: session progress · Vertical: model score (0–100)"}</figcaption>
   </figure>;
 }

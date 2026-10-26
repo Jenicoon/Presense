@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionAgentReport } from "@/components/session-agent-report";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Activity, BrainCircuit, CalendarDays, Clock, FolderClock, MoreHorizontal, Play, SlidersHorizontal, Sparkles, TrendingDown, TrendingUp, X } from "lucide-react";
@@ -14,6 +15,7 @@ function localizeDiagnosis(value: string, t: Translate) {
   const fixedLabels: Record<string, string> = {
     "Latest session result": "diag.latestSessionResult",
     "Average stress": "diag.averageStress",
+    "Mean model score": "diag.averageStress",
     "Next coaching focus": "diag.nextCoachingFocus",
     "Generated from the most recent practice session.": "diag.generatedFromSession",
     "Mostly stable delivery": "diag.stableDelivery",
@@ -51,7 +53,7 @@ function StressTrend({ records }: { records: PresentationRecord[] }) {
     .reverse()
     .map((r) => parseFloat(r.stressAverage));
 
-  const max = Math.max(...values, 0.01);
+  const max = Math.max(...values.filter(Number.isFinite), 0.01);
 
   return (
     <div>
@@ -63,8 +65,8 @@ function StressTrend({ records }: { records: PresentationRecord[] }) {
           <div
             key={i}
             className="stress-bar"
-            style={{ height: `${Math.round((v / max) * 100)}%` }}
-            title={`Session ${i + 1}: ${v.toFixed(2)}`}
+            style={{ height: `${Number.isFinite(v)?Math.round((v / max) * 100):0}%` }}
+            title={Number.isFinite(v) ? `Session ${i + 1}: ${v.toFixed(2)}` : "No analysis data"}
           />
         ))}
       </div>
@@ -106,19 +108,13 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
   const { lang, t } = useLang();
   const stressValue = parseFloat(record.stressAverage);
   const stressPercent = Math.round(stressValue * 100);
-  const stressColor = stressPercent > 65 ? "#ef4444" : stressPercent > 45 ? "#f59e0b" : "#22c55e";
+  const stressColor = !Number.isFinite(stressValue) ? "var(--text-secondary)" : stressPercent > 65 ? "#ef4444" : stressPercent > 45 ? "#f59e0b" : "#22c55e";
   const stressTier = stressPercent > 65 ? "high" : stressPercent > 45 ? "moderate" : "low";
 
-  const simulatedBars = (() => {
-    const base = stressValue;
-    return [
-      Math.min(1, base * 0.72),
-      Math.min(1, base * 1.05),
-      Math.min(1, base * 1.28),
-      Math.min(1, base * 0.95),
-    ];
-  })();
-  const barMax = Math.max(...simulatedBars, 0.01);
+  const cells=(record.agentReport?.analysis.timeline ?? []) as {startMs:number;endMs:number;stressScore:number}[];
+  const duration=Number(record.agentReport?.analysis.durationMs ?? 0);
+  const observedBars=Array.from({length:4},(_,i)=>{let time=0,total=0;for(const c of cells){const n=Math.max(0,Math.min(c.endMs,duration*(i+1)/4)-Math.max(c.startMs,duration*i/4));time+=n;total+=n*c.stressScore;}return time?total/time:null;});
+  const barMax=1;
 
   return (
     <div
@@ -168,15 +164,15 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
           <div className="report-card">
             <div className="rc-label">{t("modal.avgStressScore")}</div>
             <div className="rc-value" style={{ color: stressColor }}>{record.stressAverage}</div>
-            <div className="rc-desc" style={{ marginBottom: 8 }}>{t(`modal.outOf${stressTier === "high" ? "High" : stressTier === "moderate" ? "Moderate" : "Low"}`)}</div>
-            <StressBar percent={stressPercent} color={stressColor} />
+            <div className="rc-desc" style={{ marginBottom: 8 }}>{Number.isFinite(stressValue) ? t(`modal.outOf${stressTier === "high" ? "High" : stressTier === "moderate" ? "Moderate" : "Low"}`) : (lang === "ko" ? "분석 자료 없음" : "No analysis data")}</div>
+            {Number.isFinite(stressPercent) && <StressBar percent={stressPercent} color={stressColor} />}
           </div>
           <div className="report-card">
             <div className="rc-label">{t("modal.stressPhaseBreakdown")}</div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 52, marginTop: 8, marginBottom: 8 }}>
-              {simulatedBars.map((v, i) => (
+              {observedBars.map((v, i) => (
                 <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                  <div style={{ width: "100%", background: stressColor, borderRadius: "3px 3px 0 0", opacity: 0.75 + i * 0.06, height: `${Math.round((v / barMax) * 48)}px` }} />
+                  <small>{v===null?"—":v.toFixed(2)}</small><div style={{ width: "100%", background: stressColor, borderRadius: "3px 3px 0 0", opacity: 0.75 + i * 0.06, height: `${v===null?0:Math.round((v / barMax) * 48)}px` }} />
                 </div>
               ))}
             </div>
@@ -186,6 +182,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
           </div>
         </div>
 
+        {record.agentReport && <SessionAgentReport report={record.agentReport} language={lang} />}
         {/* AI Diagnosis */}
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
@@ -211,7 +208,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
             <BrainCircuit size={13} color="var(--accent)" /> {t("modal.coachingInsight")}
           </div>
           <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7, background: "var(--surface-2, var(--border))", borderRadius: 8, padding: "12px 14px" }}>
-            {t(`modal.coach.${stressTier}`)}
+            {record.agentReport ? (lang === "ko" ? "실제 관측 구간과 측정값을 확인하고, 근거 있는 목표 하나를 선택해 연습하세요." : "Review observed intervals and measurements, then choose one supported goal for practice.") : (lang === "ko" ? "구간 분석 자료가 없어 개선 목표를 판단할 수 없습니다." : "No interval data is available to select a practice goal.")}
           </div>
         </div>
         <div className="dashboard-review-actions">
@@ -261,9 +258,9 @@ export function DashboardOverview() {
   }, [hasEnv, user]);
 
   const totalSessions = presentationRecords.length;
-  const latestAvg = parseFloat(presentationRecords[0]?.stressAverage ?? "0");
-  const prevAvg = parseFloat(presentationRecords[1]?.stressAverage ?? "0");
-  const stressDelta = totalSessions >= 2 ? latestAvg - prevAvg : null;
+  const latestAvg = parseFloat(presentationRecords[0]?.stressAverage ?? "—");
+  const prevAvg = parseFloat(presentationRecords[1]?.stressAverage ?? "—");
+  const stressDelta = totalSessions >= 2 && Number.isFinite(latestAvg) && Number.isFinite(prevAvg) ? latestAvg - prevAvg : null;
   const latestDiagnosis = diagnosisHistory[0] ? localizeDiagnosis(diagnosisHistory[0].detail, t) : "No sessions yet";
 
   // Current Focus Area (Progress Report §1.3.2): the practice context that needs
@@ -343,7 +340,7 @@ export function DashboardOverview() {
               </span>
             )}
           </div>
-          <div className="kpi-value">{latestAvg.toFixed(2)}</div>
+          <div className="kpi-value">{Number.isFinite(latestAvg)?latestAvg.toFixed(2):"—"}</div>
           <div className="kpi-label">{t("kpi.latestAvgStress")}</div>
           <div className="kpi-sub">{t("kpi.scoreOutOf")}</div>
         </div>

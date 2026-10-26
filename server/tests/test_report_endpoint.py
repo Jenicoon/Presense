@@ -61,6 +61,47 @@ class ReportEndpointTests(unittest.TestCase):
         finally:
             self.module.app.dependency_overrides.clear()
 
+    def test_coaching_requires_authentication(self):
+        self.assertEqual(self.client.post("/agent/coach",json={"sessionId":"s1","action":"review"}).status_code,401)
+        self.assertEqual(self.client.get("/agent/coach/s1").status_code,401)
+
+    def test_coaching_restores_and_rejects_stale_actions_and_invented_ids(self):
+        from server.tests.test_coaching import document
+        from copy import deepcopy
+        doc=document("s1")
+        class Store:
+            def get(self,identity): return deepcopy(doc) if identity=="s1" else None
+            def previous(self,_):return []
+            def save(self,identity,new,revision):doc.clear();doc.update(new)
+        self.module.app.dependency_overrides[self.module.require_authenticated_user]=lambda:{"sub":"user-1"}
+        try:
+            with patch.object(self.module,"_coach_store",return_value=Store()):
+                restored=self.client.get("/agent/coach/s1");self.assertEqual(restored.status_code,200)
+                self.assertEqual(restored.json()["revision"],0)
+                self.assertEqual(self.client.get("/agent/coach/another-user").status_code,404)
+                result=self.client.post("/agent/coach",json={"sessionId":"s1","action":"review","revision":0})
+                self.assertEqual(result.status_code,200);self.assertTrue(result.json()["components"])
+                self.assertEqual(self.client.post("/agent/coach",json={"sessionId":"s1","action":"review","revision":0}).status_code,409)
+                self.assertEqual(self.client.post("/agent/chat",json={"sessionId":"s1","action":"create_practice","findingId":"made-up"}).status_code,422)
+                self.assertEqual(self.client.post("/agent/coach",json={"sessionId":"s1","action":"render_html"}).status_code,422)
+        finally:self.module.app.dependency_overrides.clear()
+
+    def test_new_report_receives_the_previously_selected_goal_and_outcome(self):
+        from server.tests.test_coaching import document
+        previous=document("previous");previous["state"]["nextGoalId"]="pitch_change"
+        previous["practices"]=[{"comparison":{"outcome":"partial"}}]
+        class Store:
+            def previous(self,_):return [previous]
+            def create(self,_,doc):return doc
+        self.module.app.dependency_overrides[self.module.require_authenticated_user]=lambda:{"sub":"user-1"}
+        try:
+            with patch.object(self.module,"_coach_store",return_value=Store()), patch.object(self.module,"model_version",return_value="test-model"),patch.object(self.module,"luxia_api_key",""):
+                response=self.client.post("/agent/report",json=self.payload)
+                self.assertEqual(response.status_code,200)
+                report=response.json();self.assertEqual(report["previousCoaching"]["goalLabel"],previous["snapshot"]["report"]["priorities"][0]["label"])
+                self.assertEqual(report["previousCoaching"]["lastOutcome"],"partial")
+        finally:self.module.app.dependency_overrides.clear()
+
 
 if __name__ == "__main__":
     unittest.main()
