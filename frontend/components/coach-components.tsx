@@ -1,4 +1,5 @@
 "use client";
+import { ArrowRight, Play, Target, Video } from "lucide-react";
 import { measurementLabel } from "@/lib/measurement-labels";
 import {
   clock,
@@ -54,7 +55,7 @@ export function CoachComponents({
                 className="coach-card coach-video"
                 onClick={() => jumpToVideo(c.sessionId, c.startMs)}
               >
-                ▶ {c.label} · {clock(c.startMs)}–{clock(c.endMs)}
+                <span className="coach-video-icon"><Play size={16} /></span><span><strong>{c.label}</strong><small>{clock(c.startMs)}–{clock(c.endMs)}</small></span><ArrowRight size={15} />
               </button>
             );
           case "finding":
@@ -62,22 +63,20 @@ export function CoachComponents({
               <button
                 key={i}
                 type="button"
-                className="coach-card coach-data"
+                className="coach-card coach-finding-choice"
                 disabled={busy}
                 onClick={() => onAction("explain_finding", c.findingId)}
               >
-                {c.label} →
+                <Target size={16} /><span>{c.label}</span><ArrowRight size={15} />
               </button>
             );
           case "practice":
             return (
-              <article key={i} className="coach-card coach-ok">
-                <strong>
-                  {c.label} · {c.durationSeconds}
-                  {ko ? "초 연습" : "s practice"}
-                </strong>
+              <article key={i} className="coach-card coach-exercise">
+                <div className="coach-component-heading"><span><Video size={14} />{ko ? "연습 과제" : "Practice exercise"}</span><small>{c.durationSeconds}{ko ? "초" : "s"}</small></div>
+                <strong>{c.label}</strong>
                 <p>{c.instruction}</p>
-                <small>{c.criterion}</small>
+                <details className="review-details"><summary>{ko ? "어떻게 평가하나요?" : "How is it evaluated?"}</summary><p>{c.criterion}</p></details>
               </article>
             );
           case "insufficient_data":
@@ -89,8 +88,8 @@ export function CoachComponents({
           case "comparison": {
             const r = c.comparison;
             return (
-              <article key={i} className="coach-card coach-data">
-                <strong>{outcome[r.outcome]?.[ko ? 0 : 1] ?? r.outcome}</strong>
+              <article key={i} className="coach-card coach-comparison">
+                <strong className="coach-outcome">{outcome[r.outcome]?.[ko ? 0 : 1] ?? r.outcome}</strong>
                 <p>
                   {r.scope === "practice"
                     ? ko
@@ -100,28 +99,14 @@ export function CoachComponents({
                       ? "이전 발표 → 이번 발표"
                       : "Previous presentation → current presentation"}
                 </p>
-                <p>
-                  {ko ? "모델 점수" : "Model score"}:{" "}
-                  {r.before.value?.toFixed(3) ?? "—"} →{" "}
-                  {r.after.value?.toFixed(3) ?? "—"}
-                  {r.modelScoreChange !== null
-                    ? ` (Δ ${r.modelScoreChange.toFixed(3)})`
-                    : ""}
-                </p>
-                <p>
-                  {ko
-                    ? "분석 창 / 독립 관측 / 커버리지"
-                    : "Windows / independent observations / coverage"}
-                  : {r.before.windowCount}/{r.before.independentObservations}/
-                  {Math.round(r.before.coverage * 100)}% → {r.after.windowCount}
-                  /{r.after.independentObservations}/
-                  {Math.round(r.after.coverage * 100)}%
-                </p>
-                <p>
-                  {ko ? "측정 품질" : "Measurement quality"}:{" "}
-                  {Math.round(r.before.quality * 100)}% →{" "}
-                  {Math.round(r.after.quality * 100)}%
-                </p>
+                <div className="coach-score-comparison">{[r.before, r.after].map((take, index) => <div key={index}><span>{index === 0 ? (ko ? "이전 시도" : "Before") : ko ? "이번 시도" : "Current"}</span><strong>{take.value?.toFixed(3) ?? "—"}</strong><small>{ko ? "모델 점수" : "Model score"}</small></div>)}</div>
+                {r.modelScoreChange !== null && <p className="coach-score-change">{ko ? "모델 점수 변화" : "Model score change"} <strong>{r.modelScoreChange > 0 ? "+" : ""}{r.modelScoreChange.toFixed(3)}</strong></p>}
+                <dl className="coach-quality-list">
+                  <div><dt>{ko ? "분석 구간" : "Analysis windows"}</dt><dd>{r.before.windowCount} → {r.after.windowCount}</dd></div>
+                  <div><dt>{ko ? "독립 관측" : "Independent observations"}</dt><dd>{r.before.independentObservations} → {r.after.independentObservations}</dd></div>
+                  <div><dt>{ko ? "커버리지" : "Coverage"}</dt><dd>{Math.round(r.before.coverage * 100)}% → {Math.round(r.after.coverage * 100)}%</dd></div>
+                  <div><dt>{ko ? "측정 품질" : "Measurement quality"}</dt><dd>{Math.round(r.before.quality * 100)}% → {Math.round(r.after.quality * 100)}%</dd></div>
+                </dl>
                 {!r.compatible && (
                   <p>
                     {ko
@@ -130,7 +115,7 @@ export function CoachComponents({
                   </p>
                 )}
                 <div className="observation-table-wrap">
-                  <table className="observation-table">
+                  <table className="observation-table coach-measurement-table">
                     <thead>
                       <tr>
                         <th>{ko ? "관련 측정값" : "Measurement"}</th>

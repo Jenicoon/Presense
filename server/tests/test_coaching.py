@@ -7,6 +7,7 @@ from agent.coaching import (
     respond,
     compare_snapshots,
     validate_response,
+    localized_messages,
 )
 from agent.report_agent import generate_report
 from agent.report_schema import ReviewRequest
@@ -69,6 +70,41 @@ class CoachingTests(unittest.TestCase):
         ]
         attempt["snapshot"]["request"]["durationMs"] = 30000
         return attempt
+
+    def test_language_switch_restores_the_same_practice_without_an_extra_transition(self):
+        doc = document()
+        doc, response = self.step(doc, "create_practice", language="ko")
+        original = deepcopy(doc)
+        english = localized_messages(doc, "en")
+        translated = english[-1]["response"]
+        self.assertEqual(translated["conversationState"], response["conversationState"])
+        self.assertEqual(translated["revision"], 1)
+        self.assertEqual(len(doc["practices"]), 1)
+        self.assertEqual(doc, original)
+        card = next(c for c in translated["components"] if c["type"] == "practice")
+        self.assertEqual(card["practiceId"], doc["state"]["activePracticeId"])
+        import re
+        self.assertIsNone(re.search(r"[가-힣]", str(english)))
+        validate_response(translated, doc)
+        bad = deepcopy(translated)
+        next(c for c in bad["components"] if c["type"] == "practice")["instruction"] = "Invented exercise"
+        with self.assertRaises(ValueError):
+            validate_response(bad, doc)
+        korean = localized_messages(doc, "ko")
+        self.assertIn("연습", korean[-1]["text"])
+
+    def test_english_review_of_korean_report_and_single_routing_call(self):
+        doc = document()
+        calls = []
+        def route(context):
+            calls.append(context)
+            return {"action": "explain_finding"}
+        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="ask", message="Why?", language="en"), route=route)
+        self.assertEqual(len(calls), 1)
+        import re
+        self.assertIsNone(re.search(r"[가-힣]", str(response)))
+        self.assertIn("200 Hz", response["message"])
+        self.assertEqual(doc["revision"], 1)
 
     def test_stable_session_has_no_forced_practice_or_findings(self):
         doc = document(changed=False)

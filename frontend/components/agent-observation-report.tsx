@@ -1,3 +1,5 @@
+import { measurementLabel } from "@/lib/measurement-labels";
+import { bilingualLabel } from "@/lib/report-locale";
 import { agentNextPractice, type AgentReport } from "@/lib/agent-report";
 
 function time(ms: number): string {
@@ -52,25 +54,25 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
       <h3>{ko ? "관찰된 모델 출력" : "Observed model outputs"}</h3>
       {observed.modelWindowCount !== undefined && <p>{ko ? `모델 분석 창 ${observed.modelWindowCount}개 · 각 창은 최대 10초이며 서로 겹칠 수 있습니다.` : `${observed.modelWindowCount} model analysis windows · each covers up to 10 seconds and may overlap.`}</p>}
       {observed.concepts.length > 0 && <div className="observation-section">
-        <strong>{ko ? "Concept 출력" : "Concept outputs"}</strong>
+        <strong>{ko ? "관련 패턴" : "Related patterns"}</strong>
         <p>{ko ? "각 막대는 0–1 눈금으로 표시합니다. 값이 클수록 모델이 해당 이름의 패턴을 더 강하게 출력한 것이며, 높고 낮음 자체가 발표의 좋고 나쁨을 뜻하지 않습니다." : "Each bar uses a fixed 0–1 scale. A larger output means the model estimated more of that named pattern; higher or lower is not a presentation-quality grade."}</p>
         <div className="observation-scale"><span>0</span><span>1</span></div>
         <div className="observation-bars">{observed.concepts.map((item) => <div className="observation-bar-row" key={item.name}>
-          <span>{item.name}</span><div className="observation-bar-track" role="progressbar" aria-label={item.name} aria-valuemin={0} aria-valuemax={1} aria-valuenow={conceptBarPercent(item.meanValue) / 100}><div className="observation-bar-fill" style={{ width: `${conceptBarPercent(item.meanValue)}%` }} /></div><b className={item.meanValue > 1 ? "observation-value-over-range" : undefined}>{item.meanValue.toFixed(2)}</b>
+          <span>{measurementLabel(item.name, ko)}</span><div className="observation-bar-track" role="progressbar" aria-label={measurementLabel(item.name, ko)} aria-valuemin={0} aria-valuemax={1} aria-valuenow={conceptBarPercent(item.meanValue) / 100}><div className="observation-bar-fill" style={{ width: `${conceptBarPercent(item.meanValue)}%` }} /></div><b className={item.meanValue > 1 ? "observation-value-over-range" : undefined}>{item.meanValue.toFixed(2)}</b>
         </div>)}</div>
         {observed.concepts.some((item) => item.meanValue < 0 || item.meanValue > 1) && <p>{ko ? "0 미만·1 초과 출력은 막대 끝에 맞춰 표시하고, 오른쪽 숫자는 원래 값을 유지합니다." : "Outputs outside 0–1 are clipped on the bar; the number retains the original value."}</p>}
       </div>}
       {featureGroups.map((group) => group.items.length > 0 && <div className="observation-section" key={group.label}>
         <strong>{group.label}</strong>
         <div className="observation-table-wrap"><table className="observation-table"><thead><tr><th>{ko ? "측정 항목" : "Measurement"}</th><th>{ko ? "평균" : "Mean"}</th><th>{ko ? "관측 범위" : "Observed range"}</th><th>{ko ? "어떻게 읽나요?" : "How to read it"}</th></tr></thead><tbody>
-          {group.items.map((item) => <tr key={item.id}><td>{ko ? item.label.split(" / ")[0] : item.label.split(" / ")[1] || item.label}</td><td>{fixedUnit(item.meanValue, item.unit)}</td><td>{fixedUnit(item.minValue, item.unit)}–{fixedUnit(item.maxValue, item.unit)}</td><td>{METRIC_EXPLANATIONS[item.id]?.[ko ? 0 : 1] ?? ""}</td></tr>)}
+          {group.items.map((item) => <tr key={item.id}><td>{bilingualLabel(item.label, ko, measurementLabel(item.id, ko))}</td><td>{fixedUnit(item.meanValue, item.unit)}</td><td>{fixedUnit(item.minValue, item.unit)}–{fixedUnit(item.maxValue, item.unit)}</td><td>{METRIC_EXPLANATIONS[item.id]?.[ko ? 0 : 1] ?? ""}</td></tr>)}
         </tbody></table></div>
       </div>)}
     </div>}
     <div className="coach-card coach-data">
       <h3>{ko ? "영상에서 확인할 변화" : "Changes to review in the recording"}</h3>
       {(observed.patterns ?? []).length > 0 ? (observed.patterns ?? []).map((item) => <p key={item.id}>
-        <strong>{time(item.startMs)}–{time(item.endMs)} · {ko ? item.label.split(" / ")[0] : item.label.split(" / ")[1] || item.label}</strong><br />
+        <strong>{time(item.startMs)}–{time(item.endMs)} · {bilingualLabel(item.label, ko, measurementLabel(item.id, ko))}</strong><br />
         {ko ? `해당 구간 ${item.value.toFixed(2)}${item.unit ? ` ${item.unit}` : ""} · 다른 분석 창 중앙값 ${item.comparisonValue.toFixed(2)}${item.unit ? ` ${item.unit}` : ""}` :
           `This interval ${item.value.toFixed(2)}${item.unit ? ` ${item.unit}` : ""} · median of other windows ${item.comparisonValue.toFixed(2)}${item.unit ? ` ${item.unit}` : ""}`}
       </p>) : <p>{observed.features.length === 0
@@ -78,7 +80,7 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
         : (ko ? "구간별 음성·영상 특징의 차이가 뚜렷하지 않았습니다." : "Audio and video features showed no clear interval difference.")}</p>}
       {previous && <p>{ko ? `이전 저장 기록 ${previous.previousSessionCount ?? 1}건과 비교: ${previous.label.split(" / ")[0]} 중앙값 ${previous.previousValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""} → 이번 ${previous.currentValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""}` :
         `Compared with ${previous.previousSessionCount ?? 1} saved session(s): ${previous.label.split(" / ")[1] || previous.label} ${previous.previousValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""} → ${previous.currentValue.toFixed(2)}${previous.unit ? ` ${previous.unit}` : ""}`}</p>}
-      {(observed.peakConcepts ?? []).length > 0 && <p>{ko ? "같은 구간의 Concept 변화: " : "Concept outputs in that interval: "}{(observed.peakConcepts ?? []).map((item) => `${item.name} ${item.value.toFixed(2)} (${ko ? "다른 창 중앙값" : "other-window median"} ${item.comparisonValue.toFixed(2)})`).join(" · ")}</p>}
+      {(observed.peakConcepts ?? []).length > 0 && <p>{ko ? "같은 구간의 패턴 변화: " : "Concept outputs in that interval: "}{(observed.peakConcepts ?? []).map((item) => `${measurementLabel(item.name, ko)} ${item.value.toFixed(2)} (${ko ? "다른 창 중앙값" : "other-window median"} ${item.comparisonValue.toFixed(2)})`).join(" · ")}</p>}
       <AgentEvidence report={report} ids={report.observationEvidenceIds} ko={ko} />
     </div>
     <div className="coach-card coach-ok"><h3>{ko ? "이번 연습에서 해볼 것" : "Focus for the next take"}</h3><p>{agentNextPractice(report, ko)}</p></div>

@@ -10,16 +10,18 @@ const DEFAULT_LANG: Lang = "en";
 // Flat key → { ko, en }. Use t("key") to read the current language.
 const dict: Record<string, { ko: string; en: string }> = {
   // ── App shell ──
+  "diag.reportComplete": { ko: "AI 보고서 완료", en: "AI report complete" },
+  "diag.reportLimited": { ko: "일부 분석 보고서", en: "AI report limited" },
   "brand.tagline": { ko: "발표 AI", en: "Presentation AI" },
   "nav.dashboard": { ko: "대시보드", en: "Dashboard" },
   "nav.history": { ko: "기록", en: "History" },
   "nav.practice": { ko: "연습", en: "Practice" },
   "nav.settings": { ko: "설정", en: "Settings" },
-  "agent.title": { ko: "AI ChatBot", en: "AI ChatBot" },
+  "agent.title": { ko: "AI 발표 코치", en: "AI Presentation Coach" },
   "agent.sidebarHint": { ko: "최근 세션과 대화", en: "Talk about your sessions" },
   "agent.subtitle": { ko: "언제든 연습 기록을 함께 살펴보세요", en: "Discuss your practice anytime" },
-  "agent.open": { ko: "AI ChatBot 열기", en: "Open AI ChatBot" },
-  "agent.close": { ko: "AI ChatBot 닫기", en: "Close AI ChatBot" },
+  "agent.open": { ko: "AI 발표 코치 열기", en: "Open AI ChatBot" },
+  "agent.close": { ko: "AI 발표 코치 닫기", en: "Close AI ChatBot" },
   "agent.expand": { ko: "채팅창 크게 보기", en: "Expand chat" },
   "agent.shrink": { ko: "채팅창 작게 보기", en: "Shrink chat" },
   "agent.contextTitle": { ko: "연결된 세션", en: "Session context" },
@@ -38,7 +40,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "agent.emptyReply": { ko: "AI ChatBot에서 빈 답변을 받았습니다.", en: "The AI ChatBot returned an empty reply." },
   "agent.privacy": { ko: "선택한 세션의 저장된 분석 자료를 바탕으로 답변합니다.", en: "Answers use the selected session’s saved analysis data." },
   "agent.reportHint": { ko: "이번 세션과 최근 기록을 함께 살펴보세요.", en: "Discuss this session alongside your recent records." },
-  "agent.openForReport": { ko: "이번 세션으로 AI ChatBot 열기", en: "Open AI ChatBot with this session" },
+  "agent.openForReport": { ko: "이번 세션으로 AI 발표 코치 열기", en: "Open AI ChatBot with this session" },
   "cta.startPractice": { ko: "연습 시작", en: "Start Practice" },
   "header.search": { ko: "세션 검색...", en: "Search sessions..." },
   "menu.settings": { ko: "설정", en: "Settings" },
@@ -390,7 +392,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "ko" || stored === "en") setLangState(stored);
+    if (stored === "ko" || stored === "en") {
+      setLangState(stored);
+      document.documentElement.lang = stored;
+    }
   }, []);
 
   const setLang = useCallback((l: Lang) => {

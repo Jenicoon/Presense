@@ -1,3 +1,5 @@
+import { measurementLabel } from "@/lib/measurement-labels";
+import { findingText, localizedSummary, matchesLanguage } from "@/lib/report-locale";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { INFERENCE_URL, type LiveInferenceFrame } from "@/lib/live-signal";
 
@@ -15,6 +17,7 @@ export type ReportSegment = {
 
 export type AgentReport = {
   schemaVersion: string;
+  language?: "ko" | "en";
   sessionId: string;
   status: "complete" | "limited";
   summaryText: string;
@@ -40,6 +43,7 @@ export type AgentReport = {
   previousCoaching?: { previousSessionId:string;goalLabel:string;comparable:boolean;lastOutcome:string|null };
   priorities: Array<{
     metric?: string;
+    referenceValue?: number | null;
     modality?: string;
     independentObservations?: number;
     assessment?: { independentObservations: number };
@@ -62,7 +66,7 @@ export type AgentReport = {
 
 /** Expand older, generic saved summaries using measurements already stored in the report. */
 export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
-  const original = report.summaryText;
+  const original = localizedSummary(report, ko);
   if (!original.includes(ko ? "음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다" :
     "The measured audio and video features showed no clear interval difference")) return original;
   const observed = report.observationReport;
@@ -103,11 +107,11 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
   const concept = observed.peakConcepts?.[0] ?? observed.concepts?.[0];
   if (concept) {
     if ("value" in concept) sentences.push(ko
-      ? `같은 구간의 Concept 출력 ‘${concept.name}’ 값은 ${concept.value.toFixed(2)} (다른 창 중앙값 ${concept.comparisonValue.toFixed(2)})였습니다.`
-      : `The ${concept.name} concept output there was ${concept.value.toFixed(2)} (other-window median ${concept.comparisonValue.toFixed(2)}).`);
+      ? `같은 구간의 Concept 출력 ‘${measurementLabel(concept.name, ko)}’ 값은 ${concept.value.toFixed(2)} (다른 창 중앙값 ${concept.comparisonValue.toFixed(2)})였습니다.`
+      : `The ${measurementLabel(concept.name, ko)} concept output there was ${concept.value.toFixed(2)} (other-window median ${concept.comparisonValue.toFixed(2)}).`);
     else sentences.push(ko
-      ? `발표 전체에서 가장 크게 나온 Concept 출력은 ‘${concept.name}’ 평균 ${concept.meanValue.toFixed(2)}이었습니다.`
-      : `The largest session-wide concept output was ${concept.name} at ${concept.meanValue.toFixed(2)} on average.`);
+      ? `발표 전체에서 가장 크게 나온 Concept 출력은 ‘${measurementLabel(concept.name, ko)}’ 평균 ${concept.meanValue.toFixed(2)}이었습니다.`
+      : `The largest session-wide concept output was ${measurementLabel(concept.name, ko)} at ${concept.meanValue.toFixed(2)} on average.`);
   }
   sentences.push(nearlyFlat ? (ko ? "전체 영상에서 실제 발화와 표정의 흐름을 확인해 보세요." :
     "Review the speech and expression across the recording.") :
@@ -122,8 +126,9 @@ export function agentNextPractice(report: AgentReport, ko: boolean): string {
     : (ko ? "반복적으로 확인된 주요 문제가 없어 별도의 교정 과제를 만들지 않았습니다. 잘 유지한 부분은 영상과 함께 직접 확인하세요." : "No repeatedly observed major issue was found, so no corrective exercise was assigned. Review the recording to identify what you maintained well.");
   const finding = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
   const recommendation = finding?.practiceSuggestion || finding?.reviewAction || finding?.recommendation;
-  if (recommendation) return recommendation;
-  if (report.observationReport?.practiceFocus) return report.observationReport.practiceFocus;
+  if (recommendation && matchesLanguage(recommendation, ko)) return recommendation;
+  if (finding) return findingText(finding, ko).practice;
+  if (matchesLanguage(report.observationReport?.practiceFocus, ko)) return report.observationReport!.practiceFocus!;
   if (!report.observationReport?.peakSegment) {
     return ko ? "카메라와 마이크를 확인한 뒤 다시 발표를 녹화해 보세요." :
       "Check the camera and microphone, then record another presentation.";

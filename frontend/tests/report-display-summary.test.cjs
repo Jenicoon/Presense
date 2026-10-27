@@ -4,15 +4,20 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 
-const source = ts.createSourceFile('agent-report.ts',
-  fs.readFileSync(path.join(__dirname, '../lib/agent-report.ts'), 'utf8'),
-  ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const declaration = source.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === 'reportDisplaySummary');
-assert.ok(declaration);
-const code = ts.transpileModule(declaration.getText(source), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-}).outputText;
-const reportDisplaySummary = new Function('exports', `${code}; return reportDisplaySummary;`)({});
+function loadTs(file) {
+  const js = ts.transpileModule(fs.readFileSync(path.join(__dirname, file), 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const exports = {};
+  new Function('exports', 'require', js)(exports, (id) => {
+    if (id === '@/lib/measurement-labels') return loadTs('../lib/measurement-labels.ts');
+    if (id === '@/lib/report-locale') return loadTs('../lib/report-locale.ts');
+    return {};
+  });
+  return exports;
+}
+const { reportDisplaySummary, agentNextPractice } = loadTs('../lib/agent-report.ts');
+const { findingText, sceneText } = loadTs('../lib/report-locale.ts');
 
 test('older generic report uses its saved measurements in the displayed summary', () => {
   const report = {
@@ -41,4 +46,28 @@ test('older generic report uses its saved measurements in the displayed summary'
 test('specific generated report is retained verbatim', () => {
   const report = { summaryText: '구간별 관찰 내용입니다.' };
   assert.equal(reportDisplaySummary(report, true), report.summaryText);
+});
+
+
+test('a saved Korean finding is rendered from its actual measurements in English', () => {
+  const finding = { id: 'pitch_change', metric: 'f0_mean', label: '평균 목소리 높이 / Mean voice pitch',
+    observationText: '구간별 한국어 관찰입니다.', reviewAction: '한국어 영상 안내', practiceSuggestion: '한국어 연습 안내',
+    referenceValue: 100, observations: [{ startMs: 25000, endMs: 35000, value: 200 }] };
+  const translated = findingText(finding, false);
+  assert.doesNotMatch(Object.values(translated).join(' '), /[가-힣]/);
+  assert.match(translated.observation, /00:25–00:35/);
+  assert.match(translated.observation, /200.00 Hz/);
+  assert.match(translated.observation, /100.00 Hz/);
+  const report = { summaryText: '한국어 요약', priorities: [finding] };
+  assert.equal(reportDisplaySummary(report, false), translated.observation);
+  assert.doesNotMatch(agentNextPractice(report, false), /[가-힣]/);
+  assert.equal(report.summaryText, '한국어 요약');
+});
+
+test('English findings render in Korean without fabricating missing observations', () => {
+  const text = findingText({ id: 'pitch_change', label: '평균 목소리 높이 / Mean voice pitch', observationText: 'English only' }, true);
+  assert.match(text.observation, /상세 관측 자료가 없습니다/);
+  assert.doesNotMatch(text.observation, /00:|Hz|200/);
+  assert.equal(sceneText('Camera', true), '카메라');
+  assert.equal(sceneText('카메라', false), 'Camera');
 });

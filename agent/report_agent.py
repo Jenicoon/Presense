@@ -314,6 +314,20 @@ def _analysis_status(request: ReviewRequest, summary: dict,
     return "no_significant_finding"
 
 
+def _concept_label(name: str, ko: bool) -> str:
+    names = {
+        "voice": ("목소리 패턴", "Voice pattern"),
+        "목소리 거칠기": ("목소리 거칠기 패턴", "Voice roughness pattern"),
+        "음색 불안정성": ("음색 변화 패턴", "Voice timbre variation pattern"),
+        "음성 두께": ("음성 두께 패턴", "Voice depth pattern"),
+        "음성 피치": ("목소리 높이 패턴", "Voice pitch pattern"),
+        "표정 변화량": ("표정 변화 패턴", "Facial movement pattern"),
+        "입술 긴장도": ("입술 모양 패턴", "Lip shape pattern"),
+        "눈썹 찡그림": ("눈썹 움직임 패턴", "Brow movement pattern"),
+    }
+    return names.get(name, ("추가 관측 패턴", "Additional observed pattern"))[0 if ko else 1]
+
+
 def _observed_summary(observations: dict, ko: bool) -> str:
     """Connect the saved measurements into a readable session review."""
     peak = observations["peakSegment"]
@@ -384,14 +398,14 @@ def _observed_summary(observations: dict, ko: bool) -> str:
     concepts = observations.get("peakConcepts") or []
     if concepts:
         concept = concepts[0]
-        sentences.append((f"같은 구간의 Concept 출력 ‘{concept['name']}’ 값은 {concept['value']:.2f}"
+        sentences.append((f"같은 구간의 Concept 출력 ‘{_concept_label(concept['name'], ko)}’ 값은 {concept['value']:.2f}"
                           f"(다른 창 중앙값 {concept['comparisonValue']:.2f})였습니다." if ko else
-                          f"The {concept['name']} concept output there was {concept['value']:.2f} "
+                          f"The {_concept_label(concept['name'], ko)} concept output there was {concept['value']:.2f} "
                           f"(other-window median {concept['comparisonValue']:.2f})."))
     elif observations.get("concepts"):
         concept = observations["concepts"][0]
-        sentences.append((f"발표 전체에서 가장 크게 나온 Concept 출력은 ‘{concept['name']}’ 평균 {concept['meanValue']:.2f}이었습니다."
-                          if ko else f"The largest session-wide concept output was {concept['name']} "
+        sentences.append((f"발표 전체에서 가장 크게 나온 Concept 출력은 ‘{_concept_label(concept['name'], ko)}’ 평균 {concept['meanValue']:.2f}이었습니다."
+                          if ko else f"The largest session-wide concept output was {_concept_label(concept['name'], ko)} "
                           f"at {concept['meanValue']:.2f} on average."))
     sentences.append(("전체 영상에서 실제 발화와 표정의 흐름을 확인해 보세요." if ko else
                       "Review the speech and expression across the recording.") if nearly_flat else
@@ -938,7 +952,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
             "detectedErrors": verification["finalErrors"].get("coaching", {}).get(issue["id"], []),
         })
     report = {
-        "schemaVersion": "1.0", "sessionId": request.sessionId,
+        "schemaVersion": "1.0", "sessionId": request.sessionId, "language": request.language,
         "status": "complete" if ((synthesis and priorities and all(issue["evidenceIds"] for issue in priorities))
                                  or (not priorities and agent_state is not None
                                      and agent_state.stop_reason not in {"action_limit", "decision_unavailable"})) else "limited",

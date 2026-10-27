@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Activity, BrainCircuit, CalendarDays, Clock, FolderClock, MoreHorizontal, Play, SlidersHorizontal, Sparkles, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { useLang } from "@/lib/i18n";
+import { durationText, sceneText } from "@/lib/report-locale";
 import { reportDisplaySummary } from "@/lib/agent-report";
 import { loadDashboardData, type DiagnosisRecord, type PresentationRecord } from "@/lib/supabase/data";
 
@@ -13,6 +14,8 @@ type Translate = (key: string, fallback?: string) => string;
 
 function localizeDiagnosis(value: string, t: Translate) {
   const fixedLabels: Record<string, string> = {
+    "AI report complete": "diag.reportComplete",
+    "AI report limited": "diag.reportLimited",
     "Latest session result": "diag.latestSessionResult",
     "Average stress": "diag.averageStress",
     "Mean model score": "diag.averageStress",
@@ -148,14 +151,14 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
               <CalendarDays size={11} />{record.date}
             </span>
             <span style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
-              <Clock size={11} />{record.duration}
+              <Clock size={11} />{durationText(record.duration, lang === "ko")}
             </span>
             {record.sceneLabel && (
               <span style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
-                <Activity size={11} />{record.sceneLabel}
+                <Activity size={11} />{sceneText(record.sceneLabel, lang === "ko")}
               </span>
             )}
-            <span className={`severity-pill ${severityClass(record.result)}`}>{record.result}</span>
+            <span className={`severity-pill ${severityClass(record.result)}`}>{localizeDiagnosis(record.result, t)}</span>
           </div>
         </div>
 
@@ -223,7 +226,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
 
 export function DashboardOverview() {
   const { hasEnv, user } = useSupabaseAuth();
-  const { t } = useLang();
+  const { lang, t } = useLang();
   const [presentationRecords, setPresentationRecords] = useState<PresentationRecord[]>([]);
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisRecord[]>([]);
   const [isLoading, setIsLoading] = useState(hasEnv);
@@ -352,7 +355,7 @@ export function DashboardOverview() {
             </div>
             <span className="kpi-badge neutral">{t("badge.latest")}</span>
           </div>
-          <div className="kpi-value" style={{ fontSize: 18, marginBottom: 6, lineHeight: 1.3 }}>{currentFocus}</div>
+          <div className="kpi-value" style={{ fontSize: 18, marginBottom: 6, lineHeight: 1.3 }}>{sceneText(currentFocus, lang === "ko")}</div>
           <div className="kpi-label">{t("kpi.currentFocus")}</div>
           <div className="kpi-sub">{t("kpi.currentFocusSub")}</div>
         </div>
@@ -416,7 +419,7 @@ export function DashboardOverview() {
             sceneTotals.map(([scene, value]) => (
               <div key={scene} className="asset-row">
                 <div className="asset-info">
-                  <div className="asset-name" style={{ textTransform: "capitalize" }}>{scene}</div>
+                  <div className="asset-name" style={{ textTransform: "capitalize" }}>{sceneText(scene, lang === "ko")}</div>
                   <div className="asset-bar-track">
                     <div className="asset-bar-fill" style={{ width: `${Math.round((value / maxScene) * 100)}%` }} />
                   </div>
@@ -465,11 +468,11 @@ export function DashboardOverview() {
                   <tr key={record.id}>
                     <td className="td-mono">{record.date}</td>
                     <td style={{ fontWeight: 500 }}>{record.title}</td>
-                    <td className="td-mono">{record.duration}</td>
+                    <td className="td-mono">{durationText(record.duration, lang === "ko")}</td>
                     <td className="td-mono" style={{ color: "var(--accent)" }}>{record.stressAverage}</td>
                     <td>
                       <span className={`severity-pill ${severityClass(record.result)}`}>
-                        {record.result}
+                        {localizeDiagnosis(record.result, t)}
                       </span>
                     </td>
                     <td>

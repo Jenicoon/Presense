@@ -6,6 +6,7 @@ measurements, component payloads, exercises, citations or state transitions.
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Annotated, Literal
 from uuid import uuid4
@@ -154,8 +155,24 @@ def measurement_name(key, ko):
         "mean_ear": ("눈 열림 추정치", "Eye opening estimate"),
         "blink_count": ("눈 감김 프레임 추정치", "Closed-eye frame estimate"),
     }
+    names.update(
+        {
+            "voice": ("목소리 패턴", "Voice pattern"),
+            "목소리 거칠기": ("목소리 거칠기 패턴", "Voice roughness pattern"),
+            "음색 불안정성": ("음색 변화 패턴", "Voice timbre variation pattern"),
+            "음성 두께": ("음성 두께 패턴", "Voice depth pattern"),
+            "음성 피치": ("목소리 높이 패턴", "Voice pitch pattern"),
+            "표정 변화량": ("표정 변화 패턴", "Facial movement pattern"),
+            "입술 긴장도": ("입술 모양 패턴", "Lip shape pattern"),
+            "눈썹 찡그림": ("눈썹 움직임 패턴", "Brow movement pattern"),
+        }
+    )
     return names.get(
-        key, (key if not key.isascii() else "추가 관측값", key.replace("_", " "))
+        key,
+        (
+            "추가 관측값",
+            key.replace("_", " ") if key.isascii() else "Additional measurement",
+        ),
     )[0 if ko else 1]
 
 
@@ -354,10 +371,19 @@ def validate_response(raw, doc, attempt=None, previous=None):
             raise ValueError("Unknown finding")
         elif isinstance(component, PracticeCard):
             p = practices.get(component.practiceId)
-            if not p or any(
-                getattr(component, k) != p[k]
+            content = {
+                k: getattr(component, k)
                 for k in ("label", "instruction", "criterion", "durationSeconds")
-            ):
+            }
+            allowed = (
+                (
+                    [{k: p[k] for k in content}]
+                    + list(p.get("translations", {}).values())
+                )
+                if p
+                else []
+            )
+            if content not in allowed:
                 raise ValueError("Unknown or altered exercise")
         elif isinstance(component, ComparisonCard):
             is_attempt = (
@@ -422,7 +448,7 @@ def route_question(message, route=None, context=None):
     return "unknown"
 
 
-def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=None):
+def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=None):
     doc = deepcopy(doc)
     if request.sessionId != doc["state"]["sessionId"]:
         raise ValueError("Session identity mismatch")
@@ -480,7 +506,15 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
     )
     message = ""
     if action == "review":
-        message = doc["snapshot"]["report"]["summaryText"]
+        from .report_agent import _observation_text
+
+        report = doc["snapshot"]["report"]
+        saved = report["summaryText"]
+        message = (
+            saved
+            if _matches_language(saved, request.language)
+            else (_observation_text(findings[0], ko) if findings else "")
+        )
         if findings:
             message += (
                 " 먼저 이 관찰을 확인해 보세요."
@@ -549,7 +583,9 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
             state.selectedFindingId = finding["id"]
             if state.stage == "session_review":
                 state.stage = "finding_selected"
-            message = finding.get("observationText", "")
+            from .report_agent import _observation_text
+
+            message = _observation_text(finding, ko)
             message += (
                 f" 겹치지 않는 관측 {finding.get('independentObservations', 0)}개에서 확인했습니다. 점수와 측정값만으로 원인을 단정할 수 없습니다. 영상에서 의도한 강조와 실제 전달을 확인하세요."
                 if ko
@@ -704,9 +740,28 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
             }
             if finding["id"] in specific:
                 practice["instruction"] = specific[finding["id"]][0 if ko else 1]
+            scene = str(doc["snapshot"]["request"].get("sceneLabel") or "—")
+            scene_names = {
+                "Camera": ("카메라", "Camera"),
+                "카메라": ("카메라", "Camera"),
+                "Classroom": ("강의실", "Classroom"),
+                "강의실": ("강의실", "Classroom"),
+                "Interview": ("면접", "Interview"),
+                "면접": ("면접", "Interview"),
+                "Live Camera": ("실시간 카메라", "Live Camera"),
+                "실시간 카메라": ("실시간 카메라", "Live Camera"),
+                "Classroom Audience": ("강의실 청중", "Classroom Audience"),
+                "강의실 청중": ("강의실 청중", "Classroom Audience"),
+                "Interview Panel": ("면접 패널", "Interview Panel"),
+                "면접 패널": ("면접 패널", "Interview Panel"),
+                "Presentation Slides": ("발표 슬라이드", "Presentation Slides"),
+                "발표 슬라이드": ("발표 슬라이드", "Presentation Slides"),
+                "Slides in Classroom": ("강의실 속 슬라이드", "Slides in Classroom"),
+                "강의실 속 슬라이드": ("강의실 속 슬라이드", "Slides in Classroom"),
+            }
             practice["instruction"] += (
                 " 같은 환경: " if ko else " Same scene: "
-            ) + str(doc["snapshot"]["request"].get("sceneLabel") or "—")
+            ) + scene_names.get(scene, (scene, scene))[0 if ko else 1]
             doc["practices"].append(practice)
             state.activePracticeId = practice["id"]
             state.attemptSessionId = None
@@ -964,3 +1019,90 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
         ]
     )[-40:]
     return doc, response
+
+
+def _matches_language(text, language):
+    return bool(text) and bool(re.search(r"[가-힣]", text)) == (language == "ko")
+
+
+def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=None):
+    """Render both locales from the same verified action; persist one state change.
+
+    The intent router runs once. Alternate rendering is pure and never saves a
+    second exercise, revision or action. Component identities use the committed
+    response, so changing language cannot create a new practice.
+    """
+    routed = []
+
+    def cached_route(context):
+        if not routed:
+            routed.append(route(context))
+        return routed[0]
+
+    router = cached_route if route else None
+    updated, response = _respond(
+        doc, request, attempt=attempt, previous=previous, route=router
+    )
+    other_language = "en" if request.language == "ko" else "ko"
+    alternate, translated = _respond(
+        doc,
+        request.model_copy(update={"language": other_language}),
+        attempt=attempt,
+        previous=previous,
+        route=router,
+    )
+    translated["conversationState"] = deepcopy(response["conversationState"])
+    for component, committed in zip(translated["components"], response["components"]):
+        if component["type"] == "practice":
+            component["practiceId"] = committed["practiceId"]
+    for component in translated["components"]:
+        if component["type"] == "practice":
+            practice = next(
+                p for p in updated["practices"] if p["id"] == component["practiceId"]
+            )
+            keys = ("label", "instruction", "criterion", "durationSeconds")
+            practice["translations"] = {
+                request.language: {k: practice[k] for k in keys},
+                other_language: {k: component[k] for k in keys},
+            }
+    validate_response(translated, updated, attempt=attempt, previous=previous)
+    for offset in (-2, -1):
+        primary, secondary = updated["messages"][offset], alternate["messages"][offset]
+        primary["language"] = request.language
+        primary["translations"] = {
+            request.language: {
+                k: deepcopy(v) for k, v in primary.items() if k in {"text", "response"}
+            },
+            other_language: (
+                {"text": translated["message"], "response": translated}
+                if offset == -1
+                else {"text": secondary["text"]}
+            ),
+        }
+    return updated, response
+
+
+def localized_messages(doc, language):
+    """Return saved conversation in the UI locale without mutating state."""
+    messages = []
+    for original in doc["messages"]:
+        message = {
+            k: deepcopy(v)
+            for k, v in original.items()
+            if k not in {"translations", "language"}
+        }
+        translated = original.get("translations", {}).get(language)
+        if translated:
+            message.update(deepcopy(translated))
+        elif message["role"] == "agent" and not _matches_language(
+            message["text"], language
+        ):
+            # Legacy prose has no translation. Preserve data without guessing a translation.
+            message["text"] = (
+                "이 답변은 다른 언어로 저장되었습니다. 현재 언어로 이어서 질문해 주세요."
+                if language == "ko"
+                else "This reply was saved in another language. Continue in the current language."
+            )
+            message.pop("response", None)
+        messages.append(message)
+    return messages

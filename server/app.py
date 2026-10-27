@@ -8,6 +8,7 @@ import os
 import threading
 import time
 from functools import lru_cache
+from typing import Literal
 
 import cv2
 import jwt
@@ -23,7 +24,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from inference import get_engine, health, predict
 from agent.report_schema import ReviewRequest
-from agent.coaching import CoachRequest, new_document, respond
+from agent.coaching import localized_messages, CoachRequest, new_document, respond
 from datetime import datetime, timezone
 from agent.report_agent import generate_report, luxia_decide_action, luxia_synthesize
 from server.agent_memory import load_recent_memory, model_version
@@ -182,11 +183,11 @@ def _route_coach_question(context):
 
 
 @app.get("/agent/coach/{session_id}")
-def restore_coaching(session_id: str, _user: dict = Depends(require_authenticated_user),
+def restore_coaching(session_id: str, language: Literal["ko", "en"] = "ko", _user: dict = Depends(require_authenticated_user),
                      credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
     doc = _coach_store(_user, credentials).get(session_id)
     if not doc: raise HTTPException(404, "No saved coaching data for this session.")
-    return {"conversationState": doc["state"], "revision": doc["revision"], "messages": doc["messages"]}
+    return {"conversationState": doc["state"], "revision": doc["revision"], "messages": localized_messages(doc, language)}
 
 
 @app.post("/agent/chat")

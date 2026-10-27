@@ -115,10 +115,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Languages size={14} />
               <span>{lang === "ko" ? "한" : "EN"}</span>
             </button>
-            <button type="button" className="icon-btn" aria-label="Notifications">
+            <button type="button" className="icon-btn" aria-label={lang === "ko" ? "알림" : "Notifications"}>
               <Bell size={15} />
             </button>
-            <button type="button" className="icon-btn" aria-label="Help">
+            <button type="button" className="icon-btn" aria-label={lang === "ko" ? "도움말" : "Help"}>
               <HelpCircle size={15} />
             </button>
 
@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 type="button"
                 className="avatar-btn"
                 onClick={() => setMenuOpen((v) => !v)}
-                aria-label="Account menu"
+                aria-label={lang === "ko" ? "계정 메뉴" : "Account menu"}
               >
                 {initials}
               </button>

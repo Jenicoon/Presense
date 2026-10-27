@@ -103,7 +103,7 @@ class AgentReportTests(unittest.TestCase):
         self.assertIn("70/100", text)
         self.assertIn("중반 평균", text)
         self.assertIn("평균 목소리 높이 160.00 Hz", text)
-        self.assertIn("Concept 출력 ‘음성 피치’ 값은 0.80", text)
+        self.assertIn("Concept 출력 ‘목소리 높이 패턴’ 값은 0.80", text)
         self.assertNotIn("긴장이 발견", text)
 
     def test_observation_report_omits_invalid_channel_values(self):
