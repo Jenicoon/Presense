@@ -976,6 +976,8 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
                        and action["result"].get("comparable")]
         report["sessionComparison"] = comparisons[0] if comparisons else None
         report["agentMemory"] = build_memory(report, agent_state)
+    from .presentation_guidance import session_summary
+    report["presenterSummary"] = {"ko": session_summary(report, True), "en": session_summary(report, False)}
     report["rawSegments"] = [s.model_dump() for s in request.segments]
     report["modelVersion"] = model_version
     report["metricDefinitionVersion"] = "session-analysis-v4"

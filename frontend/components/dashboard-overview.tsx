@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Activity, BrainCircuit, CalendarDays, Clock, FolderClock, MoreHorizontal, Play, SlidersHorizontal, Sparkles, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { useLang } from "@/lib/i18n";
-import { durationText, sceneText } from "@/lib/report-locale";
+import { durationText, sceneText, signalScore } from "@/lib/report-locale";
 import { reportDisplaySummary } from "@/lib/agent-report";
 import { loadDashboardData, type DiagnosisRecord, type PresentationRecord } from "@/lib/supabase/data";
 
@@ -69,7 +69,7 @@ function StressTrend({ records }: { records: PresentationRecord[] }) {
             key={i}
             className="stress-bar"
             style={{ height: `${Number.isFinite(v)?Math.round((v / max) * 100):0}%` }}
-            title={Number.isFinite(v) ? `Session ${i + 1}: ${v.toFixed(2)}` : "No analysis data"}
+            title={Number.isFinite(v) ? `Session ${i + 1}: ${Math.round(v * 100)} / 100` : "No analysis data"}
           />
         ))}
       </div>
@@ -122,7 +122,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 50,
+        position: "fixed", inset: 0, zIndex: 110,
         background: "rgba(0,0,0,0.6)", display: "flex",
         alignItems: "center", justifyContent: "center", padding: 24,
       }}
@@ -166,7 +166,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           <div className="report-card">
             <div className="rc-label">{t("modal.avgStressScore")}</div>
-            <div className="rc-value" style={{ color: stressColor }}>{record.stressAverage}</div>
+            <div className="rc-value" style={{ color: stressColor }}>{signalScore(record.stressAverage)}</div>
             <div className="rc-desc" style={{ marginBottom: 8 }}>{Number.isFinite(stressValue) ? t(`modal.outOf${stressTier === "high" ? "High" : stressTier === "moderate" ? "Moderate" : "Low"}`) : (lang === "ko" ? "분석 자료 없음" : "No analysis data")}</div>
             {Number.isFinite(stressPercent) && <StressBar percent={stressPercent} color={stressColor} />}
           </div>
@@ -175,12 +175,12 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
             <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 52, marginTop: 8, marginBottom: 8 }}>
               {observedBars.map((v, i) => (
                 <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                  <small>{v===null?"—":v.toFixed(2)}</small><div style={{ width: "100%", background: stressColor, borderRadius: "3px 3px 0 0", opacity: 0.75 + i * 0.06, height: `${v===null?0:Math.round((v / barMax) * 48)}px` }} />
+                  <small>{v===null?"—":Math.round(v * 100)}</small><div style={{ width: "100%", background: stressColor, borderRadius: "3px 3px 0 0", opacity: 0.75 + i * 0.06, height: `${v===null?0:Math.round((v / barMax) * 48)}px` }} />
                 </div>
               ))}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-secondary)" }}>
-              <span>Open</span><span>Build</span><span>Core</span><span>Close</span>
+              {(lang === "ko" ? ["도입", "전개", "핵심", "마무리"] : ["Open", "Build", "Core", "Close"]).map(label => <span key={label}>{label}</span>)}
             </div>
           </div>
         </div>
@@ -339,11 +339,11 @@ export function DashboardOverview() {
             {stressDelta !== null && (
               <span className={`kpi-badge ${stressDelta < 0 ? "up" : "down"}`}>
                 {stressDelta < 0 ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
-                {Math.abs(stressDelta).toFixed(2)}
+                {Math.round(Math.abs(stressDelta) * 100)}
               </span>
             )}
           </div>
-          <div className="kpi-value">{Number.isFinite(latestAvg)?latestAvg.toFixed(2):"—"}</div>
+          <div className="kpi-value">{signalScore(latestAvg)}</div>
           <div className="kpi-label">{t("kpi.latestAvgStress")}</div>
           <div className="kpi-sub">{t("kpi.scoreOutOf")}</div>
         </div>
@@ -469,7 +469,7 @@ export function DashboardOverview() {
                     <td className="td-mono">{record.date}</td>
                     <td style={{ fontWeight: 500 }}>{record.title}</td>
                     <td className="td-mono">{durationText(record.duration, lang === "ko")}</td>
-                    <td className="td-mono" style={{ color: "var(--accent)" }}>{record.stressAverage}</td>
+                    <td className="td-mono" style={{ color: "var(--accent)" }}>{signalScore(record.stressAverage)}</td>
                     <td>
                       <span className={`severity-pill ${severityClass(record.result)}`}>
                         {localizeDiagnosis(record.result, t)}

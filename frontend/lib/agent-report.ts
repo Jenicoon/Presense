@@ -1,5 +1,5 @@
 import { measurementLabel } from "@/lib/measurement-labels";
-import { findingText, localizedSummary, matchesLanguage } from "@/lib/report-locale";
+import { findingText, localizedSummary, matchesLanguage, presentationSummary, findingGuidance } from "@/lib/report-locale";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { INFERENCE_URL, type LiveInferenceFrame } from "@/lib/live-signal";
 
@@ -21,6 +21,7 @@ export type AgentReport = {
   sessionId: string;
   status: "complete" | "limited";
   summaryText: string;
+  presenterSummary?: { ko: string; en: string };
   analysisStatus: string;
   observationReport?: {
     observedMs: number;
@@ -66,6 +67,7 @@ export type AgentReport = {
 
 /** Expand older, generic saved summaries using measurements already stored in the report. */
 export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
+  if (report.analysis && Array.isArray(report.priorities)) return presentationSummary(report, ko);
   const original = localizedSummary(report, ko);
   if (!original.includes(ko ? "음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다" :
     "The measured audio and video features showed no clear interval difference")) return original;
@@ -121,6 +123,7 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
 }
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
+  if (report.analysis && report.priorities.length) return findingGuidance(report.priorities[0], ko).goal;
   if(report.priorities.length === 0) return Number(report.analysis?.coverage ?? 0)<.5
     ? (ko ? "분석 자료가 부족합니다. 카메라와 마이크를 확인한 뒤 관측 자료를 더 모아 주세요." : "Analysis data is limited. Check the camera and microphone and collect more observations.")
     : (ko ? "반복적으로 확인된 주요 문제가 없어 별도의 교정 과제를 만들지 않았습니다. 잘 유지한 부분은 영상과 함께 직접 확인하세요." : "No repeatedly observed major issue was found, so no corrective exercise was assigned. Review the recording to identify what you maintained well.");

@@ -46,9 +46,9 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
         <small>{time(item.startMs)}–{time(item.endMs)} · {ko ? "분석" : "observed"} {Math.round(item.observedMs / 1000)}{ko ? "초" : "s"}</small>
       </div>)}</div>
       {comparablePhases && first !== null && first !== undefined && last !== null && last !== undefined && <p>{Math.round((last - first) * 100) === 0
-        ? (ko ? "도입과 마무리의 평균 모델 점수는 거의 같았습니다. 두 구간의 실제 발화를 함께 비교해 보세요." : "Opening and closing had nearly the same mean model score. Compare the recorded speech in both intervals.")
-        : ko ? `마무리 구간의 평균 모델 점수는 도입보다 ${Math.abs(Math.round((last - first) * 100))}점 ${last > first ? "높았습니다" : "낮았습니다"}. 각 구간의 실제 발화와 함께 비교해 보세요.`
-          : `The closing interval's mean model score was ${Math.abs(Math.round((last - first) * 100))} points ${last > first ? "higher" : "lower"} than the opening interval. Compare this with the recording.`}</p>}
+        ? (ko ? "도입과 마무리의 평균 스트레스 신호는 거의 같았습니다. 두 구간의 실제 발화를 함께 비교해 보세요." : "Opening and closing had nearly the same mean stress signal score. Compare the recorded speech in both intervals.")
+        : ko ? `마무리 구간의 평균 스트레스 신호는 도입보다 ${Math.abs(Math.round((last - first) * 100))}점 ${last > first ? "높았습니다" : "낮았습니다"}. 각 구간의 실제 발화와 함께 비교해 보세요.`
+          : `The closing interval's mean stress signal score was ${Math.abs(Math.round((last - first) * 100))} points ${last > first ? "higher" : "lower"} than the opening interval. Compare this with the recording.`}</p>}
     </div>}
     {(observed.concepts.length > 0 || observed.features.length > 0) && <div className="coach-card coach-data">
       <h3>{ko ? "관찰된 모델 출력" : "Observed model outputs"}</h3>

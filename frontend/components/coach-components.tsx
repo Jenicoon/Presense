@@ -1,5 +1,6 @@
 "use client";
 import { ArrowRight, Play, Target, Video } from "lucide-react";
+import { signalScore } from "@/lib/report-locale";
 import { measurementLabel } from "@/lib/measurement-labels";
 import {
   clock,
@@ -8,6 +9,7 @@ import {
   type CoachComponent,
 } from "@/lib/coaching";
 const outcome: Record<string, [string, string]> = {
+  review_required: ["촬영 완료 · 전달 확인", "Take ready · review delivery"],
   achieved: ["달성", "Achieved"],
   partial: ["부분 달성", "Partly achieved"],
   insufficient_data: ["자료 부족", "Insufficient data"],
@@ -75,7 +77,7 @@ export function CoachComponents({
               <article key={i} className="coach-card coach-exercise">
                 <div className="coach-component-heading"><span><Video size={14} />{ko ? "연습 과제" : "Practice exercise"}</span><small>{c.durationSeconds}{ko ? "초" : "s"}</small></div>
                 <strong>{c.label}</strong>
-                <p>{c.instruction}</p>
+                <div className="coach-practice-steps">{c.instruction.split("\n").map((step, index) => <p key={index}>{step}</p>)}</div>
                 <details className="review-details"><summary>{ko ? "어떻게 평가하나요?" : "How is it evaluated?"}</summary><p>{c.criterion}</p></details>
               </article>
             );
@@ -90,6 +92,7 @@ export function CoachComponents({
             return (
               <article key={i} className="coach-card coach-comparison">
                 <strong className="coach-outcome">{outcome[r.outcome]?.[ko ? 0 : 1] ?? r.outcome}</strong>
+                {r.assessmentSource === "presenter" && <p className="coach-assessment-source">{ko ? "영상을 보고 직접 확인한 내 평가" : "Your own review of the recording"}</p>}
                 <p>
                   {r.scope === "practice"
                     ? ko
@@ -99,8 +102,9 @@ export function CoachComponents({
                       ? "이전 발표 → 이번 발표"
                       : "Previous presentation → current presentation"}
                 </p>
-                <div className="coach-score-comparison">{[r.before, r.after].map((take, index) => <div key={index}><span>{index === 0 ? (ko ? "이전 시도" : "Before") : ko ? "이번 시도" : "Current"}</span><strong>{take.value?.toFixed(3) ?? "—"}</strong><small>{ko ? "모델 점수" : "Model score"}</small></div>)}</div>
-                {r.modelScoreChange !== null && <p className="coach-score-change">{ko ? "모델 점수 변화" : "Model score change"} <strong>{r.modelScoreChange > 0 ? "+" : ""}{r.modelScoreChange.toFixed(3)}</strong></p>}
+                <div className="coach-score-comparison">{[r.before, r.after].map((take, index) => <div key={index}><span>{index === 0 ? (ko ? "이전 시도" : "Before") : ko ? "이번 시도" : "Current"}</span><strong>{signalScore(take.value)}</strong><small>{ko ? "스트레스 신호" : "Stress signal"}</small></div>)}</div>
+                {r.modelScoreChange !== null && <p className="coach-score-change">{ko ? "스트레스 신호 변화" : "Stress signal change"} <strong>{r.modelScoreChange > 0 ? "+" : ""}{Math.round(r.modelScoreChange * 100)}{ko ? "점" : " points"}</strong></p>}
+                <details className="review-details"><summary>{ko ? "분석 자료와 수치 변화 자세히 보기" : "Inspect data quality and measurement changes"}</summary>
                 <dl className="coach-quality-list">
                   <div><dt>{ko ? "분석 구간" : "Analysis windows"}</dt><dd>{r.before.windowCount} → {r.after.windowCount}</dd></div>
                   <div><dt>{ko ? "독립 관측" : "Independent observations"}</dt><dd>{r.before.independentObservations} → {r.after.independentObservations}</dd></div>
@@ -144,21 +148,11 @@ export function CoachComponents({
                     </tbody>
                   </table>
                 </div>
-                <details>
-                  <summary>
-                    {ko
-                      ? "평가 기준과 계산식"
-                      : "Evaluation criteria and formula"}
-                  </summary>
-                  <p>
-                    {ko
-                      ? "기준값과의 편차 감소율 = 1 − |현재−기준| ÷ |이전−기준|. 20% 이상 달성, 0% 초과 부분 달성, 그 외 재시도 권장. 기준값·동일 지표·각 시도 독립 관측 2개·커버리지 50%·측정 품질 80%가 필요합니다. 전달력 향상을 의미하지 않습니다."
-                      : "Deviation reduction = 1 − |current−reference| / |previous−reference|. ≥20% achieved, >0 partial, otherwise retry. Requires a reference, same metric, 2 independent windows, 50% coverage and 80% metric quality in each take. This does not establish better delivery."}
-                  </p>
-                  <p>
-                    {ko ? "기준값" : "Reference"}: {r.referenceValue ?? "—"}
-                  </p>
                 </details>
+                <details className="review-details"><summary>{ko ? "평가 기준" : "Evaluation criteria"}</summary><p>{r.evaluationMode === "delivery_review"
+                  ? ko ? "스트레스 신호와 측정값은 변화만 보여줍니다. 성공 여부는 영상을 보고 선택한 전달 행동을 실행했는지 직접 확인해 기록합니다. 숫자가 낮아졌다는 이유로 달성을 부여하지 않습니다. 수치 비교에는 각 시도의 독립 관측 2개, 커버리지 50%, 측정 품질 80%와 같은 분석 조건이 필요합니다." : "Signals and measurements describe changes. Review the recording to assess whether you carried out your delivery action. Lower numbers alone do not earn an achieved result. Numerical comparison requires matching conditions, 2 independent observations, 50% coverage and 80% measurement quality per take."
+                  : r.scope === "previous_session" ? (ko ? "같은 환경과 분석 기준에서 관측한 값만 비교합니다. 점수 변화로 발표 실력의 향상을 판정하지 않습니다." : "Only measurements from matching scenes and analysis versions are compared. Score changes do not grade delivery.")
+                  : ko ? "이전 버전의 수치 기준 결과입니다. 기준값과의 편차 감소율 = 1 − |현재−기준| ÷ |이전−기준|. 이 결과는 전달력 평가가 아닙니다." : "Legacy measurement-based result: deviation reduction = 1 − |current−reference| / |previous−reference|. This does not assess delivery quality."}</p></details>
               </article>
             );
           }

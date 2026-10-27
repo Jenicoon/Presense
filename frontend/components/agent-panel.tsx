@@ -31,6 +31,9 @@ export function AgentPanel({ userId }: { userId: string | null }) {
   const [preferencesLoaded,setPreferencesLoaded]=useState(false);
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [historyStart, setHistoryStart] = useState(0);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [resumed, setResumed] = useState(false);
   const [sessions, setSessions] = useState<PresentationRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState(false);
@@ -75,13 +78,14 @@ export function AgentPanel({ userId }: { userId: string | null }) {
       setMessages([]); activeSessionRef.current=null;setCoachState(null);setRevision(undefined);
       return;
     }
-    setMessages([]); setCoachState(null); setRevision(undefined);
+    setMessages([]);setError(""); setCoachState(null); setRevision(undefined);
     const active = window.localStorage.getItem(activeCoachKey(userId));
     activeSessionRef.current = active;
     let cancelled = false;
     if(active) { setFocusSessionId(active); void restoreCoach(active, lang).then(data=>{
       if(cancelled || activeSessionRef.current!==active) return;
-      setMessages(data.messages); setCoachState(data.conversationState); setRevision(data.revision);
+      setMessages(data.messages); setHistoryStart(Math.max(0, data.messages.length - 1));setResumed(data.messages.length > 0);
+      setCoachState(data.conversationState); setRevision(data.revision);
     }).catch(()=>setError(lang === "ko" ? "저장된 코칭을 불러오지 못했습니다. 세션 보고서에서 다시 열어 주세요." : "Could not restore coaching. Reopen it from the session report.")); }
     return () => { cancelled = true; };
   }, [userId, lang]);
@@ -102,14 +106,13 @@ export function AgentPanel({ userId }: { userId: string | null }) {
       setOpen(true);
       if(detail?.sessionId && userId) {
         const id=detail.sessionId; activeSessionRef.current=id; setFocusSessionId(id);
-        setMessages([]); setCoachState(null); setRevision(undefined);
+        setMessages([]);setHistoryStart(0);setHistoryExpanded(false);setResumed(false); setCoachState(null); setRevision(undefined);
         window.localStorage.setItem(activeCoachKey(userId),id);
         setBusy(true);setError("");
         void restoreCoach(id, lang).then(async data=>{
           if(activeSessionRef.current!==id || languageRef.current!==lang) return;
-          setMessages(data.messages);setCoachState(data.conversationState);setRevision(data.revision);
-          const practicing = ["practice_created", "recording", "evaluating", "comparison_ready"].includes(data.conversationState.stage);
-          if(detail.attemptSessionId || (detail.findingId && (!practicing || detail.findingId !== data.conversationState.selectedFindingId)) || data.messages.length===0) {
+          setMessages(data.messages);setHistoryStart(Math.max(0, data.messages.length - 1));setResumed(data.messages.length > 0);setCoachState(data.conversationState);setRevision(data.revision);
+          if(detail.attemptSessionId || (detail.findingId && detail.findingId !== data.conversationState.selectedFindingId) || data.messages.length===0) {
             const response=await actCoach({sessionId:id, action:detail.attemptSessionId?"finish_recording":detail.findingId?"explain_finding":"review", language:lang, findingId:detail.findingId, attemptSessionId:detail.attemptSessionId, revision:data.revision});
             if(activeSessionRef.current!==id || languageRef.current!==lang) return;
             setCoachState(response.conversationState);setRevision(response.revision);
@@ -212,10 +215,12 @@ export function AgentPanel({ userId }: { userId: string | null }) {
             )}
           </div>
 
+          <div className="agent-coaching-context"><strong>{lang === "ko" ? "현재 발표" : "Current presentation"}</strong><span>{sessions.find(session => session.id === focusSessionId)?.title ?? (lang === "ko" ? "선택한 보고서" : "Selected report")}</span></div>
+          {resumed && <div className="agent-resume-notice"><strong>{lang === "ko" ? "저장된 코칭을 이어서 보고 있어요" : "Continuing your saved coaching"}</strong><p>{lang === "ko" ? "이 세션에서 진행했던 마지막 단계와 연습을 불러왔습니다." : "Restored the last step and practice from this presentation."}</p>{historyStart > 0 && <button type="button" onClick={() => setHistoryExpanded(value => !value)}>{historyExpanded ? (lang === "ko" ? "현재 단계만 보기" : "Show current step") : lang === "ko" ? "이전 대화 보기" : "View earlier conversation"}</button>}</div>}
           <div className="agent-panel-messages" role="log" aria-live="polite" ref={messagesRef}>
             {messages.length === 0 && <div className="agent-panel-welcome"><BrainCircuit size={25} /><p>{t("agent.welcome")}</p></div>}
             {coachState && <p className="coach-stage">{lang === "ko" ? "진행 단계" : "Coaching stage"}: {({session_review:lang==="ko"?"보고서 검토":"Review", finding_selected:lang==="ko"?"발견 확인":"Finding", practice_created:lang==="ko"?"연습 준비":"Practice ready", recording:lang==="ko"?"녹화":"Recording", evaluating:lang==="ko"?"분석 중":"Evaluating", comparison_ready:lang==="ko"?"비교 완료":"Comparison ready", next_goal:lang==="ko"?"다음 목표":"Next goal", completed:lang==="ko"?"완료":"Completed"})[coachState.stage]}</p>}
-            {messages.map((message, index) => <div key={index} className={`agent-panel-message ${message.role}`}><p className="agent-message-text">{message.text}</p>{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id)=>void sendMessage(action,id)} />}</div>)}
+            {messages.map((message, index) => (historyExpanded || index >= historyStart) ? <div key={index} className={`agent-panel-message ${message.role}`}><p className="agent-message-text">{message.text}</p>{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id)=>void sendMessage(action,id)} />}</div> : null)}
             {busy && <div className="agent-panel-message agent pending">{t("agent.thinking")}</div>}
           </div>
 

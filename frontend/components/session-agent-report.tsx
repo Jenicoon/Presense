@@ -1,11 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, Gauge, Layers3, ScanLine, Sparkles } from "lucide-react";
-import { bilingualLabel, findingText } from "@/lib/report-locale";
+import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
 import { AgentEvidence } from "@/components/agent-observation-report";
 import type { AgentReport } from "@/lib/agent-report";
 import { measurementLabel } from "@/lib/measurement-labels";
-import { clock } from "@/lib/coaching";
+import { clock, restoreCoach } from "@/lib/coaching";
 export type TimelineCell = {
   startMs: number;
   endMs: number;
@@ -58,6 +58,16 @@ export function SessionAgentReport({ report, language, onSeek }: {
 }) {
   const ko = language === "ko";
   const [page, setPage] = useState(0);
+  const [hasSavedCoaching, setHasSavedCoaching] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => void restoreCoach(report.sessionId, language).then(data => {
+      if (!cancelled) setHasSavedCoaching(data.messages.length > 0);
+    }).catch(() => undefined);
+    refresh();
+    window.addEventListener("presense:coach-changed", refresh);
+    return () => { cancelled = true; window.removeEventListener("presense:coach-changed", refresh); };
+  }, [report.sessionId, language]);
   const a = report.analysis;
   const duration = Number(a.durationMs ?? 0);
   const original = (a.timeline ?? []) as TimelineCell[];
@@ -72,7 +82,7 @@ export function SessionAgentReport({ report, language, onSeek }: {
     { icon: Clock3, label: ko ? "실제 분석 시간" : "Time analyzed", value: `${(Number(a.observedMs ?? 0) / 1000).toFixed(0)}${ko ? "초" : "s"}`, note: ko ? `전체 ${(duration / 1000).toFixed(0)}초 중` : `of ${(duration / 1000).toFixed(0)}s total` },
     { icon: ScanLine, label: ko ? "분석 커버리지" : "Analysis coverage", value: `${Math.round(Number(a.coverage ?? 0) * 100)}%`, note: ko ? "자료가 있는 시간 기준" : "Time with usable data" },
     { icon: Layers3, label: ko ? "분석 구간" : "Usable intervals", value: `${Number(a.usableSegmentCount ?? 0)}`, note: ko ? `수집한 ${Number(a.segmentCount ?? 0)}개 중` : `of ${Number(a.segmentCount ?? 0)} collected` },
-    { icon: Gauge, label: ko ? "평균 모델 점수" : "Mean model score", value: typeof a.averageStress === "number" ? a.averageStress.toFixed(3) : "—", note: typeof a.peakStress === "number" ? `${ko ? "최고" : "Peak"} ${a.peakStress.toFixed(3)}${peak ? ` · ${clock(peak.startMs)}` : ""}` : ko ? "분석 자료 없음" : "No analysis data" },
+    { icon: Gauge, label: ko ? "평균 스트레스 신호" : "Mean stress signal", value: signalScore(a.averageStress), note: typeof a.peakStress === "number" ? `${ko ? "최고" : "Peak"} ${Math.round(a.peakStress * 100)}${peak ? ` · ${clock(peak.startMs)}` : ""}` : ko ? "분석 자료 없음" : "No analysis data" },
   ];
   return <section className="session-agent-report" aria-label={ko ? "세션 분석과 코칭" : "Session analysis and coaching"}>
     <div className="review-stats">
@@ -81,18 +91,19 @@ export function SessionAgentReport({ report, language, onSeek }: {
         <strong>{value}</strong><span>{note}</span>
       </div>)}
     </div>
+    <details className="review-details review-score-explainer"><summary>{ko ? "스트레스 신호 점수는 무엇인가요?" : "What does the stress signal score mean?"}</summary><p>{ko ? "AI가 음성·영상에서 학습한 스트레스 관련 패턴을 얼마나 강하게 감지했는지 0–100으로 표시합니다. 같은 발표에서 다시 볼 구간을 찾고, 같은 조건의 재촬영과 비교하는 참고 자료입니다. 70점이 실제 스트레스 70%라는 뜻은 아니며, 발표 실력의 성적도 아닙니다. 평균은 실제 분석된 시간만 반영합니다." : "This 0–100 score shows how strongly the AI detected learned stress-related patterns in audio and video. Use it to find intervals to review and compare takes under the same conditions. A score of 70 does not mean 70% actual stress or grade your presentation. The mean includes analyzed time only."}</p></details>
     <div className="review-next-step">
       <span className="review-next-icon"><Sparkles size={19} /></span>
       <div><span className="review-eyebrow">{ko ? "다음으로 할 일" : "Your next step"}</span>
-        <h3>{first ? findingText(first, ko).label : ko ? "이번 발표 돌아보기" : "Review this presentation"}</h3>
-        <p>{first ? (ko ? "먼저 근거 구간을 보고, 한 가지 목표로 짧게 연습해 보세요." : "Review the supporting interval, then try one short exercise.") : ko ? "영상을 보며 잘 유지한 부분을 확인해 보세요." : "Review the recording to see what you maintained well."}</p>
+        <h3>{first ? findingGuidance(first, ko).title : ko ? "이번 발표 돌아보기" : "Review this presentation"}</h3>
+        <p>{first ? (ko ? "영상에서 의도한 표현인지 확인한 뒤, 필요한 연습을 함께 정해요." : "Check whether the expression was intentional, then choose a useful exercise.") : ko ? "영상을 보며 잘 유지한 부분을 확인해 보세요." : "Review the recording to see what you maintained well."}</p>
       </div>
       {report.coachingAvailable === false ? <p role="status">{ko ? "연결을 확인한 후 보고서를 다시 생성해 주세요." : "Check the connection and regenerate the report."}</p> :
-        <button type="button" className="btn btn-primary" onClick={() => open(first?.id)}>{first ? (ko ? "코칭 시작" : "Start coaching") : ko ? "코치와 살펴보기" : "Review with coach"}<ArrowRight size={15} /></button>}
+        <button type="button" className="btn btn-primary" onClick={() => open(first?.id)}>{hasSavedCoaching ? (ko ? "저장된 코칭 이어가기" : "Continue saved coaching") : first ? (ko ? "이 구간 함께 확인하기" : "Review this interval together") : ko ? "코치와 살펴보기" : "Review with coach"}<ArrowRight size={15} /></button>}
     </div>
     {report.previousCoaching && <p className="review-context">{ko ? "이전 목표" : "Previous goal"} · {bilingualLabel(report.previousCoaching.goalLabel, ko, ko ? "저장된 연습 목표" : "Saved practice goal")}{!report.previousCoaching.comparable && (ko ? " · 분석 조건이 달라 수치 비교를 보류합니다." : " · Analysis conditions differ; numerical comparison is unavailable.")}</p>}
     <section className="review-section review-timeline">
-      <div className="review-section-heading"><div><h3>{ko ? "시간별 모델 스트레스 신호" : "Model stress signal over time"}</h3><p>{ko ? "구간을 선택해 당시의 발표를 확인하세요." : "Select an interval to review that moment."}</p></div><span className="review-scale">{ko ? "0–1 분석 점수" : "0–1 analysis score"}</span></div>
+      <div className="review-section-heading"><div><h3>{ko ? "시간별 스트레스 신호" : "Stress signal over time"}</h3><p>{ko ? "구간을 선택해 당시의 발표를 확인하세요." : "Select an interval to review that moment."}</p></div><span className="review-scale">{ko ? "0–100 · AI 추정" : "0–100 · AI estimate"}</span></div>
       <figure className="stress-line-chart">
         <svg
           viewBox="0 0 650 220"
@@ -111,7 +122,7 @@ export function SessionAgentReport({ report, language, onSeek }: {
                 className="stress-line-grid"
               />
               <text x="4" y={184 - v * 160} className="stress-line-label">
-                {v}
+                {v * 100}
               </text>
             </g>
           ))}
@@ -167,31 +178,32 @@ export function SessionAgentReport({ report, language, onSeek }: {
             }
             style={{ flex: c.endMs - c.startMs }}
             onClick={() => onSeek?.(c.startMs)}
-            title={`${clock(c.startMs)}–${clock(c.endMs)} · ${c.stressScore === null ? (ko ? "분석 자료 없음" : "No analysis data") : c.stressScore.toFixed(3)}`}
-            aria-label={`${clock(c.startMs)}–${clock(c.endMs)} ${c.stressScore === null ? (ko ? "분석 자료 없음" : "No analysis data") : c.stressScore.toFixed(3)}`}
+            title={`${clock(c.startMs)}–${clock(c.endMs)} · ${c.stressScore === null ? (ko ? "분석 자료 없음" : "No analysis data") : signalScore(c.stressScore)}`}
+            aria-label={`${clock(c.startMs)}–${clock(c.endMs)} ${c.stressScore === null ? (ko ? "분석 자료 없음" : "No analysis data") : signalScore(c.stressScore)}`}
           />
         ))}
       </div>
 
-      <div className="review-timeline-key"><span><i />{ko ? "관측된 모델 점수" : "Observed model score"}</span><span><i className="gap" />{ko ? "분석 자료 없음" : "No analysis data"}</span></div>
+      <div className="review-timeline-key"><span><i />{ko ? "관측된 스트레스 신호" : "Observed stress signal"}</span><span><i className="gap" />{ko ? "분석 자료 없음" : "No analysis data"}</span></div>
       <details className="review-details review-method"><summary>{ko ? "타임라인 읽는 법" : "How to read the timeline"}</summary><p>{ko ? "회색은 분석 자료가 없는 시간입니다. 겹친 시간은 한 번만 반영하고, 같은 시점의 점수는 평균합니다. 낮은 점수도 모두 표시합니다. 도입·전개·핵심·마무리는 시간 표시 구간입니다." : "Gray marks time without analysis data. Overlap counts once; concurrent scores are averaged. Low scores remain visible. Open / Build / Core / Close are time divisions for display."}</p>{original.length > 120 && <p>{ko ? "많은 관측은 묶어 표시하며 원본은 아래에서 확인할 수 있습니다." : "Dense observations are grouped for display. Original results are available below."}</p>}</details>
     </section>
-    <section className="review-findings"><div className="review-section-heading"><div><h3>{ko ? "주요 발견" : "Key findings"}</h3><p>{ko ? "반복된 관측과 실제 측정값을 함께 살펴보세요." : "Review repeated observations alongside the measurements."}</p></div><span className="review-count">{report.priorities.length}</span></div>
+    <section className="review-findings"><div className="review-section-heading"><div><h3>{ko ? "함께 확인할 부분" : "What to review together"}</h3><p>{ko ? "반복된 관측과 실제 측정값을 함께 살펴보세요." : "Review repeated observations alongside the measurements."}</p></div><span className="review-count">{report.priorities.length}</span></div>
     {report.priorities.length === 0 ? <div className="review-empty"><ScanLine size={21} /><p>{Number(a.coverage ?? 0) < 0.5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient analysis data to judge major issues.") : ko ? "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found in this session."}</p></div> : report.priorities.slice(0, 3).map((f, index) => {
       const text = findingText(f, ko);
+      const view = findingGuidance(f, ko);
       return <article key={f.id} className="review-finding">
-        <div className="review-finding-heading"><span className="review-finding-number">{String(index + 1).padStart(2, "0")}</span><h4>{text.label}</h4><span className="review-finding-count">{ko ? "독립 관측" : "Independent observations"} {f.independentObservations ?? f.assessment?.independentObservations ?? "—"}{ko ? "회" : ""}</span></div>
-        <p className="review-finding-summary">{text.observation}</p>
-        <div className="review-observations">{f.observations?.map(o => <div className="review-observation" key={o.segmentId}>
+        <div className="review-finding-heading"><span className="review-finding-number">{String(index + 1).padStart(2, "0")}</span><h4>{view.title}</h4><span className="review-finding-count">{ko ? "독립 관측" : "Independent observations"} {f.independentObservations ?? f.assessment?.independentObservations ?? "—"}{ko ? "회" : ""}</span></div>
+        <p className="review-finding-summary">{view.observation}</p>
+        <details className="review-details"><summary>{ko ? "관측 근거와 측정값 보기" : "Observation evidence"}</summary><p>{text.observation}</p><div className="review-observations">{f.observations?.map(o => <div className="review-observation" key={o.segmentId}>
           <button type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(o.startMs)}>▶ {clock(o.startMs)}–{clock(o.endMs)}</button>
           <span>{measurementLabel(f.metric ?? "", ko)}<strong>{Number(o.value.toFixed(2))}</strong></span>
-          <span>{ko ? "모델 점수" : "Model score"}<strong>{o.stressScore.toFixed(3)}</strong></span>
-        </div>)}</div>
-        <div className="review-finding-action"><div><strong>{ko ? "영상에서 확인할 것" : "What to check"}</strong><p>{text.review}</p></div><div><strong>{ko ? "다음 연습" : "Next exercise"}</strong><p>{text.practice}</p></div></div>
+          <span>{ko ? "스트레스 신호 점수" : "Stress signal score"}<strong>{signalScore(o.stressScore)}</strong></span>
+        </div>)}</div></details>
+        <div className="review-finding-action"><div><strong>{ko ? "영상에서 확인할 것" : "What to check"}</strong><p>{view.question}</p></div><div><strong>{ko ? "다음 연습" : "Next exercise"}</strong><p>{view.goal}</p></div></div>
         <details className="review-details"><summary>{ko ? "관련 패턴 값과 참고 근거" : "Related patterns and sources"}</summary>{f.observations?.map(o => <p key={o.segmentId}>{clock(o.startMs)}–{clock(o.endMs)} · {Object.entries(o.conceptValues).map(([k, v]) => `${measurementLabel(k, ko)} ${v.toFixed(3)}`).join(" · ")}</p>)}<AgentEvidence report={report} ids={f.evidenceIds} ko={ko} /></details>
-        <button type="button" className="btn btn-outline" onClick={() => open(f.id)}>{ko ? "코치와 이 부분 연습하기" : "Practice this with the coach"}<ArrowRight size={14} /></button>
+        <button type="button" className="btn btn-outline" onClick={() => open(f.id)}>{ko ? "이 구간 함께 확인하기" : "Review this interval together"}<ArrowRight size={14} /></button>
       </article>;
     })}</section>
-    {raw.length > 0 && <details className="review-details review-raw"><summary>{ko ? `실제 분석 결과 ${raw.length}개 확인` : `Inspect ${raw.length} original analysis windows`}</summary><div className="observation-table-wrap"><table className="review-raw-table"><thead><tr><th>{ko ? "구간" : "Interval"}</th><th>{ko ? "모델 점수" : "Model score"}</th><th>{ko ? "분석 신뢰도" : "Confidence"}</th><th>{ko ? "자료 상태" : "Data quality"}</th></tr></thead><tbody>{raw.slice(page * 30, (page + 1) * 30).map(s => <tr key={s.segmentId}><td>{clock(s.startMs)}–{clock(s.endMs)}</td><td>{s.stressScore.toFixed(3)}</td><td>{s.predictionConfidence?.toFixed(3) ?? "—"}</td><td>{s.quality.audioValid ? (ko ? "음성 유효" : "Audio valid") : ko ? "음성 자료 부족" : "Audio unavailable"} · {s.quality.faceDetected ? (ko ? "얼굴 검출" : "Face detected") : ko ? "얼굴 자료 부족" : "Face unavailable"}</td></tr>)}</tbody></table></div>{raw.length > 30 && <div className="review-pagination"><button className="btn btn-outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>{ko ? "이전" : "Previous"}</button><span>{page + 1} / {Math.ceil(raw.length / 30)}</span><button className="btn btn-outline" disabled={(page + 1) * 30 >= raw.length} onClick={() => setPage(p => p + 1)}>{ko ? "다음" : "Next"}</button></div>}</details>}
+    {raw.length > 0 && <details className="review-details review-raw"><summary>{ko ? `실제 분석 결과 ${raw.length}개 확인` : `Inspect ${raw.length} original analysis windows`}</summary><div className="observation-table-wrap"><table className="review-raw-table"><thead><tr><th>{ko ? "구간" : "Interval"}</th><th>{ko ? "스트레스 신호 점수" : "Stress signal score"}</th><th>{ko ? "분석 신뢰도" : "Confidence"}</th><th>{ko ? "자료 상태" : "Data quality"}</th></tr></thead><tbody>{raw.slice(page * 30, (page + 1) * 30).map(s => <tr key={s.segmentId}><td>{clock(s.startMs)}–{clock(s.endMs)}</td><td>{signalScore(s.stressScore)}</td><td>{s.predictionConfidence?.toFixed(3) ?? "—"}</td><td>{s.quality.audioValid ? (ko ? "음성 유효" : "Audio valid") : ko ? "음성 자료 부족" : "Audio unavailable"} · {s.quality.faceDetected ? (ko ? "얼굴 검출" : "Face detected") : ko ? "얼굴 자료 부족" : "Face unavailable"}</td></tr>)}</tbody></table></div>{raw.length > 30 && <div className="review-pagination"><button className="btn btn-outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>{ko ? "이전" : "Previous"}</button><span>{page + 1} / {Math.ceil(raw.length / 30)}</span><button className="btn btn-outline" disabled={(page + 1) * 30 >= raw.length} onClick={() => setPage(p => p + 1)}>{ko ? "다음" : "Next"}</button></div>}</details>}
   </section>;
 }

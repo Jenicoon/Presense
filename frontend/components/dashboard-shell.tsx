@@ -24,6 +24,7 @@ import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveIn
 import { useLang } from "@/lib/i18n";
 import { savePracticeSession } from "@/lib/supabase/data";
 import { agentNextPractice, generateAgentReport, reportDisplaySummary, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
+import { signalScore } from "@/lib/report-locale";
 import { SessionAgentReport } from "@/components/session-agent-report";
 import { practiceKey, type PracticeContext } from "@/lib/coaching";
 import { StressChart } from "@/components/stress-chart";
@@ -977,9 +978,9 @@ export function DashboardShell() {
 
   // Localized report display values (report holds structured data).
   const observedAverage=agentReport?.analysis.averageStress;
-  const reportAvgText = SIGNAL_SOURCE === "live" ? (typeof observedAverage === "number" ? observedAverage.toFixed(3) : "—") : report ? `${report.averageStress.toFixed(2)} / 1.00` : "";
+  const reportAvgText = SIGNAL_SOURCE === "live" ? (signalScore(observedAverage)) : report ? signalScore(report.averageStress) : "";
   const peakObservation=agentReport?.observationReport?.peakSegment;
-  const reportPeakPointText = peakObservation ? `${peakObservation.stressScore.toFixed(3)} · ${(peakObservation.startMs/1000).toFixed(1)}–${(peakObservation.endMs/1000).toFixed(1)}s` : SIGNAL_SOURCE === "live" ? "—" : report ? `${report.peakValue}/100` : "—";
+  const reportPeakPointText = peakObservation ? `${signalScore(peakObservation.stressScore)} · ${(peakObservation.startMs/1000).toFixed(1)}–${(peakObservation.endMs/1000).toFixed(1)}s` : SIGNAL_SOURCE === "live" ? "—" : report ? `${report.peakValue}/100` : "—";
   const observedCells=(agentReport?.analysis.timeline ?? []) as {startMs:number;endMs:number;stressScore:number}[];
   const actualDuration=Number(agentReport?.analysis.durationMs ?? 0);
   const actualPhases=PHASES.map((name,i)=>{let time=0,total=0;for(const c of observedCells){const length=Math.max(0,Math.min(c.endMs,actualDuration*(i+1)/4)-Math.max(c.startMs,actualDuration*i/4));time+=length;total+=length*c.stressScore;}return {name,value:time?total/time:null};});
@@ -1195,15 +1196,15 @@ export function DashboardShell() {
                         className={value >= 70 ? "high" : value >= 50 ? "mid" : "low"}
                         style={{ flex: Math.max(value, 20) }}
                         onClick={() => seekToTimelineBin(bin)}
-                        title={`${lang === "ko" ? "모델 점수" : "Model score"} ${value}%`}
+                        title={`${lang === "ko" ? "스트레스 신호 점수" : "Stress signal score"} ${value}%`}
                       />
                     ))}
                   </div>
                   }
                   <div className="video-timeline-legend">
-                    <span><i className="low" />{lang === "ko" ? "낮은 모델 점수" : "Lower model score"}</span>
-                    <span><i className="mid" />{lang === "ko" ? "중간 모델 점수" : "Middle model score"}</span>
-                    <span><i className="high" />{lang === "ko" ? "높은 모델 점수" : "Higher model score"}</span>
+                    <span><i className="low" />{lang === "ko" ? "낮은 스트레스 신호 점수" : "Lower stress signal score"}</span>
+                    <span><i className="mid" />{lang === "ko" ? "중간 스트레스 신호 점수" : "Middle stress signal score"}</span>
+                    <span><i className="high" />{lang === "ko" ? "높은 스트레스 신호 점수" : "Higher stress signal score"}</span>
                   </div>
                 </div>
               )}

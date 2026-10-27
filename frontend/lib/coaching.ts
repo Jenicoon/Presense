@@ -13,7 +13,13 @@ export type CoachAction =
   | "choose_next_goal"
   | "compare_previous_session"
   | "finish_coaching"
-  | "ask";
+  | "ask"
+  | "confirm_intent"
+  | "guide_review"
+  | "explain_score"
+  | "assess_delivery_achieved"
+  | "assess_delivery_partial"
+  | "assess_delivery_retry";
 export type CoachState = {
   sessionId: string;
   selectedFindingId: string | null;
@@ -30,6 +36,7 @@ export type CoachState = {
     | "completed";
   nextGoalId: string | null;
   lastAction?: CoachAction | null;
+  reviewFeedback?: "intentional" | "needs_practice" | "unsure" | null;
 };
 export type CoachChoice = {
   id: string;
@@ -65,6 +72,8 @@ export type Comparison = {
     afterQuality: number;
   }[];
   formula: string;
+  evaluationMode?: "delivery_review" | "measurement_comparison";
+  assessmentSource?: "presenter" | "none";
 };
 export type CoachComponent =
   | { type: "action_choices"; choices: CoachChoice[] }
@@ -146,7 +155,9 @@ export async function actCoach(input: {
   conversationState?: CoachState;
   previousAction?: CoachAction;
 }): Promise<CoachResponse> {
-  return api("/agent/coach", input, input.language);
+  const response = await api("/agent/coach", input, input.language);
+  window.dispatchEvent(new CustomEvent("presense:coach-changed", {detail: {sessionId: input.sessionId}}));
+  return response;
 }
 export function jumpToVideo(sessionId: string, startMs: number) {
   const detail = { sessionId, startMs, handled: false };

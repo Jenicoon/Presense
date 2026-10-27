@@ -45,14 +45,14 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     if (Math.abs(seek - 25) > 1) throw Error("Timeline did not seek to 25s");
     console.log("seekTime", seek);
     await page
-      .getByRole("button", { name: "코치와 이 부분 연습하기" })
+      .getByRole("button", { name: "이 구간 함께 확인하기" })
       .first()
       .click();
     await page.locator(".agent-panel .coach-video").first().waitFor();
     console.log("coach", await page.locator(".agent-panel").innerText());
     await page
       .locator(".agent-panel")
-      .getByRole("button", { name: "이 부분 연습하기", exact: true })
+      .getByRole("button", { name: "이 부분을 연습하고 싶어요", exact: true })
       .last()
       .click();
     await page
@@ -90,6 +90,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     console.log("RECORDING_STARTED");
     await page.waitForTimeout(32000);
     await page.getByRole("button", { name: "세션 종료", exact: true }).click();
+    await page.locator(".agent-panel").getByRole("button", { name: "의도한 전달이 됐어요", exact: true }).waitFor({ timeout: 30000 });
+    await page.locator(".agent-panel").getByRole("button", { name: "의도한 전달이 됐어요", exact: true }).click();
     await page
       .locator(".agent-panel .coach-components")
       .getByText("달성", { exact: true })
@@ -138,13 +140,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
       .click();
     await page
       .locator(".agent-panel")
-      .getByRole("button", { name: "평균 목소리 높이", exact: true })
+      .getByRole("button", { name: "핵심 문장 하나에만 강조 주기", exact: true })
       .last()
       .click();
     await page
       .locator(".agent-panel-message.agent")
       .filter({
-        hasText: "다음 목표로 ‘평균 목소리 높이’ 항목을 선택했습니다.",
+        hasText: "다음 목표로 ‘핵심 문장 하나에만 강조 주기’ 항목을 선택했습니다.",
       })
       .last()
       .waitFor();

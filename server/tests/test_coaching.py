@@ -103,8 +103,64 @@ class CoachingTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         import re
         self.assertIsNone(re.search(r"[가-힣]", str(response)))
-        self.assertIn("200 Hz", response["message"])
+        self.assertIn("your voice moved higher", response["message"])
+        self.assertNotIn("Hz", response["message"])
         self.assertEqual(doc["revision"], 1)
+
+    def test_intentional_expression_is_kept_without_a_corrective_goal(self):
+        doc, response = self.step(document(), "explain_finding")
+        self.assertIn("의도한", response["message"])
+        choices = next(c["choices"] for c in response["components"] if c["type"] == "action_choices")
+        self.assertIn("confirm_intent", [c["action"] for c in choices])
+        doc, response = self.step(doc, "confirm_intent")
+        self.assertEqual(doc["state"]["reviewFeedback"], "intentional")
+        self.assertEqual(doc["practices"], [])
+        doc, _ = self.step(doc, "finish_coaching")
+        self.assertIsNone(doc["state"]["nextGoalId"])
+
+    def test_lower_measurements_do_not_automatically_earn_delivery_success(self):
+        doc = self.ready()
+        task = doc["practices"][-1]
+        self.assertIn("1.", task["instruction"])
+        self.assertIn("2.", task["instruction"])
+        self.assertIn("3.", task["instruction"])
+        attempt = self.retry(doc)
+        result = compare_snapshots(doc["snapshot"], attempt["snapshot"], task)
+        self.assertLess(result["modelScoreChange"], 0)
+        self.assertEqual(result["outcome"], "review_required")
+        self.assertEqual(result["formula"], "")
+        self.assertEqual(result["assessmentSource"], "none")
+        with self.assertRaises(ValueError):
+            respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_achieved"), attempt=attempt)
+
+    def test_partial_delivery_review_offers_a_specific_adjustment_and_rejects_another_attempt(self):
+        doc = self.ready()
+        doc, _ = self.step(doc, "start_recording")
+        attempt = self.retry(doc)
+        doc, _ = respond(doc, CoachRequest(sessionId="baseline", action="finish_recording"), attempt=attempt)
+        other = deepcopy(attempt)
+        other["snapshot"]["request"]["sessionId"] = "unrelated"
+        with self.assertRaisesRegex(ValueError, "saved practice attempt"):
+            respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_partial"), attempt=other)
+        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_partial"), attempt=attempt)
+        self.assertIn("핵심 문장", response["message"])
+        self.assertIn("멈추고", response["message"])
+        self.assertNotIn("Hz", response["message"])
+        result = response["components"][0]["comparison"]
+        self.assertEqual(result["outcome"], "partial")
+        self.assertEqual(result["assessmentSource"], "presenter")
+        doc, _ = self.step(doc, "retry_practice")
+        self.assertNotIn("deliveryAssessment", doc["practices"][-1])
+
+    def test_chat_explains_the_score_and_accepts_the_presenters_intention(self):
+        doc, response = self.step(document(), "ask", message="이 점수가 왜 필요해?")
+        self.assertIn("54 / 100", response["message"])
+        self.assertIn("실제 스트레스 70%를 뜻하지", response["message"])
+        doc, response = self.step(doc, "ask", message="무엇을 들어야 할지 모르겠어요")
+        self.assertEqual(doc["state"]["reviewFeedback"], "unsure")
+        doc, response = self.step(doc, "ask", message="That was intentional", language="en")
+        self.assertEqual(doc["state"]["reviewFeedback"], "intentional")
+        self.assertEqual(doc["practices"], [])
 
     def test_stable_session_has_no_forced_practice_or_findings(self):
         doc = document(changed=False)
@@ -116,6 +172,8 @@ class CoachingTests(unittest.TestCase):
 
     def test_full_practice_loop_and_restored_state(self):
         doc = document()
+        self.assertEqual(doc["messages"], [])
+        self.assertNotIn("Hz", doc["snapshot"]["report"]["presenterSummary"]["ko"])
         doc, response = self.step(doc, "review")
         finding = next(
             c["findingId"] for c in response["components"] if c["type"] == "finding"
@@ -138,7 +196,10 @@ class CoachingTests(unittest.TestCase):
             attempt=attempt,
         )
         self.assertEqual(doc["state"]["stage"], "comparison_ready")
+        self.assertEqual(response["components"][0]["comparison"]["outcome"], "review_required")
+        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_achieved"), attempt=attempt)
         self.assertEqual(response["components"][0]["comparison"]["outcome"], "achieved")
+        self.assertEqual(response["components"][0]["comparison"]["assessmentSource"], "presenter")
         doc, _ = self.step(doc, "choose_next_goal", findingId=finding)
         doc, _ = self.step(doc, "finish_coaching")
         self.assertEqual(doc["state"]["nextGoalId"], finding)

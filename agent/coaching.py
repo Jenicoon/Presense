@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from pydantic import Field
 
+from .presentation_guidance import guidance, session_summary
 from .report_schema import Contract, ReviewRequest
 from .session_analyzer import _independent_count, intervals, metric
 
@@ -30,6 +31,12 @@ Action = Literal[
     "compare_previous_session",
     "finish_coaching",
     "ask",
+    "confirm_intent",
+    "guide_review",
+    "explain_score",
+    "assess_delivery_achieved",
+    "assess_delivery_partial",
+    "assess_delivery_retry",
 ]
 Stage = Literal[
     "session_review",
@@ -64,6 +71,7 @@ class ConversationState(Contract):
     stage: Stage = "session_review"
     nextGoalId: str | None = None
     lastAction: Action | None = None
+    reviewFeedback: Literal["intentional", "needs_practice", "unsure"] | None = None
 
 
 class Choice(Contract):
@@ -295,7 +303,19 @@ def compare_snapshots(before, after, practice=None):
         ),
         None,
     )
-    if (
+    delivery_review = bool(
+        practice and practice.get("evaluationMode") == "delivery_review"
+    )
+    if delivery_review:
+        eligible = (
+            sufficient
+            and focus
+            and min(focus["beforeCount"], focus["afterCount"]) >= 2
+            and min(focus["beforeQuality"], focus["afterQuality"]) >= 0.8
+        )
+        if eligible:
+            outcome = practice.get("deliveryAssessment") or "review_required"
+    elif (
         sufficient
         and focus
         and reference is not None
@@ -326,10 +346,22 @@ def compare_snapshots(before, after, practice=None):
         "modelScoreChange": round(b["value"] - a["value"], 6) if sufficient else None,
         "measurements": changes if compatible else [],
         "referenceValue": reference,
-        "criterion": "relative_deviation_reduction_20pct"
+        "evaluationMode": "delivery_review"
+        if delivery_review
+        else "measurement_comparison",
+        "assessmentSource": "presenter"
+        if delivery_review
+        and practice.get("deliveryAssessment")
+        and outcome != "insufficient_data"
+        else "none",
+        "criterion": "presenter_delivery_review"
+        if delivery_review
+        else "relative_deviation_reduction_20pct"
         if practice
         else "same_metric_descriptive_comparison",
-        "formula": "1 - |current - reference| / |previous - reference|; ≥ 0.20 achieved, > 0 partial, otherwise retry",
+        "formula": ""
+        if delivery_review
+        else "1 - |current - reference| / |previous - reference|; ≥ 0.20 achieved, > 0 partial, otherwise retry",
         "note": "Selected measurement goal only; a lower model score or pitch does not prove better delivery.",
     }
 
@@ -415,7 +447,32 @@ def route_question(message, route=None, context=None):
         "compare_previous_session",
         "compare_attempts",
         "review",
+        "confirm_intent",
+        "guide_review",
+        "explain_score",
     }
+    # Explicit answers from the presenter can be understood without fabricating facts.
+    text = message.lower().strip()
+    if any(
+        word in text
+        for word in ("모르겠", "어떻게 봐", "how to review", "help me review")
+    ):
+        return "guide_review"
+    if any(
+        word in text
+        for word in (
+            "의도한 표현이었",
+            "일부러 강조",
+            "that was intentional",
+            "on purpose",
+        )
+    ):
+        return "confirm_intent"
+    if any(word in text for word in ("점수", "score")) and not any(
+        word in text
+        for word in ("어디", "구간", "where", "interval", "이전", "previous")
+    ):
+        return "explain_score"
     if route:
         try:
             result = route(
@@ -463,6 +520,8 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             raise ValueError("Finish the active practice before switching goals")
         if request.findingId not in {f["id"] for f in findings}:
             raise ValueError("Unknown finding")
+        if state.selectedFindingId != request.findingId:
+            state.reviewFeedback = None
         state.selectedFindingId = request.findingId
         if state.stage in {
             "session_review",
@@ -490,14 +549,15 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
     def choices(*items):
         components.append({"type": "action_choices", "choices": list(items)})
 
-    def segment(snap, row):
+    def segment(snap, row, card_label=None):
         components.append(
             {
                 "type": "video_segment",
                 "sessionId": snap["request"]["sessionId"],
                 "startMs": row["startMs"],
                 "endMs": row["endMs"],
-                "label": "이 구간 확인하기" if ko else "Review this interval",
+                "label": card_label
+                or ("이 구간 확인하기" if ko else "Review this interval"),
             }
         )
 
@@ -506,15 +566,8 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
     )
     message = ""
     if action == "review":
-        from .report_agent import _observation_text
-
         report = doc["snapshot"]["report"]
-        saved = report["summaryText"]
-        message = (
-            saved
-            if _matches_language(saved, request.language)
-            else (_observation_text(findings[0], ko) if findings else "")
-        )
+        message = session_summary(report, ko)
         if findings:
             message += (
                 " 먼저 이 관찰을 확인해 보세요."
@@ -533,13 +586,17 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 segment(doc["snapshot"], first)
             for f in findings:
                 components.append(
-                    {"type": "finding", "findingId": f["id"], "label": label(f, ko)}
+                    {
+                        "type": "finding",
+                        "findingId": f["id"],
+                        "label": guidance(f, ko)["title"],
+                    }
                 )
             choices(
                 choice(
                     "explain_finding",
-                    "선정 이유와 영상 보기",
-                    "Reason and video",
+                    "이 구간 함께 확인하기",
+                    "Review this interval together",
                     findings[0]["id"],
                 ),
                 choice(
@@ -583,21 +640,47 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             state.selectedFindingId = finding["id"]
             if state.stage == "session_review":
                 state.stage = "finding_selected"
-            from .report_agent import _observation_text
-
-            message = _observation_text(finding, ko)
-            message += (
-                f" 겹치지 않는 관측 {finding.get('independentObservations', 0)}개에서 확인했습니다. 점수와 측정값만으로 원인을 단정할 수 없습니다. 영상에서 의도한 강조와 실제 전달을 확인하세요."
-                if ko
-                else f" Supported by {finding.get('independentObservations', 0)} non-overlapping observations. Scores and measurements cannot establish a cause. Check intended emphasis and delivery in the video."
-            )
+            view = guidance(finding, ko)
+            message = view["observation"] + " " + view["question"]
             rows = [
                 s
                 for s in doc["snapshot"]["request"]["segments"]
                 if s["segmentId"] in {o["segmentId"] for o in finding["observations"]}
             ]
-            for row in rows[:3]:
-                segment(doc["snapshot"], row)
+            if rows:
+                segment(
+                    doc["snapshot"],
+                    rows[0],
+                    "변화가 나타난 구간 듣기"
+                    if ko
+                    else "Listen to the changed interval",
+                )
+                earlier = next(
+                    (
+                        row
+                        for row in doc["snapshot"]["request"]["segments"]
+                        if row["endMs"] <= rows[0]["startMs"]
+                        and metric(
+                            ReviewRequest.model_validate(
+                                doc["snapshot"]["request"]
+                            ).segments[
+                                doc["snapshot"]["request"]["segments"].index(row)
+                            ],
+                            finding["modality"],
+                            finding["metric"],
+                        )
+                        is not None
+                    ),
+                    None,
+                )
+                if earlier:
+                    segment(
+                        doc["snapshot"],
+                        earlier,
+                        "앞부분과 비교해 듣기"
+                        if ko
+                        else "Compare with an earlier interval",
+                    )
             if action == "show_measurements":
                 for row in rows[:3]:
                     values = []
@@ -626,8 +709,20 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                         + "; ".join(values)
                     )
             choices(
-                choice("show_measurements", "관련 측정값 보기", "Show measurements"),
-                choice("create_practice", "이 부분 연습하기", "Practice this interval"),
+                choice("confirm_intent", "의도한 표현이었어요", "That was intentional"),
+                choice(
+                    "create_practice",
+                    "이 부분을 연습하고 싶어요",
+                    "I'd like to practice this",
+                ),
+                choice(
+                    "guide_review", "무엇을 들어야 할지 모르겠어요", "Help me review it"
+                ),
+                choice(
+                    "show_measurements",
+                    "분석 근거 자세히 보기",
+                    "Show analysis evidence",
+                ),
             )
         else:
             message = (
@@ -684,6 +779,72 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                             for k in row[field]
                             if (v := metric(obs, modality, k)) is not None
                         )
+    elif action == "explain_score":
+        mean = doc["snapshot"]["report"]["analysis"].get("averageStress")
+        prefix = (
+            (
+                f"이번 발표의 평균 스트레스 신호는 {round(mean * 100)} / 100입니다. "
+                if ko
+                else f"This presentation's mean stress signal is {round(mean * 100)} / 100. "
+            )
+            if mean is not None
+            else (
+                "현재 평균을 계산할 분석 자료가 없습니다. "
+                if ko
+                else "There is no analyzed data for a mean score. "
+            )
+        )
+        message = prefix + (
+            "AI가 음성·영상에서 학습한 스트레스 관련 패턴을 감지한 참고값입니다. 같은 발표에서 다시 볼 구간을 찾고 같은 조건의 재촬영과 비교하는 데 사용합니다. 70점이 실제 스트레스 70%를 뜻하지 않으며, 발표 실력의 성적도 아닙니다. 평균에는 실제 분석된 시간만 반영합니다."
+            if ko
+            else "It is a reference measure of stress-related patterns learned by the AI from audio and video. Use it to find moments to review and compare takes under the same conditions. A score of 70 does not mean 70% actual stress or grade your presentation. The mean includes analyzed time only."
+        )
+    elif action in {"confirm_intent", "guide_review"}:
+        finding = finding or next(iter(findings), None)
+        if not finding or state.stage in {"recording", "evaluating"}:
+            raise ValueError("Select a finding before reviewing delivery")
+        state.selectedFindingId = finding["id"]
+        state.stage = "finding_selected"
+        state.reviewFeedback = "intentional" if action == "confirm_intent" else "unsure"
+        if action == "confirm_intent":
+            message = (
+                "의도한 표현으로 기록했어요. 이 변화만으로 목소리나 표정을 고칠 필요는 없습니다. 다른 확인할 부분이 없다면 이번 코칭을 마쳐도 좋습니다."
+                if ko
+                else "Recorded this as intentional expression. This change alone needs no correction. You can finish coaching if there is nothing else to review."
+            )
+            choices(
+                choice(
+                    "choose_next_goal", "다른 확인할 부분 보기", "Review another focus"
+                ),
+                choice("finish_coaching", "이번 코칭 마치기", "Finish coaching"),
+            )
+        else:
+            view = guidance(finding, ko)
+            message = (
+                "먼저 앞부분과 선택 구간을 번갈아 들어보세요. 핵심 문장 한 곳만 힘주어 말했는지, 여러 문장이 계속 강하게 들리는지 확인해 보세요. 어떤 표현이 더 좋은지는 전달하려던 의도와 함께 판단하세요."
+                if finding["id"].startswith("pitch") and ko
+                else "Alternate between the earlier and selected intervals. Listen for one emphasized key sentence versus sustained emphasis across several sentences. Judge it against your intention."
+                if finding["id"].startswith("pitch")
+                else "선택 구간을 소리와 함께 보고 표정·시선이 말의 의도와 맞는지 확인해 보세요. 수치만으로 고쳐야 할 표현이라고 정하지 않습니다."
+                if ko
+                else "Watch with sound and check expression or gaze against what you intended to convey. A measurement alone does not establish a delivery problem."
+            )
+            row = next(
+                (
+                    r
+                    for r in doc["snapshot"]["request"]["segments"]
+                    if r["segmentId"] == finding["observations"][0]["segmentId"]
+                ),
+                None,
+            )
+            if row:
+                segment(doc["snapshot"], row)
+            choices(
+                choice("confirm_intent", "의도한 표현이었어요", "That was intentional"),
+                choice(
+                    "create_practice", "한 번 연습해 볼게요", "Try one practice take"
+                ),
+            )
     elif action == "create_practice":
         finding = finding or next(iter(findings), None)
         if not finding:
@@ -716,30 +877,16 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 ),
                 "durationSeconds": 30,
             }
-            specific = {
-                "pitch_change": (
-                    "선택 구간을 듣고 의도한 강조였는지 확인하세요. 같은 내용을 30초 다시 말하며 강조할 문장 하나를 직접 정해 보세요.",
-                    "Listen for intended emphasis in the selected interval. Repeat the same content for 30 seconds, choosing one sentence to emphasize.",
-                ),
-                "pitch_variability": (
-                    "선택 구간의 억양을 들어보세요. 같은 문장을 다른 강조로 30초 반복하고 어느 쪽이 의도에 맞는지 직접 비교하세요.",
-                    "Listen to the intonation. Repeat the same sentences for 30 seconds with different emphasis, and compare with your intention.",
-                ),
-                "brow_tension": (
-                    "영상에서 표정 변화가 전달 의도와 맞는지 확인하세요. 의도한 표정을 정하고 같은 내용을 30초 다시 발표하세요. 특정 표정을 강제로 줄일 필요는 없습니다.",
-                    "Review whether facial movement matches your intention. Repeat the same content for 30 seconds with your intended expression; no forced facial correction is needed.",
-                ),
-                "lip_tension": (
-                    "입 움직임과 실제 발화를 영상에서 함께 확인하세요. 전달이 흐린 지점을 직접 골라 같은 내용을 30초 다시 발표하세요.",
-                    "Review mouth movement alongside recorded speech. Choose any unclear delivery yourself and repeat the same content for 30 seconds.",
-                ),
-                "gaze": (
-                    "영상에서 의도한 시선 이동과 화면 기준 시선 추정치를 함께 확인하세요. 같은 카메라 위치에서 같은 내용을 30초 다시 발표하세요.",
-                    "Review intended gaze shifts alongside the camera estimate. Repeat the same content for 30 seconds with the same camera placement.",
-                ),
-            }
-            if finding["id"] in specific:
-                practice["instruction"] = specific[finding["id"]][0 if ko else 1]
+            view = guidance(finding, ko)
+            state.reviewFeedback = "needs_practice"
+            practice["evaluationMode"] = "delivery_review"
+            practice["label"] = view["goal"]
+            practice["instruction"] = view["instruction"]
+            practice["criterion"] = (
+                "녹화 후 두 영상을 비교해 선택한 전달 행동을 실행했는지 확인합니다. 스트레스 신호와 음성·영상 수치는 변화의 참고 자료이며, 숫자가 낮아졌다는 이유로 성공을 판정하지 않습니다."
+                if ko
+                else "Compare both recordings to check whether you carried out the chosen delivery action. Stress signals and measurements describe changes; lower numbers alone do not establish success."
+            )
             scene = str(doc["snapshot"]["request"].get("sceneLabel") or "—")
             scene_names = {
                 "Camera": ("카메라", "Camera"),
@@ -806,6 +953,7 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             practice["id"] = str(uuid4())
             practice.pop("comparison", None)
             practice.pop("attemptSessionId", None)
+            practice.pop("deliveryAssessment", None)
             doc["practices"].append(practice)
             state.activePracticeId = practice["id"]
         state.stage = "recording"
@@ -853,16 +1001,153 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             state.attemptSessionId = practice["attemptSessionId"]
             state.stage = "comparison_ready"
             message = (
-                "같은 지표로 이전 시도와 재촬영을 비교했습니다. 수치 변화는 발표 실력이나 감정을 확정하지 않습니다."
+                "재촬영 분석이 끝났어요. 아래 수치는 원본과 이번 시도의 차이입니다. 두 영상을 보고 연습에서 정한 전달 행동을 실행했는지 확인해 주세요."
                 if ko
-                else "Compared both takes using the same metrics. Changes do not establish delivery quality or emotion."
+                else "The retry analysis is ready. The figures describe differences between both takes. Watch them to check whether you carried out the chosen action, such as emphasizing only your key sentence."
             )
+            focus_change = next(
+                (
+                    m
+                    for m in result["measurements"]
+                    if m["metric"] == practice["metric"]
+                    and m["modality"] == practice["modality"]
+                ),
+                None,
+            )
+            if focus_change:
+                direction = focus_change["difference"]
+                item = measurement_name(practice["metric"], ko)
+                message += (
+                    f" {item}는 원본보다 {'높게' if direction > 0 else '낮게' if direction < 0 else '비슷하게'} 관측됐습니다. 자세한 수치는 아래에서 확인할 수 있어요."
+                    if ko
+                    else f" {item} was {'higher' if direction > 0 else 'lower' if direction < 0 else 'similar'} in the retry. Exact measurements are available below."
+                )
+            if result["outcome"] == "insufficient_data":
+                message = (
+                    "촬영은 끝났지만 두 시도의 분석 조건이나 자료가 충분히 맞지 않아 수치 비교를 보류했어요. 카메라·마이크와 같은 촬영 환경을 확인하고, 같은 내용을 30초 이상 다시 발표해 주세요."
+                    if ko
+                    else "Recording is complete, but the analysis conditions or observations do not sufficiently match for comparison. Check the camera and microphone, use the same scene and content, and present for at least 30 seconds."
+                )
             components.append({"type": "comparison", "comparison": result})
-            choices(
-                choice("retry_practice", "같은 연습 다시 하기", "Retry practice"),
-                choice("choose_next_goal", "다음 목표 선택", "Choose next goal"),
-                choice("finish_coaching", "목표 저장하고 마치기", "Save and finish"),
+            for snap, card_label, selected in (
+                (
+                    doc["snapshot"],
+                    "원본 발표 보기" if ko else "Watch the original",
+                    practice["ranges"],
+                ),
+                (
+                    attempt["snapshot"],
+                    "이번 재촬영 보기" if ko else "Watch the retry",
+                    None,
+                ),
+            ):
+                row = next(
+                    (
+                        r
+                        for r in snap["request"]["segments"]
+                        if not selected
+                        or any(
+                            r["startMs"] >= x["startMs"] and r["endMs"] <= x["endMs"]
+                            for x in selected
+                        )
+                    ),
+                    None,
+                )
+                if row:
+                    segment(snap, row, card_label)
+            if result["outcome"] == "review_required":
+                choices(
+                    choice(
+                        "assess_delivery_achieved",
+                        "의도한 전달이 됐어요",
+                        "I delivered it as intended",
+                    ),
+                    choice(
+                        "assess_delivery_partial", "일부만 됐어요", "Partly as intended"
+                    ),
+                    choice(
+                        "assess_delivery_retry", "다시 해볼게요", "I'd like to retry"
+                    ),
+                )
+            else:
+                choices(
+                    choice("retry_practice", "같은 연습 다시 하기", "Retry practice"),
+                    choice("choose_next_goal", "다음 목표 선택", "Choose next goal"),
+                    choice(
+                        "finish_coaching", "목표 저장하고 마치기", "Save and finish"
+                    ),
+                )
+    elif action.startswith("assess_delivery_"):
+        if (
+            not practice
+            or not attempt
+            or state.stage != "comparison_ready"
+            or practice.get("evaluationMode") != "delivery_review"
+        ):
+            raise ValueError("No delivery review is ready")
+        if attempt["snapshot"]["request"][
+            "sessionId"
+        ] != state.attemptSessionId or state.attemptSessionId != practice.get(
+            "attemptSessionId"
+        ):
+            raise ValueError("Delivery review must use the saved practice attempt")
+        result = compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)
+        if result["outcome"] == "insufficient_data":
+            raise ValueError("Insufficient observations for delivery review")
+        assessment = {
+            "assess_delivery_achieved": "achieved",
+            "assess_delivery_partial": "partial",
+            "assess_delivery_retry": "retry_recommended",
+        }[action]
+        practice["deliveryAssessment"] = assessment
+        result = compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)
+        practice["comparison"] = result
+        focus_finding = next(f for f in findings if f["id"] == practice["findingId"])
+        if assessment == "achieved":
+            message = (
+                f"‘{guidance(focus_finding, ko)['goal']}’를 해냈다고 직접 확인한 결과로 기록했어요. 다음 발표에서도 같은 행동을 유지해 보세요. 원하면 다른 목표를 선택할 수 있습니다."
+                if ko
+                else f"Saved your confirmation that you carried out '{guidance(focus_finding, ko)['goal']}'. Keep that action next time, or choose another goal."
             )
+        else:
+            adjustments = {
+                "pitch_change": (
+                    "다음에는 녹화 전에 핵심 문장 하나를 먼저 소리 내어 정해 보세요. 그 문장 뒤에만 한 번 멈추고, 나머지는 편한 목소리로 이어가세요.",
+                    "Before recording, say your chosen key sentence once. Pause after that sentence only, then use your comfortable voice for the rest.",
+                ),
+                "pitch_variability": (
+                    "다음에는 강조할 단어를 하나만 정해 보세요. 같은 문장을 평소처럼 한 번, 그 단어를 강조해 한 번 말하며 비교하세요.",
+                    "Choose just one word to emphasize. Say the sentence once naturally and once with that emphasis, then compare.",
+                ),
+                "gaze": (
+                    "다음에는 핵심 문장을 카메라 옆에 짧게 적어 두세요. 그 문장을 말할 때만 카메라를 바라보고 나머지 시선은 자연스럽게 두세요.",
+                    "Put a short reminder beside the camera. Look toward it for your key sentence and keep other gaze shifts natural.",
+                ),
+                "lip_tension": (
+                    "다음에는 고른 문장을 조금 짧게 나눠 보세요. 의미 단위 사이에만 멈추고 실제 소리가 더 분명하게 들리는지 확인하세요.",
+                    "Break the sentence into shorter meaningful phrases. Pause only between them and listen for clearer speech.",
+                ),
+                "brow_tension": (
+                    "다음에는 전달할 느낌 하나만 먼저 정하세요. 핵심 문장 한 곳에서 그 느낌을 표현하고 영상으로 의도와 맞는지 확인하세요.",
+                    "Choose one feeling to convey. Express it for your key sentence, then check the recording against your intention.",
+                ),
+            }
+            adjustment = adjustments.get(
+                focus_finding["id"],
+                (
+                    "같은 목표로 한 번 더 연습하고 두 영상을 비교해 보세요.",
+                    "Try the same goal once more and compare both recordings.",
+                ),
+            )[0 if ko else 1]
+            message = (
+                "직접 확인한 결과를 기록했어요. " if ko else "Saved your review. "
+            ) + adjustment
+        components.append({"type": "comparison", "comparison": result})
+        choices(
+            choice("retry_practice", "같은 연습 다시 하기", "Retry practice"),
+            choice("choose_next_goal", "다음 목표 선택", "Choose next goal"),
+            choice("finish_coaching", "목표 저장하고 마치기", "Save and finish"),
+        )
     elif action == "compare_previous_session":
         if previous:
             # Display chronological previous -> current.
@@ -902,6 +1187,7 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                     "partial": ("부분 달성", "Partial"),
                     "retry_recommended": ("재시도 권장", "Retry recommended"),
                     "insufficient_data": ("자료 부족", "Insufficient data"),
+                    "review_required": ("영상 확인 대기", "Awaiting delivery review"),
                 }
                 message += (
                     " · 이전 연습 결과: " if ko else " · Previous practice result: "
@@ -927,27 +1213,54 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
         )
         if request.findingId and finding:
             message = (
-                f"다음 목표로 ‘{label(finding, ko)}’ 항목을 선택했습니다. 목표를 저장하고 마칠 수 있습니다."
+                f"다음 목표로 ‘{guidance(finding, ko)['goal']}’ 항목을 선택했습니다. 목표를 저장하고 마칠 수 있습니다."
                 if ko
-                else f"Selected {label(finding, ko)} as the next goal. Save it to finish."
+                else f"Selected {guidance(finding, ko)['goal']} as the next goal. Save it to finish."
             )
 
+        if state.reviewFeedback == "intentional" and not any(
+            f["id"] != state.selectedFindingId for f in findings
+        ):
+            message = (
+                "추가로 확인할 근거 있는 항목이 없습니다. 의도한 표현을 유지하며 이번 코칭을 마쳐도 좋습니다."
+                if ko
+                else "No additional supported focus is available. Keep your intentional expression and finish this review when ready."
+            )
         choices(
             *[
-                choice("choose_next_goal", label(f, ko), label(f, ko), f["id"])
+                choice(
+                    "choose_next_goal",
+                    guidance(f, ko)["goal"],
+                    guidance(f, ko)["goal"],
+                    f["id"],
+                )
                 for f in findings
+                if not (
+                    state.reviewFeedback == "intentional"
+                    and f["id"] == state.selectedFindingId
+                )
             ],
             choice("finish_coaching", "목표 저장하고 마치기", "Save and finish"),
         )
     elif action == "finish_coaching":
         if state.stage in {"recording", "evaluating"}:
             raise ValueError("Finish evaluation before completing coaching")
-        state.nextGoalId = state.nextGoalId or state.selectedFindingId
+        state.nextGoalId = state.nextGoalId or (
+            state.selectedFindingId if state.reviewFeedback != "intentional" else None
+        )
         state.stage = "completed"
         message = (
-            "코칭 결과와 다음 목표를 저장했습니다."
+            (
+                "코칭 결과와 다음 목표를 저장했습니다."
+                if state.nextGoalId
+                else "코칭 결과를 저장했습니다. 의도한 표현은 다음 발표에서도 유지해 보세요."
+            )
             if ko
-            else "Saved coaching results and the next goal."
+            else (
+                "Saved coaching results and the next goal."
+                if state.nextGoalId
+                else "Saved the coaching review. Keep your intended expression next time."
+            )
         )
     else:
         message = (
@@ -992,6 +1305,18 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
     # Previous comparison uses chronological ordering in its validation too.
     response = validate_response(raw, doc, attempt=attempt, previous=previous)
     action_labels = {
+        "confirm_intent": ("의도한 표현이었어요", "That was intentional"),
+        "guide_review": ("영상 확인 방법", "Help reviewing the video"),
+        "explain_score": ("스트레스 신호 점수 설명", "Explain stress signal score"),
+        "assess_delivery_achieved": (
+            "의도한 전달 달성",
+            "Delivery matched my intention",
+        ),
+        "assess_delivery_partial": (
+            "전달 일부 달성",
+            "Delivery partly matched my intention",
+        ),
+        "assess_delivery_retry": ("전달 재시도", "Retry delivery"),
         "review": ("보고서 살펴보기", "Review report"),
         "explain_finding": ("선정 이유 보기", "Explain finding"),
         "show_measurements": ("측정값 보기", "Show measurements"),

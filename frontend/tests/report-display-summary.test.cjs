@@ -71,3 +71,26 @@ test('English findings render in Korean without fabricating missing observations
   assert.equal(sceneText('Camera', true), '카메라');
   assert.equal(sceneText('카메라', false), 'Camera');
 });
+
+
+test('the main report explains an observable change and the next review action without a Hertz dump', () => {
+  const report = { summaryText: '목소리 높이는 200 Hz였습니다.', analysis: { coverage: .83 }, priorities: [
+    { id: 'pitch_change', referenceValue: 100, independentObservations: 3, observations: [{ startMs: 25000, endMs: 35000, value: 200 }] }
+  ] };
+  const ko = reportDisplaySummary(report, true);
+  assert.match(ko, /00:25–00:35/);
+  assert.match(ko, /목소리가 더 높아/);
+  assert.match(ko, /의도한 강조/);
+  assert.doesNotMatch(ko, /Hz|200|잘못|나쁨/);
+  const en = reportDisplaySummary(report, false);
+  assert.doesNotMatch(en, /[가-힣]/);
+  assert.match(en, /intentional/);
+});
+
+test('stress signal scores use a 100 point reference scale and never fabricate a missing score', () => {
+  const { signalScore } = loadTs('../lib/report-locale.ts');
+  assert.equal(signalScore(.54), '54 / 100');
+  assert.equal(signalScore('0.80'), '80 / 100');
+  assert.equal(signalScore(null), '—');
+  assert.equal(signalScore('—'), '—');
+});
