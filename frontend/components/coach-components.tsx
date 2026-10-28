@@ -58,11 +58,11 @@ export function CoachComponents({
             if (c.findingId) {
               const group = components.filter((item): item is Extract<CoachComponent, {type: "video_segment"}> => item.type === "video_segment" && item.findingId === c.findingId);
               if (components.findIndex(item => item.type === "video_segment" && item.findingId === c.findingId) !== i) return null;
-              return <section key={i} className="coach-observation-group" aria-label={ko ? `반복 관측 ${group.length}개` : `${group.length} supporting observations`}>
-                <strong>{ko ? `반복 관측 ${group.length}개` : `${group.length} supporting observations`}</strong>
-                <p>{ko ? "각 구간을 눌러 영상에서 확인하세요." : "Select each interval to review it in the recording."}</p>
-                <div className="coach-observation-grid">{group.map((part, index) => <button key={`${part.sessionId}:${part.startMs}:${part.endMs}`} type="button" className="coach-card coach-video" aria-label={ko ? `관측 ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}` : `Observation ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}`} onClick={() => jumpToVideo(part.sessionId, part.startMs)}>
-                  <span className="coach-video-icon"><Play size={14} /></span><span><strong>{ko ? `관측 ${index+1}` : `Observation ${index+1}`}</strong><small>{clock(part.startMs)}–{clock(part.endMs)}</small></span><ArrowRight size={13} />
+              return <section key={i} className="coach-observation-group" aria-label={ko ? `확인할 영상 ${group.length}곳` : `${group.length} intervals to review`}>
+                <strong>{ko ? `확인할 영상 ${group.length}곳` : `${group.length} intervals to review`}</strong>
+                <p>{ko ? "아래 시간을 눌러 해당 장면을 다시 보세요." : "Select a time to replay that part of the recording."}</p>
+                <div className="coach-observation-grid">{group.map((part, index) => <button key={`${part.sessionId}:${part.startMs}:${part.endMs}`} type="button" className="coach-card coach-video" aria-label={ko ? `영상 ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}` : `Clip ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}`} onClick={() => jumpToVideo(part.sessionId, part.startMs)}>
+                  <span className="coach-video-icon"><Play size={14} /></span><span><strong>{ko ? `영상 ${index+1}` : `Clip ${index+1}`}</strong><small>{clock(part.startMs)}–{clock(part.endMs)}</small></span><ArrowRight size={13} />
                 </button>)}</div>
               </section>;
             }

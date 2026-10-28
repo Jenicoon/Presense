@@ -196,10 +196,10 @@ export function SessionAgentReport({ report, language, onSeek }: {
       const text = findingText(f, ko);
       const view = findingGuidance(f, ko);
       return <article key={f.id} className="review-finding">
-        <div className="review-finding-heading"><span className="review-finding-number">{String(index + 1).padStart(2, "0")}</span><h4>{view.title}</h4><span className="review-finding-count">{ko ? "독립 관측" : "Independent observations"} {f.independentObservations ?? f.assessment?.independentObservations ?? "—"}{ko ? "회" : ""}</span></div>
+        <div className="review-finding-heading"><span className="review-finding-number">{String(index + 1).padStart(2, "0")}</span><h4>{view.title}</h4><span className="review-finding-count">{ko ? `확인할 영상 ${f.observations?.length ?? 0}곳` : `${f.observations?.length ?? 0} intervals to review`}</span></div>
         <p className="review-finding-summary">{view.observation}</p>
         <div className="review-supporting-times" role="group" aria-label={ko ? "근거가 된 관측 구간" : "Supporting observation intervals"}>{f.observations?.map((o, n) => <button key={o.segmentId} type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(o.startMs)}>{n + 1}. {clock(o.startMs)}–{clock(o.endMs)}</button>)}</div>
-        <details className="review-details"><summary>{ko ? "관측 근거와 측정값 보기" : "Observation evidence"}</summary><p>{text.observation}</p><div className="review-observations">{f.observations?.map(o => <div className="review-observation" key={o.segmentId}>
+        <details className="review-details"><summary>{ko ? "관측 근거와 측정값 보기" : "Observation evidence"}</summary><p>{text.observation}</p><p>{ko ? `서로 겹치지 않는 분석 ${f.independentObservations ?? f.assessment?.independentObservations ?? "—"}개를 근거로 선택했습니다.` : `Selected using ${f.independentObservations ?? f.assessment?.independentObservations ?? "—"} non-overlapping observations.`}</p><div className="review-observations">{f.observations?.map(o => <div className="review-observation" key={o.segmentId}>
           <button type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(o.startMs)}>▶ {clock(o.startMs)}–{clock(o.endMs)}</button>
           <span>{measurementLabel(f.metric ?? "", ko)}<strong>{Number(o.value.toFixed(2))}</strong></span>
           <span>{ko ? "스트레스 신호 점수" : "Stress signal score"}<strong>{signalScore(o.stressScore)}</strong></span>

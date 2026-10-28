@@ -94,3 +94,33 @@ test('stress signal scores use a 100 point reference scale and never fabricate a
   assert.equal(signalScore(null), '—');
   assert.equal(signalScore('—'), '—');
 });
+
+
+test('mouth findings explain the measured opening, without inventing pronunciation problems', () => {
+  const {findingGuidance} = loadTs('../lib/report-locale.ts');
+  const finding = {id:'lip_tension', referenceValue:.137, independentObservations:8, observations:[
+    {startMs:20000, endMs:30000, value:.203}, {startMs:30000, endMs:40000, value:.155}
+  ]};
+  const ko = findingGuidance(finding, true);
+  assert.match(ko.observation, /00:20–00:30.*입이 벌어진 정도가 앞부분보다 컸어요/);
+  assert.match(ko.observation, /영상은 2곳/);
+  assert.doesNotMatch(ko.observation, /구간 차이|겹치지|긴장|불명확|8곳/);
+  assert.match(ko.question, /입 모양만으로.*소리와 함께.*지금 방식을 유지.*짧게 나눠 연습/);
+  const en = findingGuidance(finding, false);
+  assert.match(en.observation, /more open/);
+  assert.doesNotMatch(Object.values(en).join(' '), /[가-힣]/);
+  assert.match(findingGuidance({...finding, observations:[{startMs:20000,endMs:30000,value:.1}]},true).observation, /작았어요/);
+  assert.match(findingGuidance({...finding, observations:[{startMs:20000,endMs:30000,value:.137}]},true).observation, /비슷했어요/);
+});
+
+test('missing reference does not fabricate a mouth comparison or direction', () => {
+  const {findingGuidance} = loadTs('../lib/report-locale.ts');
+  for (const referenceValue of [null, undefined, NaN, Infinity]) {
+    const view = findingGuidance({id:'lip_tension',referenceValue,observations:[{startMs:20000,endMs:30000,value:.203}]}, true);
+    assert.match(view.observation, /비교할 자료가 부족/);
+    assert.doesNotMatch(view.observation, /컸어요|작았어요|비슷했어요/);
+  }
+  const missing = findingGuidance({id:'lip_tension',independentObservations:8}, true);
+  assert.match(missing.observation, /상세 관측 자료가 없습니다/);
+  assert.doesNotMatch(missing.observation, /곳/);
+});

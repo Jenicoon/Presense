@@ -132,8 +132,8 @@ PROFILES = {
     },
     "lip_tension": {
         "check": (
-            "입 모양 수치로 발음을 판단하지 말고 실제 소리를 들어보세요. 다시 듣게 된 문장이 있다면 그 문장만 골라 의미 단위 사이의 쉼을 바꿔보세요.",
-            "Listen to the actual speech rather than judging pronunciation from mouth measurements. If a sentence needs replaying, choose it and try different pauses between meaningful phrases.",
+            "입 모양만으로 발음이 좋거나 나쁜지는 알 수 없어요. 이 장면을 소리와 함께 재생해 보세요. 잘 들리면 지금 방식을 유지하고, 다시 듣게 된 문장이 있다면 그 문장만 짧게 나눠 연습해요.",
+            "Mouth opening alone cannot tell us whether pronunciation is clear. Play this interval with sound. Keep your delivery if it is clear; if you need to replay a sentence, rehearse that sentence in short phrases.",
         ),
         "outcomes": [
             ("effective", "실제 소리는 잘 들려요", "The speech is audible"),
@@ -237,6 +237,9 @@ def prepare_review_request(doc, request):
             reviewFeedback=None,
             reviewOutcome=None,
             practiceStrategyId=None,
+            activePracticeId=None,
+            attemptSessionId=None,
+            stage="finding_selected",
         )
     if request.action == "submit_review":
         if not finding or doc["state"]["stage"] not in {

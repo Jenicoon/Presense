@@ -1,5 +1,7 @@
 """Plain-language coaching from saved observations, with no inferred delivery errors."""
 
+from math import isfinite
+
 from .coaching_methods import profile
 
 
@@ -13,8 +15,12 @@ def guidance(finding, ko):
     first = rows[0] if rows else None
     reference = finding.get("referenceValue")
     current = first.get("value") if first else None
-    higher = current is not None and reference is not None and current > reference
-    lower = current is not None and reference is not None and current < reference
+    comparable = all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and isfinite(v)
+        for v in (current, reference)
+    )
+    higher = comparable and current > reference
+    lower = comparable and current < reference
     directional = higher or lower
     descriptions = {
         "pitch_change": (
@@ -36,8 +42,20 @@ def guidance(finding, ko):
             "1. Choose one key sentence from the selected interval.\n2. Repeat the same content for 30 seconds, emphasizing only that sentence.\n3. Pause briefly after it, then continue in your comfortable voice.",
         ),
         "pitch_variability": (
-            "목소리의 오르내림이 다른 구간과 달랐어요",
-            "Your intonation differed from other intervals",
+            "목소리 높낮이의 변화 폭이 앞부분보다 컸어요"
+            if higher
+            else "목소리 높낮이의 변화 폭이 앞부분보다 작았어요"
+            if lower
+            else "목소리 높낮이의 변화 폭은 앞부분과 비슷했어요"
+            if comparable
+            else "앞부분과 목소리 높낮이의 변화 폭을 비교할 자료가 부족해요",
+            "Your pitch varied more than earlier in the presentation"
+            if higher
+            else "Your pitch varied less than earlier in the presentation"
+            if lower
+            else "Your pitch varied about as much as earlier in the presentation"
+            if comparable
+            else "There is not enough data to compare pitch variation with earlier in the presentation",
             "강조할 문장이 잘 구분되는지 듣기",
             "Listen for a clear emphasis",
             "같은 문장을 두 가지 강조로 말하기",
@@ -46,8 +64,20 @@ def guidance(finding, ko):
             "1. Choose a sentence.\n2. Say it naturally for 15 seconds, then repeat for 15 seconds emphasizing one key word.\n3. Listen back and choose the version that better expresses your intention.",
         ),
         "brow_tension": (
-            "눈썹 움직임에 구간 차이가 있었어요",
-            "Brow movement differed across intervals",
+            "눈썹이 앞부분보다 더 내려간 모습으로 측정됐어요"
+            if higher
+            else "눈썹이 앞부분보다 덜 내려간 모습으로 측정됐어요"
+            if lower
+            else "눈썹이 내려간 정도는 앞부분과 비슷했어요"
+            if comparable
+            else "앞부분과 눈썹 모양을 비교할 자료가 부족해요",
+            "Your eyebrows were estimated to be more lowered than earlier in the presentation"
+            if higher
+            else "Your eyebrows were estimated to be less lowered than earlier in the presentation"
+            if lower
+            else "The estimated eyebrow lowering was similar to earlier in the presentation"
+            if comparable
+            else "There is not enough data to compare eyebrow lowering with earlier in the presentation",
             "표정이 말의 의도와 맞는지 보기",
             "Check expression against your intention",
             "핵심 메시지에 맞는 표정으로 다시 말하기",
@@ -56,10 +86,22 @@ def guidance(finding, ko):
             "1. Watch the interval with sound.\n2. Choose the feeling you intended to convey, such as calm, confidence or surprise.\n3. Repeat the content for 30 seconds and compare expression against that intention.",
         ),
         "lip_tension": (
-            "입 움직임에 구간 차이가 있었어요",
-            "Mouth movement differed across intervals",
-            "실제 발화가 잘 들리는지 확인하기",
-            "Check the recorded speech for clarity",
+            "입이 벌어진 정도가 앞부분보다 컸어요"
+            if higher
+            else "입이 벌어진 정도가 앞부분보다 작았어요"
+            if lower
+            else "입이 벌어진 정도는 앞부분과 비슷했어요"
+            if comparable
+            else "앞부분과 입이 벌어진 정도를 비교할 자료가 부족해요",
+            "Your mouth was more open than earlier in the presentation"
+            if higher
+            else "Your mouth was less open than earlier in the presentation"
+            if lower
+            else "Your mouth opening was similar to earlier in the presentation"
+            if comparable
+            else "There is not enough data to compare mouth opening with earlier in the presentation",
+            "말소리가 또렷하게 들리는지 듣기",
+            "Listen for clear speech",
             "전달할 문장을 나눠 다시 말하기",
             "Break a sentence into clear phrases",
             "1. 선택 구간을 듣고 스스로 전달이 흐린 문장을 고르세요.\n2. 그 문장을 뜻 단위로 나누고, 사이에 잠깐 멈추세요.\n3. 30초 다시 말한 뒤 실제 소리가 더 분명해졌는지 들어보세요.",
@@ -94,12 +136,16 @@ def guidance(finding, ko):
         span = f"{clock(first['startMs'])}–{clock(first['endMs'])}"
         observation = (
             f"{span}, 앞부분과 비교해 {observation[0].lower() + observation[1:]}"
-            if ko and directional
+            if ko and finding.get("id") == "pitch_change" and directional
             else (
                 f"{span}, {observation}"
                 if ko
                 else f"In {span}, {observation[0].lower() + observation[1:]}"
-                + (" compared with earlier intervals." if directional else ".")
+                + (
+                    " compared with earlier intervals."
+                    if finding.get("id") == "pitch_change" and directional
+                    else "."
+                )
             )
         )
     if ko:
@@ -110,14 +156,13 @@ def guidance(finding, ko):
             if ko
             else "No detailed observations are saved for this finding."
         )
-    count = finding.get("independentObservations") or finding.get("assessment", {}).get(
-        "independentObservations", 0
-    )
-    if count > 1:
+    # Counts in the main copy refer only to actual available video cards. Detailed
+    # evidence retains the independently counted measurements and completeness flags.
+    if len(rows) > 1:
         observation += (
-            f" 비슷한 변화가 겹치지 않는 {count}개 구간에서 관찰됐습니다."
+            f" 함께 확인할 영상은 {len(rows)}곳이에요."
             if ko
-            else f" A similar change appeared in {count} non-overlapping observations."
+            else f" There are {len(rows)} recorded intervals to review together."
         )
     question = profile(finding)["check"][0 if ko else 1]
     return {

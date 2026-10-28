@@ -256,7 +256,7 @@ def build_context(doc, request, attempt=None, previous=None):
     history = [
         {"role": m["role"], "text": m["text"][:1800]} for m in doc["messages"][-10:]
     ]
-    return {
+    context = {
         "responseTask": (
             "The presenter already answered that this expression was intentional. Acknowledge and retain this answer, do not generate reviewGuide or repeat an observation. Offer one optional rehearsal method or another focus."
             if doc["state"].get("reviewFeedback") == "intentional"
@@ -315,6 +315,58 @@ def build_context(doc, request, attempt=None, previous=None):
         "dataOrigin": doc["snapshot"].get("dataOrigin", "recorded"),
     }
 
+    # A direct finding button must not be influenced by a different finding's
+    # earlier conversation or exercise. Full-session questions keep all context.
+    if request.findingId and request.action in {
+        "explain_finding",
+        "guide_review",
+        "show_measurements",
+        "create_practice",
+        "confirm_intent",
+    }:
+        focus = next(f for f in findings if f["id"] == request.findingId)
+        spans = {(o["startMs"], o["endMs"]) for o in focus["observations"]}
+        first_start = min((s[0] for s in spans), default=0)
+        focused_videos = {
+            key: v
+            for key, v in videos.items()
+            if v["sessionId"] == doc["state"]["sessionId"]
+            and ((v["startMs"], v["endMs"]) in spans or v["endMs"] <= first_start)
+        }
+        context["findings"] = [
+            f for f in context["findings"] if f["id"] == request.findingId
+        ]
+        context["videoRefs"] = focused_videos
+        context["facts"] = {
+            key: value
+            for key, value in catalog.items()
+            if key in {"current.summary", "finding." + request.findingId}
+            or any(
+                key == video or key.startswith(video + ".") for video in focused_videos
+            )
+        }
+        focused_history = []
+        for i, message in enumerate(doc["messages"][-10:]):
+            history_rows = doc["messages"][-10:]
+            reply = (
+                message
+                if message["role"] == "agent"
+                else next(
+                    (m for m in history_rows[i + 1 :] if m["role"] == "agent"), {}
+                )
+            )
+            if (
+                reply.get("response", {})
+                .get("conversationState", {})
+                .get("selectedFindingId")
+                == request.findingId
+            ):
+                focused_history.append(
+                    {"role": message["role"], "text": message["text"][:1800]}
+                )
+        context["history"] = focused_history
+    return context
+
 
 PROMPT = """You are PreSense's actual presentation coach. Read the supplied saved observations,
 quality, state and conversation before deciding what to say and which short exercise helps.
@@ -343,13 +395,18 @@ Do NOT type ANY digits or timestamps in message, labels or steps. No citations, 
 research claims or unsupplied measurements. Use evidenceIds to declare every placeholder used.
 You may write cautious questions, limitations and concrete proposed practice actions in your own words.
 Do not paraphrase observations outside placeholders. After a fact token write only a helpful
-question, proposed action or limitation. For example, never add "해당 구간에서 피치 변화가 두드러졌습니다" or "your intonation difference was noted" after a placeholder. For create_practice you may omit the fact token entirely and start with the actual practice action. Avoid jargon such as 피치, 술어 구간, 귀중심 문장; use natural Korean such as 중요한 문장, 높낮이, 문장 끝의 쉼. Do not say delivery may have been difficult, unclear or
+question, proposed action or limitation. For example, never add "해당 구간에서 피치 변화가 두드러졌습니다" or "your intonation difference was noted" after a placeholder. For create_practice you may omit the fact token entirely and start with the actual practice action. Never use vague findings such as 구간 차이, 다른 구간과 달랐어요, or differed across intervals. The fact tokens already say what changed and in which direction. Avoid jargon such as 피치, 입 개방, 술어 구간, 귀중심 문장; use natural Korean such as 중요한 문장, 높낮이, 문장 끝의 쉼. Do not say delivery may have been difficult, unclear or
 improved: those outcomes are unmeasured, including speculative claims. Use videoRefs for navigation.
 The app renders exact values from facts; don't dump irrelevant measurements into a short answer.
 Compare previous vs current vs retry explicitly, never confuse them. Use comparison.result for comparisons.
 If data are missing, say so; do not fill gaps. Self-assessment remains the presenter's assessment.
 
 A question alone is NOT coaching. Use reviewProfile to give a concrete task.
+For lip_tension the observed quantity is mouth opening, not pronunciation or intent.
+Never ask if mouth movement was intentional, infer speech content, or speculate that it
+is connected to practice content. Do not ask about calmness, anxiety or emotions in a mouth-opening review; they are unrelated to this measured quantity. Ask the presenter to play the interval with sound,
+keep clear delivery, and select a sentence needing replay only if they actually notice one.
+Do not add an extra mouth-movement description after its fact token.
 For explain_finding or guide_review before a presenter answer, supply reviewGuide with two
 specific things to listen/watch for. Explain that selecting a review outcome creates the matching
 exercise immediately. Never diagnose weak emphasis/unclear speech from measurements; the presenter
@@ -459,12 +516,24 @@ def validate_plan(raw, context):
     for language in ("ko", "en"):
         message = getattr(plan.message, language)
         plain = TOKEN.sub("", message)
+        if plan.findingId == "lip_tension" and re.search(
+            r"입.{0,20}(?:더욱|더|덜).{0,12}벌어|mouth.{0,25}(?:more open|less open|opened|wider|narrower)",
+            plain,
+            re.IGNORECASE,
+        ):
+            raise ValueError(
+                "Do not repeat the mouth-opening observation after its fact token. Write only the action: play with sound, keep clear speech, or select a sentence needing replay"
+            )
+        if plan.findingId == "lip_tension" and REASK_INTENTION.search(plain):
+            raise ValueError(
+                "Do not ask whether mouth movement was intentional. Ask the presenter to listen to the recorded speech, keep clear delivery, or select a sentence they need to replay"
+            )
         if answered and REASK_INTENTION.search(plain):
             raise ValueError(
                 "The presenter already answered. Acknowledge it and give the next action; do not ask about intention again"
             )
         if re.search(
-            r"(?:관찰|측정|확인)(?:됐|되었|했)|나타났|두드러졌|(?:was|were) (?:observed|noted)|your (?:intonation|pitch|expression).{0,25}(?:changed|differ)",
+            r"(?:관찰|측정|확인)(?:됐|되었|했)|나타났|두드러졌|구간.{0,10}차이|다른.{0,8}구간.{0,10}달랐|differed (?:between|across) intervals|(?:was|were) (?:observed|noted)|your (?:intonation|pitch|expression).{0,25}(?:changed|differ)",
             plain,
             re.IGNORECASE,
         ):
@@ -506,7 +575,15 @@ def validate_plan(raw, context):
                 getattr(plan.practice.successCheck, language),
             ] + [getattr(step, language) for step in plan.practice.steps]
         for text in texts:
-            if answered and REASK_INTENTION.search(text):
+            if plan.findingId == "lip_tension" and re.search(
+                r"침착|차분|불안|긴장|calm|compos|anxious|emotion", text, re.IGNORECASE
+            ):
+                raise ValueError(
+                    "Mouth opening does not measure calmness or emotions. Focus only on playing the speech with sound and the presenter's clarity review"
+                )
+            if (answered or plan.findingId == "lip_tension") and REASK_INTENTION.search(
+                text
+            ):
                 raise ValueError(
                     "Do not ask an already answered intention question in a guide or exercise"
                 )
@@ -653,7 +730,31 @@ def respond_with_ai(
     if generate is None or verify is None:
         raise AIUnavailable("AI coaching is not configured")
     context = build_context(doc, request, attempt, previous)
-    context["responseSchema"] = Plan.model_json_schema()
+    schema = Plan.model_json_schema()
+    schema["properties"]["action"]["enum"] = context["allowedActions"]
+    if request.findingId:
+        schema["properties"]["findingId"] = {
+            "const": request.findingId,
+            "type": "string",
+        }
+    if context["videoRefs"]:
+        schema["properties"]["videoRefs"]["items"] = {
+            "type": "string",
+            "enum": list(context["videoRefs"]),
+        }
+    else:
+        schema["properties"]["videoRefs"]["maxItems"] = 0
+    schema["properties"]["evidenceIds"]["items"] = {
+        "type": "string",
+        "enum": list(context["facts"]),
+    }
+    if context["practiceMethods"]:
+        schema["$defs"]["Exercise"]["properties"]["strategyId"]["enum"] = list(
+            context["practiceMethods"]
+        )
+    else:
+        schema["properties"]["practice"] = {"type": "null"}
+    context["responseSchema"] = schema
     for trial in range(2):
         try:
             plan = validate_plan(generate(context), context)
@@ -748,7 +849,12 @@ def respond_with_ai(
             updated.pop("aiAudit", None)
             return updated, response
         except (ValueError, TypeError, KeyError) as error:
-            context["validationFeedback"] = str(error)[:300]
+            context["validationFeedback"] = (
+                "Keep plan.action in "
+                + str(context["allowedActions"])
+                + ". "
+                + str(error)
+            )[:500]
             logger.warning(
                 "AI coach validation rejected (%s), trial %d",
                 type(error).__name__,
