@@ -80,6 +80,7 @@ export type CoachComponent =
   | {
       type: "video_segment";
       sessionId: string;
+      findingId?: string | null;
       startMs: number;
       endMs: number;
       label: string;

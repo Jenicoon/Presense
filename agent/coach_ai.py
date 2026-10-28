@@ -20,6 +20,7 @@ from .coaching import (
     respond,
     validate_response,
 )
+from .finding_evidence import attach_observation_videos, complete_document_evidence
 from .presentation_guidance import guidance
 from .report_schema import Contract, ReviewRequest
 from .session_analyzer import metric
@@ -493,12 +494,15 @@ def _apply_plan(doc, response, plan, context, language, attempt, previous):
         "dataOrigin": context["dataOrigin"],
         "evidenceIds": plan.evidenceIds,
     }
+    response = attach_observation_videos(response, doc, language == "ko")
     return validate_response(response, doc, attempt=attempt, previous=previous)
 
 
 def respond_with_ai(
     doc, request, *, generate=None, verify=None, attempt=None, previous=None
 ):
+    # Recover exact selected IDs from legacy traces before using their evidence.
+    doc = complete_document_evidence(doc)
     # Validate identities/transitions BEFORE external model access or persistence.
     baseline, system_response = respond(
         doc, request, attempt=attempt, previous=previous

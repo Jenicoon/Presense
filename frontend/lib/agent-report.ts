@@ -49,6 +49,9 @@ export type AgentReport = {
     modality?: string;
     independentObservations?: number;
     assessment?: { independentObservations: number };
+    selectedSegmentIds?: string[];
+    observationEvidenceComplete?: boolean;
+    verifiedObservationCount?: number;
     observations?: Array<{segmentId: string; startMs: number; endMs: number; value: number; stressScore: number; conceptValues: Record<string,number>}>;
     id: string;
     label: string;
@@ -62,7 +65,7 @@ export type AgentReport = {
   limitations: string[];
   evidence?: Array<{ id: string; title?: string | null; source: string; articleUrl?: string | null; doi?: string | null; findingKo?: string | null; page?: number | null; applicability?: "direct" | "related" }>;
   analysis: Record<string, unknown>;
-  agentRun?: { stopReason: string };
+  agentRun?: { stopReason: string; actions?: Array<{action: string; candidateId: string; segmentIds?: string[]}> };
   [key: string]: unknown;
 };
 

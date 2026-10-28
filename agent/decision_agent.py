@@ -187,6 +187,7 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
                    for row in state.request.segments
                    if row.endMs <= min(part.startMs for part in selected)
                    and metric(row, item["modality"], item["metric"]) is not None]
+        item["selectedSegmentIds"] = [row.segmentId for row in selected]
         item["ranges"] = _ranges(selected)
         item["durationMs"] = sum(span["endMs"] - span["startMs"] for span in item["ranges"])
         item["referenceValue"] = median(earlier) if len(earlier) >= 2 else None
@@ -206,7 +207,7 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
                                  "endMs": row.endMs, "value": metric(row, item["modality"], item["metric"]),
                                  "stressScore": row.stressScore,
                                  "conceptValues": row.concepts if row.quality.audioValid and row.quality.faceDetected else {}}
-                                for row in independent_valid[:3]]
+                                for row in independent_valid]
     ranges = item["ranges"]
     observations = [row for row in item["observations"]
                     if any(row["startMs"] < span["endMs"] and row["endMs"] > span["startMs"]

@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT / "server"))
 if os.getenv("PRESENSE_SERVER_ENV"):
     load_dotenv(os.environ["PRESENSE_SERVER_ENV"])
 from server import app as module
+from agent.finding_evidence import complete_document_evidence
 
 app = module.app
 manifest_path = Path(
@@ -37,6 +38,7 @@ manifest_path = Path(
     )
 )
 manifest = json.loads(manifest_path.read_text())
+manifest["document"] = complete_document_evidence(manifest["document"])
 if manifest["provenance"]["inference"] != "real":
     raise RuntimeError("This preview requires real model observations")
 media = Path(manifest["mediaPath"])
@@ -49,6 +51,7 @@ documents = (
     if state_file.exists()
     else {base: manifest["document"]}
 )
+documents = {k: complete_document_evidence(v) for k, v in documents.items()}
 if documents.get(base, {}).get("snapshot", {}).get("provenance") != manifest[
     "document"
 ]["snapshot"].get("provenance"):

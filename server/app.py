@@ -26,6 +26,7 @@ from inference import get_engine, health, predict
 from agent.report_schema import ReviewRequest
 from agent.coaching import localized_messages, CoachRequest, new_document
 from agent.coach_ai import AIUnavailable, PROMPT, VERIFY_PROMPT, respond_with_ai
+from agent.finding_evidence import complete_document_evidence
 from datetime import datetime, timezone
 from agent.report_agent import generate_report, luxia_decide_action, luxia_synthesize
 from server.agent_memory import load_recent_memory, model_version
@@ -191,7 +192,7 @@ def _verify_coaching(context):
 @app.get("/agent/coach/{session_id}")
 def restore_coaching(session_id: str, language: Literal["ko", "en"] = "ko", _user: dict = Depends(require_authenticated_user),
                      credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
-    doc = _coach_store(_user, credentials).get(session_id)
+    doc = complete_document_evidence(_coach_store(_user, credentials).get(session_id))
     if not doc: raise HTTPException(404, "No saved coaching data for this session.")
     return {"conversationState": doc["state"], "revision": doc["revision"], "messages": localized_messages(doc, language)}
 
@@ -201,7 +202,7 @@ def restore_coaching(session_id: str, language: Literal["ko", "en"] = "ko", _use
 def coach_action(body: CoachRequest, _user: dict = Depends(require_authenticated_user),
                  credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
     store = _coach_store(_user, credentials)
-    doc = store.get(body.sessionId)
+    doc = complete_document_evidence(store.get(body.sessionId))
     if not doc: raise HTTPException(404, "No saved observations for this session. Generate a report first.")
     if body.revision is not None and body.revision != doc["revision"]:
         raise HTTPException(409, "Coaching changed. Reload and retry.")

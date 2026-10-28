@@ -4,6 +4,7 @@ import { ArrowRight, Clock3, Gauge, Layers3, ScanLine, Sparkles } from "lucide-r
 import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
 import { AgentEvidence } from "@/components/agent-observation-report";
 import type { AgentReport } from "@/lib/agent-report";
+import { completeReportEvidence } from "@/lib/finding-evidence";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { clock, restoreCoach } from "@/lib/coaching";
 export type TimelineCell = {
@@ -56,6 +57,7 @@ export function SessionAgentReport({ report, language, onSeek }: {
   language: "ko" | "en";
   onSeek?: (ms: number) => void;
 }) {
+  report = completeReportEvidence(report);
   const ko = language === "ko";
   const [page, setPage] = useState(0);
   const [hasSavedCoaching, setHasSavedCoaching] = useState(false);
@@ -196,6 +198,7 @@ export function SessionAgentReport({ report, language, onSeek }: {
       return <article key={f.id} className="review-finding">
         <div className="review-finding-heading"><span className="review-finding-number">{String(index + 1).padStart(2, "0")}</span><h4>{view.title}</h4><span className="review-finding-count">{ko ? "독립 관측" : "Independent observations"} {f.independentObservations ?? f.assessment?.independentObservations ?? "—"}{ko ? "회" : ""}</span></div>
         <p className="review-finding-summary">{view.observation}</p>
+        <div className="review-supporting-times" role="group" aria-label={ko ? "근거가 된 관측 구간" : "Supporting observation intervals"}>{f.observations?.map((o, n) => <button key={o.segmentId} type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(o.startMs)}>{n + 1}. {clock(o.startMs)}–{clock(o.endMs)}</button>)}</div>
         <details className="review-details"><summary>{ko ? "관측 근거와 측정값 보기" : "Observation evidence"}</summary><p>{text.observation}</p><div className="review-observations">{f.observations?.map(o => <div className="review-observation" key={o.segmentId}>
           <button type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(o.startMs)}>▶ {clock(o.startMs)}–{clock(o.endMs)}</button>
           <span>{measurementLabel(f.metric ?? "", ko)}<strong>{Number(o.value.toFixed(2))}</strong></span>

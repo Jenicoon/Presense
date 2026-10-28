@@ -2122,3 +2122,14 @@ h1, h2, h3 { margin: 0; }
 
 .coach-response-source { display: block; margin-bottom: 9px; font-size: 11px; font-weight: 600; line-height: 1.6; color: var(--primary, #2563eb); }
 .coach-response-source span { color: var(--text-secondary, #64748b); font-weight: 400; }
+
+.coach-observation-group > strong { font-size: 13px; color: var(--text-primary, #1e293b); }
+.coach-observation-group > p { margin: 5px 0 10px; font-size: 12px; color: var(--text-secondary, #64748b); }
+.coach-observation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.coach-observation-grid .coach-video { margin: 0; padding: 11px 10px; gap: 7px; }
+.coach-observation-grid .coach-video-icon { width: 27px; height: 27px; flex-shrink: 0; }
+.coach-observation-grid .coach-video strong { font-size: 12px; }
+.coach-observation-grid .coach-video small { font-size: 11px; white-space: nowrap; }
+.review-supporting-times { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.review-supporting-times .review-time-link { border: 1px solid var(--border, #e2e8f0); border-radius: 7px; padding: 7px 9px; background: #fff; }
+@media (max-width: 380px) { .coach-observation-grid { grid-template-columns: 1fr; } }

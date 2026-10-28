@@ -89,6 +89,7 @@ class Choices(Contract):
 class SegmentCard(Contract):
     type: Literal["video_segment"]
     sessionId: str
+    findingId: str | None = None
     startMs: int = Field(ge=0)
     endMs: int = Field(gt=0)
     label: str
@@ -136,7 +137,7 @@ class Generation(Contract):
 
 class CoachResponse(Contract):
     message: str
-    components: list[Component] = Field(max_length=16)
+    components: list[Component] = Field(max_length=24)
     conversationState: ConversationState
     revision: int
     generation: Generation = Field(default_factory=Generation)
@@ -381,7 +382,8 @@ def validate_response(raw, doc, attempt=None, previous=None):
     state = response.conversationState
     if state.sessionId != doc["state"]["sessionId"]:
         raise ValueError("Cross-session state")
-    findings = {f["id"] for f in doc["snapshot"]["report"]["priorities"]}
+    finding_map = {f["id"]: f for f in doc["snapshot"]["report"]["priorities"]}
+    findings = set(finding_map)
     if state.nextGoalId and state.nextGoalId not in findings:
         raise ValueError("Unknown next goal")
     if state.selectedFindingId and state.selectedFindingId not in findings:
@@ -409,6 +411,10 @@ def validate_response(raw, doc, attempt=None, previous=None):
                 for s in snap["request"]["segments"]
             ):
                 raise ValueError("Video interval was not observed")
+            if component.findingId:
+                finding = finding_map.get(component.findingId)
+                if not finding or component.sessionId != state.sessionId or not any(o["startMs"] == component.startMs and o["endMs"] == component.endMs for o in finding["observations"]):
+                    raise ValueError("Video is not supporting evidence for this finding")
         elif isinstance(component, FindingCard) and component.findingId not in findings:
             raise ValueError("Unknown finding")
         elif isinstance(component, PracticeCard):
@@ -444,6 +450,11 @@ def validate_response(raw, doc, attempt=None, previous=None):
                 c.findingId and c.findingId not in findings for c in component.choices
             ):
                 raise ValueError("Unknown choice finding")
+    for finding_id in {c.findingId for c in response.components if isinstance(c, SegmentCard) and c.findingId}:
+        shown = [(c.startMs, c.endMs) for c in response.components if isinstance(c, SegmentCard) and c.findingId == finding_id]
+        expected = [(o["startMs"], o["endMs"]) for o in finding_map[finding_id]["observations"]]
+        if sorted(shown) != sorted(expected):
+            raise ValueError("Supporting observation videos must not be omitted or duplicated")
     return response.model_dump()
 
 
@@ -1439,5 +1450,8 @@ def localized_messages(doc, language):
                 else "This reply was saved in another language. Continue in the current language."
             )
             message.pop("response", None)
+        if message.get("response"):
+            from .finding_evidence import attach_observation_videos
+            message["response"] = attach_observation_videos(message["response"], doc, language == "ko")
         messages.append(message)
     return messages
