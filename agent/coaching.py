@@ -1,7 +1,7 @@
-"""Grounded coaching actions. Text is rendered from verified data, never executable LLM output.
+"""Server-owned coaching state, calculations and safe component contracts.
 
-The LLM may route a free-text question to an allowlisted intent. It cannot supply
-measurements, component payloads, exercises, citations or state transitions.
+The reference renderer remains available for offline testing and compatibility.
+LLM-authored coaching uses the same state transitions and component validation.
 """
 
 from __future__ import annotations
@@ -125,11 +125,21 @@ Component = Annotated[
 ]
 
 
+class Generation(Contract):
+    source: Literal["ai", "system"] = "system"
+    provider: str | None = None
+    model: str | None = None
+    validated: bool = False
+    dataOrigin: Literal["recorded", "synthetic", "stressid"] = "recorded"
+    evidenceIds: list[str] = Field(default_factory=list, max_length=8)
+
+
 class CoachResponse(Contract):
     message: str
     components: list[Component] = Field(max_length=16)
     conversationState: ConversationState
     revision: int
+    generation: Generation = Field(default_factory=Generation)
 
 
 def new_document(request: ReviewRequest, report: dict, version: str) -> dict:

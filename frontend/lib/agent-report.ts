@@ -16,6 +16,7 @@ export type ReportSegment = {
 };
 
 export type AgentReport = {
+  dataOrigin?: "recorded" | "synthetic" | "stressid";
   schemaVersion: string;
   language?: "ko" | "en";
   sessionId: string;

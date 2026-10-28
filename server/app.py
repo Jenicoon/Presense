@@ -24,7 +24,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from inference import get_engine, health, predict
 from agent.report_schema import ReviewRequest
-from agent.coaching import localized_messages, CoachRequest, new_document, respond
+from agent.coaching import localized_messages, CoachRequest, new_document
+from agent.coach_ai import AIUnavailable, PROMPT, VERIFY_PROMPT, respond_with_ai
 from datetime import datetime, timezone
 from agent.report_agent import generate_report, luxia_decide_action, luxia_synthesize
 from server.agent_memory import load_recent_memory, model_version
@@ -177,9 +178,14 @@ def _coach_store(user, credentials):
                          credentials.credentials if credentials else "", user.get("sub"))
 
 
-def _route_coach_question(context):
+def _generate_coaching(context):
     from agent.report_agent import _luxia_json
-    return _luxia_json("Route the question to exactly one supplied allowedActions intent. Return JSON {action: intent}. Use review only for a session overview. Use unknown for unrelated questions. Never output factual prose.", context, 80, read_timeout=10)
+    return _luxia_json(PROMPT, context, 2600, read_timeout=35)
+
+
+def _verify_coaching(context):
+    from agent.report_agent import _luxia_json
+    return _luxia_json(VERIFY_PROMPT, context, 160, read_timeout=15)
 
 
 @app.get("/agent/coach/{session_id}")
@@ -208,8 +214,11 @@ def coach_action(body: CoachRequest, _user: dict = Depends(require_authenticated
                          if not row["snapshot"]["request"].get("practiceContext")
                          and row["snapshot"].get("recordedAt", "") < current_date), None)
     try:
-        updated, response = respond(doc, body, attempt=attempt, previous=previous,
-                                    route=_route_coach_question if luxia_api_key else None)
+        updated, response = respond_with_ai(doc, body, attempt=attempt, previous=previous,
+                                           generate=_generate_coaching if luxia_api_key else None,
+                                           verify=_verify_coaching if luxia_api_key else None)
+    except AIUnavailable as error:
+        raise HTTPException(503, {"code": "coach_ai_unavailable"}) from error
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     store.save(body.sessionId, updated, doc["revision"])

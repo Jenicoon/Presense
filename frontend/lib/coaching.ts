@@ -100,6 +100,7 @@ export type CoachResponse = {
   components: CoachComponent[];
   conversationState: CoachState;
   revision: number;
+  generation?: { source: "ai" | "system"; provider?: string | null; model?: string | null; validated: boolean; dataOrigin: "recorded" | "synthetic" | "stressid"; evidenceIds: string[] };
 };
 export type CoachMessage = {
   role: "user" | "agent";
@@ -122,7 +123,7 @@ async function api(path: string, body?: unknown, language: "ko" | "en" = "ko") {
       "Content-Type": "application/json",
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(120000),
   });
   const data = await response.json();
   if (!response.ok) {
@@ -133,6 +134,7 @@ async function api(path: string, body?: unknown, language: "ko" | "en" = "ko") {
       422: ["현재 단계에서 실행할 수 없는 요청입니다. 안내된 행동을 선택해 주세요.", "This action is unavailable at the current stage. Choose one of the suggested actions."],
       503: ["코칭을 저장하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.", "Coaching could not be saved. Check the connection and retry."],
     };
+    if (data.detail?.code === "coach_ai_unavailable") throw new Error(ko ? "AI 답변을 생성하지 못했습니다. 연결 또는 답변 검증에 문제가 있어 코칭 단계를 변경하지 않았습니다. 다시 시도해 주세요." : "The AI could not generate a verified reply. Your coaching step was preserved. Please try again.");
     throw new Error(errors[response.status]?.[ko ? 0 : 1] ?? (ko ? "코칭에 연결하지 못했습니다. 다시 시도해 주세요." : "Could not reach the coach. Please try again."));
   }
   return data;

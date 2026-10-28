@@ -75,7 +75,8 @@ class ReportEndpointTests(unittest.TestCase):
             def save(self,identity,new,revision):doc.clear();doc.update(new)
         self.module.app.dependency_overrides[self.module.require_authenticated_user]=lambda:{"sub":"user-1"}
         try:
-            with patch.object(self.module,"_coach_store",return_value=Store()):
+            from server.tests.test_coach_ai import grounded_plan
+            with patch.object(self.module,"_coach_store",return_value=Store()), patch.object(self.module,"luxia_api_key","test-configured"), patch.object(self.module,"_generate_coaching", side_effect=grounded_plan), patch.object(self.module,"_verify_coaching",return_value={"supported":True}):
                 restored=self.client.get("/agent/coach/s1");self.assertEqual(restored.status_code,200)
                 self.assertEqual(restored.json()["revision"],0)
                 self.assertEqual(self.client.get("/agent/coach/another-user").status_code,404)
@@ -90,6 +91,25 @@ class ReportEndpointTests(unittest.TestCase):
                 self.assertEqual(self.client.post("/agent/chat",json={"sessionId":"s1","action":"create_practice","findingId":"made-up"}).status_code,422)
                 self.assertEqual(self.client.post("/agent/coach",json={"sessionId":"s1","action":"render_html"}).status_code,422)
         finally:self.module.app.dependency_overrides.clear()
+
+    def test_ai_coaching_failure_preserves_state_and_reports_unavailability(self):
+        from server.tests.test_coaching import document
+        from copy import deepcopy
+        doc = document("ai-failure")
+        original = deepcopy(doc)
+        class Store:
+            def get(self, identity): return deepcopy(doc)
+            def previous(self, identity): return []
+            def save(self, *args): raise AssertionError("Failed AI reply must not be saved")
+        self.module.app.dependency_overrides[self.module.require_authenticated_user] = lambda: {"sub": "user-1"}
+        try:
+            with patch.object(self.module, "_coach_store", return_value=Store()), patch.object(self.module, "luxia_api_key", ""):
+                response = self.client.post("/agent/coach", json={"sessionId": "ai-failure", "action": "review"})
+                self.assertEqual(response.status_code, 503)
+                self.assertEqual(response.json()["detail"]["code"], "coach_ai_unavailable")
+            self.assertEqual(doc, original)
+        finally:
+            self.module.app.dependency_overrides.clear()
 
     def test_new_report_receives_the_previously_selected_goal_and_outcome(self):
         from server.tests.test_coaching import document

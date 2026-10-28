@@ -38,7 +38,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "agent.signIn": { ko: "로그인 후 AI ChatBot을 사용할 수 있습니다.", en: "Sign in to use the AI ChatBot." },
   "agent.requestFailed": { ko: "AI ChatBot에 연결하지 못했습니다. 다시 시도해 주세요.", en: "Could not reach the AI ChatBot. Please try again." },
   "agent.emptyReply": { ko: "AI ChatBot에서 빈 답변을 받았습니다.", en: "The AI ChatBot returned an empty reply." },
-  "agent.privacy": { ko: "선택한 세션의 저장된 분석 자료를 바탕으로 답변합니다.", en: "Answers use the selected session’s saved analysis data." },
+  "agent.privacy": { ko: "AI는 저장된 분석 수치와 대화를 읽습니다. 영상·음성 원본은 AI에 보내지 않습니다.", en: "The AI reads saved measurements and conversation. Original video and audio are not sent to the AI." },
   "agent.reportHint": { ko: "이번 세션과 최근 기록을 함께 살펴보세요.", en: "Discuss this session alongside your recent records." },
   "agent.openForReport": { ko: "이번 세션으로 AI 발표 코치 열기", en: "Open AI ChatBot with this session" },
   "cta.startPractice": { ko: "연습 시작", en: "Start Practice" },

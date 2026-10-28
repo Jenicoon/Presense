@@ -114,6 +114,10 @@ class Store:
 
 
 module._coach_store = lambda *_: Store()
+from agent.coaching import respond as offline_respond
+module.respond_with_ai = lambda doc, request, **kwargs: offline_respond(
+    doc, request, attempt=kwargs.get("attempt"), previous=kwargs.get("previous")
+)
 
 
 @app.post("/auth/v1/token")

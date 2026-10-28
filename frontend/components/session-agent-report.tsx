@@ -85,6 +85,8 @@ export function SessionAgentReport({ report, language, onSeek }: {
     { icon: Gauge, label: ko ? "평균 스트레스 신호" : "Mean stress signal", value: signalScore(a.averageStress), note: typeof a.peakStress === "number" ? `${ko ? "최고" : "Peak"} ${Math.round(a.peakStress * 100)}${peak ? ` · ${clock(peak.startMs)}` : ""}` : ko ? "분석 자료 없음" : "No analysis data" },
   ];
   return <section className="session-agent-report" aria-label={ko ? "세션 분석과 코칭" : "Session analysis and coaching"}>
+    {report.dataOrigin === "stressid" && <p className="review-context" role="status">{ko ? "StressID 데이터셋 영상의 실제 모델 분석입니다. 코칭은 AI가 저장된 분석을 읽고 작성하며, 발화 내용을 직접 평가하지 않습니다." : "Actual model analysis of a StressID dataset recording. The AI coach uses saved measurements; it does not assess speech content."}</p>}
+    {report.dataOrigin === "synthetic" && <p className="review-context" role="status">{ko ? "합성 예시 분석 자료입니다." : "This analysis uses synthetic sample data."}</p>}
     <div className="review-stats">
       {stats.map(({ icon: Icon, label, value, note }) => <div className="review-stat" key={label}>
         <div className="review-stat-label"><Icon size={14} />{label}</div>

@@ -166,7 +166,15 @@ export function AgentPanel({ userId }: { userId: string | null }) {
       if(action==="finish_recording") window.dispatchEvent(new CustomEvent("presense:coach-stop",{detail:{sessionId:id}}));
     } catch(failure) { setError(failure instanceof Error?failure.message:t("agent.requestFailed"));
       // Recover authoritative state after another tab won a revision race.
-      try { const restored=await restoreCoach(id, lang);setCoachState(restored.conversationState);setRevision(restored.revision); } catch {}
+      try {
+        const restored=await restoreCoach(id, languageRef.current);
+        if (activeSessionRef.current !== id) return;
+        setCoachState(restored.conversationState); setRevision(restored.revision);
+        setMessages(restored.messages);
+        if (revision !== undefined && restored.revision > revision) {
+          setError(""); setResumed(true); setHistoryStart(Math.max(0, restored.messages.length - 1));
+        }
+      } catch {}
     } finally { setBusy(false); }
   }
 
@@ -220,7 +228,7 @@ export function AgentPanel({ userId }: { userId: string | null }) {
           <div className="agent-panel-messages" role="log" aria-live="polite" ref={messagesRef}>
             {messages.length === 0 && <div className="agent-panel-welcome"><BrainCircuit size={25} /><p>{t("agent.welcome")}</p></div>}
             {coachState && <p className="coach-stage">{lang === "ko" ? "진행 단계" : "Coaching stage"}: {({session_review:lang==="ko"?"보고서 검토":"Review", finding_selected:lang==="ko"?"발견 확인":"Finding", practice_created:lang==="ko"?"연습 준비":"Practice ready", recording:lang==="ko"?"녹화":"Recording", evaluating:lang==="ko"?"분석 중":"Evaluating", comparison_ready:lang==="ko"?"비교 완료":"Comparison ready", next_goal:lang==="ko"?"다음 목표":"Next goal", completed:lang==="ko"?"완료":"Completed"})[coachState.stage]}</p>}
-            {messages.map((message, index) => (historyExpanded || index >= historyStart) ? <div key={index} className={`agent-panel-message ${message.role}`}><p className="agent-message-text">{message.text}</p>{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id)=>void sendMessage(action,id)} />}</div> : null)}
+            {messages.map((message, index) => (historyExpanded || index >= historyStart) ? <div key={index} className={`agent-panel-message ${message.role}`}>{message.response && <span className="coach-response-source">{message.response.generation?.source === "ai" ? (lang === "ko" ? "AI가 작성한 코칭" : "AI-generated coaching") : (lang === "ko" ? "기본 안내" : "System guidance")}{message.response.generation?.dataOrigin === "synthetic" && <span> · {lang === "ko" ? "합성 예시 분석 기반" : "Synthetic sample analysis"}</span>}{message.response.generation?.dataOrigin === "stressid" && <span> · {lang === "ko" ? "StressID 실제 분석 기반" : "Real StressID analysis"}</span>}</span>}<p className="agent-message-text">{message.text}</p>{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id)=>void sendMessage(action,id)} />}</div> : null)}
             {busy && <div className="agent-panel-message agent pending">{t("agent.thinking")}</div>}
           </div>
 
