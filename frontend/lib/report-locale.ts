@@ -84,7 +84,13 @@ export function findingGuidance(finding: Finding, ko: boolean) {
   const count = finding.independentObservations ?? finding.assessment?.independentObservations ?? 0;
   if (count > 1) observation += ko ? ` 비슷한 변화가 겹치지 않는 ${count}개 구간에서 관찰됐습니다.` : ` A similar change appeared in ${count} non-overlapping observations.`;
   return { title: row[ko ? 2 : 3], goal: row[ko ? 4 : 5], observation,
-    question: ko ? "이 변화가 의도한 강조나 표현이었나요? 영상을 먼저 확인해 주세요." : "Was this an intentional emphasis or expression? Watch the interval first." };
+    question: ({
+      pitch_change: ["높낮이가 바뀌는 순간에 중요한 문장이 구분되는지 들어보세요. 문장 끝의 쉼과 다음 문장 시작도 따로 들어보세요.", "Listen for whether a pitch change marks a key sentence. Separately check sentence-end pauses and the next sentence start."],
+      pitch_variability: ["고른 구간을 듣고 가장 중요한 문장 하나를 직접 골라보세요. 그 문장이 나머지와 구분되는지, 의미가 끝나기 전에 끊겨 들리는지 확인하세요.", "Choose the key sentence yourself. Listen for whether it stands out and whether the thought sounds interrupted before it is complete."],
+      lip_tension: ["입 모양 수치로 발음을 판단하지 말고 실제 소리를 들어보세요. 다시 듣게 된 문장이 있다면 그 문장만 골라 의미 단위 사이의 쉼을 바꿔보세요.", "Listen to the actual speech rather than judging pronunciation from mouth measurements. Select a sentence that needs replaying and try different phrase pauses."],
+      brow_tension: ["같은 구간을 소리 없이 한 번, 소리와 함께 한 번 보세요. 전달하려던 느낌을 직접 고른 뒤 표정이 그 느낌과 맞는지 판단하세요.", "Watch once without sound, then with sound. Choose the intended feeling and compare the expression with it."],
+      gaze: ["핵심 문장을 말할 때 카메라 부근에 시선이 머무는지 보세요. 시선 이동이 방해되는지는 영상과 전달 의도를 함께 보고 직접 판단하세요.", "Watch where the gaze rests during the key sentence. Judge distracting shifts yourself against the recording and intended delivery."],
+    } as Record<string, [string,string]>)[finding.id]?.[ko ? 0 : 1] ?? (ko ? "실제 영상에서 바꿔 보고 싶은 행동 하나를 고르세요." : "Choose one delivery action from the actual recording.") };
 }
 export function presentationSummary(report: AgentReport, ko: boolean) {
   if (report.priorities.length) {

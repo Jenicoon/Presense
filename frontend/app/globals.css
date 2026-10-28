@@ -2133,3 +2133,26 @@ h1, h2, h3 { margin: 0; }
 .review-supporting-times { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .review-supporting-times .review-time-link { border: 1px solid var(--border, #e2e8f0); border-radius: 7px; padding: 7px 9px; background: #fff; }
 @media (max-width: 380px) { .coach-observation-grid { grid-template-columns: 1fr; } }
+
+.coach-next-action { border-color: #c7d8fb; background: #f6f9ff; }
+.coach-next-action > strong, .coach-review-guide > strong { display: block; margin: 6px 0 8px; font-size: 14px; }
+.coach-next-action p, .coach-review-guide li { color: var(--text-secondary, #475569); font-size: 13px; line-height: 1.8; }
+.coach-review-guide ol { margin: 8px 0 0; padding-left: 20px; }
+.coach-review-guide li + li { margin-top: 7px; }
+
+.coach-success-check { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--bg-subtle, #f4f7fb); }
+.coach-success-check > strong { font-size: 12px; }
+.coach-success-check p { margin: 7px 0 0; font-size: 12px; line-height: 1.7; color: var(--text-secondary, #475569); }
+
+@media (max-width: 600px), (max-height: 760px) {
+  .agent-panel-header { padding: 12px 16px; }
+  .agent-panel-heading > div > span { display: none; }
+  .agent-session-context { padding: 6px 14px 9px; }
+  .agent-session-heading button { height: 24px; width: 24px; }
+  .agent-session-list { padding-top: 4px; }
+  .agent-session-list button { padding: 5px 9px; }
+  .agent-coaching-context { display: none; }
+  .agent-resume-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding: 8px 14px; }
+  .agent-resume-notice p { display: none; }
+  .agent-resume-notice button { padding: 0; }
+}

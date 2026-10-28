@@ -15,11 +15,15 @@ export type CoachAction =
   | "finish_coaching"
   | "ask"
   | "confirm_intent"
+  | "submit_review"
   | "guide_review"
   | "explain_score"
   | "assess_delivery_achieved"
   | "assess_delivery_partial"
   | "assess_delivery_retry";
+export type ReviewOutcome = "intentional" | "effective" | "needs_contrast" | "needs_phrasing" | "unclear_speech" | "expression_mismatch" | "gaze_distracting" | "unsure";
+export type PracticeStrategy = "contrast" | "phrasing" | "two_versions" | "clear_phrases" | "expression" | "gaze_anchor";
+export type CoachActionContext = {reviewOutcome?: ReviewOutcome | null; practiceStrategyId?: PracticeStrategy | null};
 export type CoachState = {
   sessionId: string;
   selectedFindingId: string | null;
@@ -37,12 +41,16 @@ export type CoachState = {
   nextGoalId: string | null;
   lastAction?: CoachAction | null;
   reviewFeedback?: "intentional" | "needs_practice" | "unsure" | null;
+  reviewOutcome?: ReviewOutcome | null;
+  practiceStrategyId?: PracticeStrategy | null;
 };
 export type CoachChoice = {
   id: string;
   label: string;
   action: CoachAction;
   findingId?: string | null;
+  reviewOutcome?: ReviewOutcome | null;
+  practiceStrategyId?: PracticeStrategy | null;
 };
 export type Comparison = {
   previousSessionId: string;
@@ -77,6 +85,8 @@ export type Comparison = {
 };
 export type CoachComponent =
   | { type: "action_choices"; choices: CoachChoice[] }
+  | { type: "review_guide"; findingId: string; title: string; steps: string[] }
+  | { type: "coaching_path"; findingId: string; title: string; instruction: string }
   | {
       type: "video_segment";
       sessionId: string;
@@ -107,6 +117,7 @@ export type CoachMessage = {
   role: "user" | "agent";
   text: string;
   response?: CoachResponse;
+  supersededQuestion?: boolean;
 };
 export type PracticeContext = { sessionId: string; practiceId: string };
 export const activeCoachKey = (user: string) => `presense-coach-active:${user}`;
@@ -157,6 +168,8 @@ export async function actCoach(input: {
   revision?: number;
   conversationState?: CoachState;
   previousAction?: CoachAction;
+  reviewOutcome?: ReviewOutcome | null;
+  practiceStrategyId?: PracticeStrategy | null;
 }): Promise<CoachResponse> {
   const response = await api("/agent/coach", input, input.language);
   window.dispatchEvent(new CustomEvent("presense:coach-changed", {detail: {sessionId: input.sessionId}}));

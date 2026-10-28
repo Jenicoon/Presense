@@ -100,7 +100,7 @@ export function SessionAgentReport({ report, language, onSeek }: {
       <span className="review-next-icon"><Sparkles size={19} /></span>
       <div><span className="review-eyebrow">{ko ? "다음으로 할 일" : "Your next step"}</span>
         <h3>{first ? findingGuidance(first, ko).title : ko ? "이번 발표 돌아보기" : "Review this presentation"}</h3>
-        <p>{first ? (ko ? "영상에서 의도한 표현인지 확인한 뒤, 필요한 연습을 함께 정해요." : "Check whether the expression was intentional, then choose a useful exercise.") : ko ? "영상을 보며 잘 유지한 부분을 확인해 보세요." : "Review the recording to see what you maintained well."}</p>
+        <p>{first ? (ko ? "영상을 보고 확인 결과를 선택하면, 그에 맞는 짧은 연습으로 이어집니다." : "Review the recording and select what you noticed to start a matching short exercise.") : ko ? "영상을 보며 잘 유지한 부분을 확인해 보세요." : "Review the recording to see what you maintained well."}</p>
       </div>
       {report.coachingAvailable === false ? <p role="status">{ko ? "연결을 확인한 후 보고서를 다시 생성해 주세요." : "Check the connection and regenerate the report."}</p> :
         <button type="button" className="btn btn-primary" onClick={() => open(first?.id)}>{hasSavedCoaching ? (ko ? "저장된 코칭 이어가기" : "Continue saved coaching") : first ? (ko ? "이 구간 함께 확인하기" : "Review this interval together") : ko ? "코치와 살펴보기" : "Review with coach"}<ArrowRight size={15} /></button>}

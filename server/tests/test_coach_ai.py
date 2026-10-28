@@ -31,8 +31,45 @@ def grounded_plan(context):
         "followUps": [],
         "practice": None,
     }
+    if context["state"].get("reviewFeedback") == "intentional" or context["state"].get(
+        "reviewOutcome"
+    ) in {"intentional", "effective"}:
+        plan["message"] = {
+            "ko": "알려주신 표현은 유지하겠습니다. 원하면 아래에서 문장 경계 연습을 선택해 보세요.",
+            "en": "Keep the expression you confirmed. You can optionally choose sentence boundary practice below.",
+        }
+    if (
+        action in {"explain_finding", "guide_review"}
+        and finding
+        and not (
+            context["state"].get("reviewFeedback") == "intentional"
+            or context["state"].get("reviewOutcome") in {"intentional", "effective"}
+        )
+    ):
+        plan["reviewGuide"] = {
+            "title": {
+                "ko": "이렇게 듣고 다음 행동 고르기",
+                "en": "Listen and choose the next action",
+            },
+            "steps": [
+                {
+                    "ko": "구간에서 가장 중요한 문장을 직접 고르세요.",
+                    "en": "Choose the key sentence yourself.",
+                },
+                {
+                    "ko": "문장 끝의 쉼을 듣고 아래에서 연습할 행동을 고르세요.",
+                    "en": "Listen for a pause at the sentence ending and choose a rehearsal action below.",
+                },
+            ],
+        }
     if action == "create_practice" and finding:
         plan["practice"] = {
+            "strategyId": context["state"].get("practiceStrategyId")
+            or next(iter(context["practiceMethods"])),
+            "successCheck": {
+                "ko": "녹음을 듣고 의미 단위 사이에 쉼을 두었는지 직접 확인하세요.",
+                "en": "Listen back and check whether you paused between meaningful phrases.",
+            },
             "label": {
                 "ko": "선택한 문장을 나눠 말하기",
                 "en": "Rehearse a sentence in phrases",
@@ -133,7 +170,7 @@ class CoachAIContractTests(unittest.TestCase):
         choice = next(
             c for c in response["components"] if c["type"] == "action_choices"
         )["choices"][0]
-        self.assertEqual(choice["action"], "create_practice")
+        self.assertEqual(choice["action"], "submit_review")
         self.assertNotIn("99:99", choice["label"])
         self.assertEqual(updated["revision"], 1)
 

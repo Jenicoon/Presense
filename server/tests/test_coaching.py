@@ -109,7 +109,7 @@ class CoachingTests(unittest.TestCase):
 
     def test_intentional_expression_is_kept_without_a_corrective_goal(self):
         doc, response = self.step(document(), "explain_finding")
-        self.assertIn("의도한", response["message"])
+        self.assertIn("문장", response["message"])
         choices = next(c["choices"] for c in response["components"] if c["type"] == "action_choices")
         self.assertIn("confirm_intent", [c["action"] for c in choices])
         doc, response = self.step(doc, "confirm_intent")

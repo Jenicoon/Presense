@@ -6,6 +6,7 @@ import {
   clock,
   jumpToVideo,
   type CoachAction,
+  type CoachActionContext,
   type CoachComponent,
 } from "@/lib/coaching";
 const outcome: Record<string, [string, string]> = {
@@ -25,12 +26,16 @@ export function CoachComponents({
   components: CoachComponent[];
   ko: boolean;
   busy: boolean;
-  onAction: (action: CoachAction, findingId?: string) => void;
+  onAction: (action: CoachAction, findingId?: string, context?: CoachActionContext) => void;
 }) {
   return (
     <div className="coach-components">
       {components.map((c, i) => {
         switch (c.type) {
+          case "coaching_path":
+            return <article key={i} className="coach-card coach-next-action"><span className="coach-component-heading">{ko ? "다음 행동" : "Next action"}</span><strong>{c.title}</strong><p>{c.instruction}</p></article>;
+          case "review_guide":
+            return <article key={i} className="coach-card coach-review-guide"><strong>{c.title}</strong><ol>{c.steps.map((step,index)=><li key={index}>{step}</li>)}</ol></article>;
           case "action_choices":
             return (
               <div className="coach-choices" key={i}>
@@ -41,7 +46,7 @@ export function CoachComponents({
                     key={choice.id}
                     disabled={busy}
                     onClick={() =>
-                      onAction(choice.action, choice.findingId ?? undefined)
+                      onAction(choice.action, choice.findingId ?? undefined, {reviewOutcome: choice.reviewOutcome, practiceStrategyId: choice.practiceStrategyId})
                     }
                   >
                     {choice.label}
@@ -89,7 +94,7 @@ export function CoachComponents({
                 <div className="coach-component-heading"><span><Video size={14} />{ko ? "연습 과제" : "Practice exercise"}</span><small>{c.durationSeconds}{ko ? "초" : "s"}</small></div>
                 <strong>{c.label}</strong>
                 <div className="coach-practice-steps">{c.instruction.split("\n").map((step, index) => <p key={index}>{step}</p>)}</div>
-                <details className="review-details"><summary>{ko ? "어떻게 평가하나요?" : "How is it evaluated?"}</summary><p>{c.criterion}</p></details>
+                <div className="coach-success-check"><strong>{ko ? "연습 후 확인할 것" : "What to check after practice"}</strong><p>{c.criterion}</p></div>
               </article>
             );
           case "insufficient_data":

@@ -1,5 +1,7 @@
 """Plain-language coaching from saved observations, with no inferred delivery errors."""
 
+from .coaching_methods import profile
+
 
 def clock(ms):
     seconds = int(ms / 1000)
@@ -117,11 +119,7 @@ def guidance(finding, ko):
             if ko
             else f" A similar change appeared in {count} non-overlapping observations."
         )
-    question = (
-        "이 변화가 의도한 강조나 표현이었나요? 영상을 먼저 확인해 주세요."
-        if ko
-        else "Was this an intentional emphasis or expression? Watch the interval first."
-    )
+    question = profile(finding)["check"][0 if ko else 1]
     return {
         "observation": observation,
         "title": values[2 if ko else 3],

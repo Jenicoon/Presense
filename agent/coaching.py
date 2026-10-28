@@ -13,6 +13,15 @@ from uuid import uuid4
 
 from pydantic import Field
 
+from .coaching_methods import (
+    METHODS,
+    REASK_INTENTION,
+    PracticeStrategy,
+    ReviewOutcome,
+    attach_coaching_path,
+    prepare_review_request,
+    profile,
+)
 from .presentation_guidance import guidance, session_summary
 from .report_schema import Contract, ReviewRequest
 from .session_analyzer import _independent_count, intervals, metric
@@ -32,6 +41,7 @@ Action = Literal[
     "finish_coaching",
     "ask",
     "confirm_intent",
+    "submit_review",
     "guide_review",
     "explain_score",
     "assess_delivery_achieved",
@@ -61,6 +71,8 @@ class CoachRequest(Contract):
     # Echoes are context only. The database state is authoritative.
     conversationState: dict = Field(default_factory=dict, max_length=10)
     previousAction: Action | None = None
+    reviewOutcome: ReviewOutcome | None = None
+    practiceStrategyId: PracticeStrategy | None = None
 
 
 class ConversationState(Contract):
@@ -72,6 +84,8 @@ class ConversationState(Contract):
     nextGoalId: str | None = None
     lastAction: Action | None = None
     reviewFeedback: Literal["intentional", "needs_practice", "unsure"] | None = None
+    reviewOutcome: ReviewOutcome | None = None
+    practiceStrategyId: PracticeStrategy | None = None
 
 
 class Choice(Contract):
@@ -79,6 +93,8 @@ class Choice(Contract):
     label: str
     action: Action
     findingId: str | None = None
+    reviewOutcome: ReviewOutcome | None = None
+    practiceStrategyId: PracticeStrategy | None = None
 
 
 class Choices(Contract):
@@ -120,8 +136,29 @@ class Notice(Contract):
     label: str
 
 
+class ReviewGuideCard(Contract):
+    type: Literal["review_guide"]
+    findingId: str
+    title: str = Field(min_length=1, max_length=180)
+    steps: list[str] = Field(min_length=2, max_length=4)
+
+
+class CoachingPathCard(Contract):
+    type: Literal["coaching_path"]
+    findingId: str
+    title: str = Field(min_length=1, max_length=180)
+    instruction: str = Field(min_length=1, max_length=900)
+
+
 Component = Annotated[
-    Choices | SegmentCard | FindingCard | PracticeCard | ComparisonCard | Notice,
+    Choices
+    | SegmentCard
+    | FindingCard
+    | PracticeCard
+    | ComparisonCard
+    | Notice
+    | ReviewGuideCard
+    | CoachingPathCard,
     Field(discriminator="type"),
 ]
 
@@ -413,10 +450,23 @@ def validate_response(raw, doc, attempt=None, previous=None):
                 raise ValueError("Video interval was not observed")
             if component.findingId:
                 finding = finding_map.get(component.findingId)
-                if not finding or component.sessionId != state.sessionId or not any(o["startMs"] == component.startMs and o["endMs"] == component.endMs for o in finding["observations"]):
-                    raise ValueError("Video is not supporting evidence for this finding")
+                if (
+                    not finding
+                    or component.sessionId != state.sessionId
+                    or not any(
+                        o["startMs"] == component.startMs
+                        and o["endMs"] == component.endMs
+                        for o in finding["observations"]
+                    )
+                ):
+                    raise ValueError(
+                        "Video is not supporting evidence for this finding"
+                    )
         elif isinstance(component, FindingCard) and component.findingId not in findings:
             raise ValueError("Unknown finding")
+        elif isinstance(component, (ReviewGuideCard, CoachingPathCard)):
+            if component.findingId not in findings:
+                raise ValueError("Unknown review guide finding")
         elif isinstance(component, PracticeCard):
             p = practices.get(component.practiceId)
             content = {
@@ -450,11 +500,37 @@ def validate_response(raw, doc, attempt=None, previous=None):
                 c.findingId and c.findingId not in findings for c in component.choices
             ):
                 raise ValueError("Unknown choice finding")
-    for finding_id in {c.findingId for c in response.components if isinstance(c, SegmentCard) and c.findingId}:
-        shown = [(c.startMs, c.endMs) for c in response.components if isinstance(c, SegmentCard) and c.findingId == finding_id]
-        expected = [(o["startMs"], o["endMs"]) for o in finding_map[finding_id]["observations"]]
+            for choice in component.choices:
+                finding = finding_map.get(choice.findingId or state.selectedFindingId)
+                if choice.action == "submit_review" and (
+                    not finding
+                    or choice.reviewOutcome
+                    not in {row[0] for row in profile(finding)["outcomes"]}
+                ):
+                    raise ValueError("Unsupported review outcome choice")
+                if choice.practiceStrategyId and (
+                    choice.action != "create_practice"
+                    or not finding
+                    or choice.practiceStrategyId not in profile(finding)["strategies"]
+                ):
+                    raise ValueError("Unsupported practice method choice")
+    for finding_id in {
+        c.findingId
+        for c in response.components
+        if isinstance(c, SegmentCard) and c.findingId
+    }:
+        shown = [
+            (c.startMs, c.endMs)
+            for c in response.components
+            if isinstance(c, SegmentCard) and c.findingId == finding_id
+        ]
+        expected = [
+            (o["startMs"], o["endMs"]) for o in finding_map[finding_id]["observations"]
+        ]
         if sorted(shown) != sorted(expected):
-            raise ValueError("Supporting observation videos must not be omitted or duplicated")
+            raise ValueError(
+                "Supporting observation videos must not be omitted or duplicated"
+            )
     return response.model_dump()
 
 
@@ -543,6 +619,8 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             raise ValueError("Unknown finding")
         if state.selectedFindingId != request.findingId:
             state.reviewFeedback = None
+            state.reviewOutcome = None
+            state.practiceStrategyId = None
         state.selectedFindingId = request.findingId
         if state.stage in {
             "session_review",
@@ -826,7 +904,11 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             raise ValueError("Select a finding before reviewing delivery")
         state.selectedFindingId = finding["id"]
         state.stage = "finding_selected"
-        state.reviewFeedback = "intentional" if action == "confirm_intent" else "unsure"
+        if action == "confirm_intent":
+            state.reviewFeedback = "intentional"
+            state.reviewOutcome = state.reviewOutcome or "intentional"
+        elif state.reviewOutcome not in {"effective", "intentional"}:
+            state.reviewFeedback = "unsure"
         if action == "confirm_intent":
             message = (
                 "의도한 표현으로 기록했어요. 이 변화만으로 목소리나 표정을 고칠 필요는 없습니다. 다른 확인할 부분이 없다면 이번 코칭을 마쳐도 좋습니다."
@@ -899,10 +981,33 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 "durationSeconds": 30,
             }
             view = guidance(finding, ko)
-            state.reviewFeedback = "needs_practice"
+            if state.reviewOutcome not in {"effective", "intentional"}:
+                state.reviewFeedback = "needs_practice"
+            practice["strategyId"] = state.practiceStrategyId
+            practice["reviewOutcome"] = state.reviewOutcome
             practice["evaluationMode"] = "delivery_review"
             practice["label"] = view["goal"]
             practice["instruction"] = view["instruction"]
+            if state.practiceStrategyId:
+                method = METHODS[state.practiceStrategyId]
+                practice["label"] = method["label"][0 if ko else 1]
+                practice["instruction"] = (
+                    (
+                        "1. 선택 구간에서 다시 말할 문장을 직접 고르세요.\n2. "
+                        + method["goal"][0]
+                        + ".\n3. "
+                        + method["check"][0]
+                        + "."
+                    )
+                    if ko
+                    else (
+                        "1. Choose a sentence from the selected interval.\n2. "
+                        + method["goal"][1]
+                        + ".\n3. "
+                        + method["check"][1]
+                        + "."
+                    )
+                )
             practice["criterion"] = (
                 "녹화 후 두 영상을 비교해 선택한 전달 행동을 실행했는지 확인합니다. 스트레스 신호와 음성·영상 수치는 변화의 참고 자료이며, 숫자가 낮아졌다는 이유로 성공을 판정하지 않습니다."
                 if ko
@@ -1378,6 +1483,7 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
     second exercise, revision or action. Component identities use the committed
     response, so changing language cannot create a new practice.
     """
+    doc, request = prepare_review_request(doc, request)
     routed = []
 
     def cached_route(context):
@@ -1452,6 +1558,17 @@ def localized_messages(doc, language):
             message.pop("response", None)
         if message.get("response"):
             from .finding_evidence import attach_observation_videos
-            message["response"] = attach_observation_videos(message["response"], doc, language == "ko")
+
+            message["response"] = attach_observation_videos(
+                message["response"], doc, language == "ko"
+            )
         messages.append(message)
+    if messages and messages[-1].get("response"):
+        messages[-1]["response"] = attach_coaching_path(
+            messages[-1]["response"], doc, language == "ko"
+        )
+        if doc["state"].get(
+            "reviewFeedback"
+        ) == "intentional" and REASK_INTENTION.search(messages[-1]["text"]):
+            messages[-1]["supersededQuestion"] = True
     return messages

@@ -20,6 +20,15 @@ from .coaching import (
     respond,
     validate_response,
 )
+from .coaching_methods import (
+    METHODS,
+    REASK_INTENTION,
+    PracticeStrategy,
+    attach_coaching_path,
+    prepare_review_request,
+    profile,
+    selected_finding,
+)
 from .finding_evidence import attach_observation_videos, complete_document_evidence
 from .presentation_guidance import guidance
 from .report_schema import Contract, ReviewRequest
@@ -66,6 +75,13 @@ class Exercise(Contract):
     label: Bilingual
     steps: list[Bilingual] = Field(min_length=2, max_length=4)
     durationSeconds: Literal[30] = 30
+    strategyId: PracticeStrategy
+    successCheck: Bilingual
+
+
+class ReviewGuide(Contract):
+    title: Bilingual
+    steps: list[Bilingual] = Field(min_length=2, max_length=3)
 
 
 class FollowUp(Contract):
@@ -79,6 +95,7 @@ class Plan(Contract):
     evidenceIds: list[str] = Field(default_factory=list, max_length=8)
     message: Bilingual
     practice: Exercise | None = None
+    reviewGuide: ReviewGuide | None = None
     videoRefs: list[str] = Field(default_factory=list, max_length=4)
     followUps: list[FollowUp] = Field(default_factory=list, max_length=6)
 
@@ -240,6 +257,14 @@ def build_context(doc, request, attempt=None, previous=None):
         {"role": m["role"], "text": m["text"][:1800]} for m in doc["messages"][-10:]
     ]
     return {
+        "responseTask": (
+            "The presenter already answered that this expression was intentional. Acknowledge and retain this answer, do not generate reviewGuide or repeat an observation. Offer one optional rehearsal method or another focus."
+            if doc["state"].get("reviewFeedback") == "intentional"
+            and request.action in {"confirm_intent", "guide_review", "explain_finding"}
+            else "For practice, directly explain the selected action and supply the matching exercise. Do not repeat the finding description."
+            if request.action == "create_practice"
+            else "Use a fact placeholder once, then give concrete review steps and tell the presenter to select their review result below. Never restate the observation outside the placeholder."
+        ),
         "request": request.model_dump(exclude={"conversationState"}),
         "state": doc["state"],
         "sessionSummaries": summaries,
@@ -272,6 +297,15 @@ def build_context(doc, request, attempt=None, previous=None):
         if practice
         else None,
         "history": history,
+        "reviewProfile": profile(selected_finding(doc, request.findingId))
+        if selected_finding(doc, request.findingId)
+        else None,
+        "practiceMethods": {
+            key: METHODS[key]
+            for key in profile(selected_finding(doc, request.findingId))["strategies"]
+        }
+        if selected_finding(doc, request.findingId)
+        else {},
         "facts": catalog,
         "videoRefs": videos,
         "comparison": comparison,
@@ -300,26 +334,40 @@ are display sections only. Model scores are stress-related pattern estimates, no
 message is YOUR answer, not a restatement of a canned response. Connect the user's specific question
 to the evidence, explain what the user should check, and suggest a useful next action. Keep it short.
 ALL factual/numeric/timestamp statements MUST be inserted as {{evidence:ID}} using supplied facts.
-Literal example for a finding fact named finding.pitch_change:
-"message":{"ko":"{{evidence:finding.pitch_change}} 이 변화가 의도한 강조였는지 영상을 먼저 확인해 볼까요?","en":"{{evidence:finding.pitch_change}} Shall we first check whether that was intentional emphasis?"},
-"evidenceIds":["finding.pitch_change"]
+Example for a finding named finding.pitch_variability:
+"message":{"ko":"{{evidence:finding.pitch_variability}} 핵심 문장과 문장 끝의 쉼을 따로 들어본 뒤 아래에서 결과를 골라 주세요.","en":"{{evidence:finding.pitch_variability}} Listen separately for the key sentence and sentence-end pauses, then select what you noticed below."},
+"evidenceIds":["finding.pitch_variability"]
 Copy the placeholder EXACTLY, including both pairs of braces. The app replaces it.
 NEVER rewrite the factual sentence or copy a timestamp from facts into your prose.
 Do NOT type ANY digits or timestamps in message, labels or steps. No citations, links, HTML,
 research claims or unsupplied measurements. Use evidenceIds to declare every placeholder used.
 You may write cautious questions, limitations and concrete proposed practice actions in your own words.
 Do not paraphrase observations outside placeholders. After a fact token write only a helpful
-question, proposed action or limitation. Do not say delivery may have been difficult, unclear or
+question, proposed action or limitation. For example, never add "해당 구간에서 피치 변화가 두드러졌습니다" or "your intonation difference was noted" after a placeholder. For create_practice you may omit the fact token entirely and start with the actual practice action. Avoid jargon such as 피치, 술어 구간, 귀중심 문장; use natural Korean such as 중요한 문장, 높낮이, 문장 끝의 쉼. Do not say delivery may have been difficult, unclear or
 improved: those outcomes are unmeasured, including speculative claims. Use videoRefs for navigation.
 The app renders exact values from facts; don't dump irrelevant measurements into a short answer.
 Compare previous vs current vs retry explicitly, never confuse them. Use comparison.result for comparisons.
 If data are missing, say so; do not fill gaps. Self-assessment remains the presenter's assessment.
 
+A question alone is NOT coaching. Use reviewProfile to give a concrete task.
+For explain_finding or guide_review before a presenter answer, supply reviewGuide with two
+specific things to listen/watch for. Explain that selecting a review outcome creates the matching
+exercise immediately. Never diagnose weak emphasis/unclear speech from measurements; the presenter
+reports that themselves. Do not paraphrase the observation again after inserting its fact token.
+If state.reviewFeedback is intentional or reviewOutcome is effective/intentional, the presenter
+ALREADY answered: acknowledge it, retain the expression, and offer the next practical method or
+another goal. Do not generate reviewGuide in this answered state. Start by acknowledging that the presenter already answered and keep their answer. Never ask about intended emphasis again. Intention does not prove delivery quality.
+For practice, use practiceMethods: choose strategyId and write a specific successCheck observable
+in a recording. Honor a saved practiceStrategyId. Different methods must produce different tasks:
+contrast emphasizes one self-selected key sentence with a comfortable emphasis, never an exaggerated or stronger pitch change; phrasing changes a pause at a completed thought;
+two_versions compares two rehearsals without assuming an error; other methods concern their
+matching measured modality. Do not prescribe voice normalization or generic 'be natural' steps.
 For create_practice with a supported finding supply practice with one short goal, two to four concrete
 steps in both languages, durationSeconds:30. Ask the presenter to choose their own sentence/content
 because you have no transcript. Use the selected finding and user preference/history to tailor the
 exercise. Do not promise that an exercise reduces stress or grade content. Otherwise practice:null.
-followUps: choose contextual actions; labels bilingual. The server retains only choices safe at the
+followUps: choose only secondary contextual actions; labels bilingual. The app supplies review
+answer choices and practice method controls, which cannot be removed. The server retains only choices safe at the
 resulting stage. videoRefs: up to four supplied keys, prefer the chosen finding's actual interval.
 """
 VERIFY_PROMPT = """Validate a proposed presentation-coach answer against supplied saved facts.
@@ -330,7 +378,7 @@ judgment, or claim of having watched/heard recordings. Reject factual statements
 facts or state. Intentional expression cannot be diagnosed. High pitch alone is not a flaw and lower
 scores alone do not prove better delivery. New exercise steps are proposals, NOT observed facts;
 allow concrete instructions, user-selected sentences, and self-review questions. Synthetic inputs
-must not be described as real recorded evidence. Check BOTH languages and exercise steps.
+must not be described as real recorded evidence. Check BOTH languages and exercise steps. Reject exercise steps or successCheck that do not implement the selected practice strategy in practiceMethods. A phrasing exercise must concern thought boundaries, not merely emphasis. Do not repeat an intentional-expression question after it has been answered.
 """
 
 
@@ -367,8 +415,62 @@ def validate_plan(raw, context):
         raise ValueError("AI exercise has no supported goal")
     if plan.action == "create_practice" and findings and not plan.practice:
         raise ValueError("AI did not supply the requested exercise")
+    answered = (
+        context["state"].get("reviewOutcome") in {"effective", "intentional"}
+        or context["state"].get("reviewFeedback") == "intentional"
+    )
+    if (
+        plan.findingId
+        and plan.action in {"explain_finding", "guide_review"}
+        and not answered
+        and not plan.reviewGuide
+    ):
+        raise ValueError(
+            "Provide reviewGuide with two concrete listening/viewing steps and a next action, not just a question"
+        )
+    if plan.practice:
+        if plan.practice.strategyId not in context["practiceMethods"]:
+            raise ValueError("Exercise strategy is unrelated to the selected finding")
+        chosen = context["state"].get("practiceStrategyId")
+        if chosen and plan.practice.strategyId != chosen:
+            raise ValueError("Preserve the user's chosen practice method")
+        if f"finding.{plan.findingId}" not in plan.evidenceIds:
+            raise ValueError("Exercise needs its actual finding evidence ID")
+    if answered and plan.action in {
+        "confirm_intent",
+        "guide_review",
+        "explain_finding",
+    }:
+        if plan.reviewGuide:
+            raise ValueError(
+                "Review is already answered. Set reviewGuide:null and acknowledge the saved answer, then offer an optional practice or next goal"
+            )
+        if any(
+            not re.search(
+                r"기록|알겠|반영|유지|의도한 표현|recorded|keep|retain|understood|acknowledge|intentional",
+                getattr(plan.message, lang),
+                re.IGNORECASE,
+            )
+            for lang in ("ko", "en")
+        ):
+            raise ValueError(
+                "The presenter already answered. Acknowledge the saved intentional-expression answer in both languages, without asking again"
+            )
     for language in ("ko", "en"):
         message = getattr(plan.message, language)
+        plain = TOKEN.sub("", message)
+        if answered and REASK_INTENTION.search(plain):
+            raise ValueError(
+                "The presenter already answered. Acknowledge it and give the next action; do not ask about intention again"
+            )
+        if re.search(
+            r"(?:관찰|측정|확인)(?:됐|되었|했)|나타났|두드러졌|(?:was|were) (?:observed|noted)|your (?:intonation|pitch|expression).{0,25}(?:changed|differ)",
+            plain,
+            re.IGNORECASE,
+        ):
+            raise ValueError(
+                "Do not restate any observation outside {{evidence:ID}}. After the placeholder, write only a proposed action or limitation"
+            )
         used = TOKEN.findall(message)
         if not set(used) <= set(plan.evidenceIds):
             raise ValueError("AI used an undeclared fact")
@@ -379,8 +481,6 @@ def validate_plan(raw, context):
                 "review",
                 "explain_finding",
                 "show_measurements",
-                "guide_review",
-                "create_practice",
             }
             and not used
         ):
@@ -396,11 +496,20 @@ def validate_plan(raw, context):
         ):
             raise ValueError("AI comparison lacks verified comparison facts")
         texts = [TOKEN.sub("", message)]
-        if plan.practice:
-            texts += [getattr(plan.practice.label, language)] + [
-                getattr(step, language) for step in plan.practice.steps
+        if plan.reviewGuide:
+            texts += [getattr(plan.reviewGuide.title, language)] + [
+                getattr(step, language) for step in plan.reviewGuide.steps
             ]
+        if plan.practice:
+            texts += [
+                getattr(plan.practice.label, language),
+                getattr(plan.practice.successCheck, language),
+            ] + [getattr(step, language) for step in plan.practice.steps]
         for text in texts:
+            if answered and REASK_INTENTION.search(text):
+                raise ValueError(
+                    "Do not ask an already answered intention question in a guide or exercise"
+                )
             if UNOBSERVED_OUTCOME.search(text):
                 raise ValueError(
                     "Unmeasured delivery, audience or psychological outcome; replace the claim with a review question"
@@ -446,6 +555,11 @@ def _apply_plan(doc, response, plan, context, language, attempt, previous):
     if plan.followUps:
         for component in response["components"]:
             if component["type"] == "action_choices":
+                if any(
+                    c.get("reviewOutcome") or c.get("practiceStrategyId")
+                    for c in component["choices"]
+                ):
+                    continue
                 allowed = {c["action"]: c for c in component["choices"]}
                 chosen = []
                 for follow in plan.followUps:
@@ -478,11 +592,17 @@ def _apply_plan(doc, response, plan, context, language, attempt, previous):
                     f"{i + 1}. {getattr(step, lang)}"
                     for i, step in enumerate(plan.practice.steps)
                 ),
-                "criterion": practice["translations"][lang]["criterion"],
+                "criterion": getattr(plan.practice.successCheck, lang)
+                + (
+                    " 스트레스 신호와 측정값의 변화는 참고 자료이며, 전달 행동의 달성은 영상을 보고 직접 확인합니다."
+                    if lang == "ko"
+                    else " Signal and measurement changes are descriptive; assess the delivery action by watching the recordings yourself."
+                ),
                 "durationSeconds": plan.practice.durationSeconds,
             }
         practice.update(practice["translations"][language])
         practice["authoredBy"] = "ai"
+        practice["strategyId"] = plan.practice.strategyId
         for component in response["components"]:
             if component["type"] == "practice":
                 component.update(practice["translations"][language])
@@ -495,14 +615,27 @@ def _apply_plan(doc, response, plan, context, language, attempt, previous):
         "evidenceIds": plan.evidenceIds,
     }
     response = attach_observation_videos(response, doc, language == "ko")
+    if plan.reviewGuide and plan.findingId:
+        response["components"].insert(
+            0,
+            {
+                "type": "review_guide",
+                "findingId": plan.findingId,
+                "title": getattr(plan.reviewGuide.title, language),
+                "steps": [getattr(step, language) for step in plan.reviewGuide.steps],
+            },
+        )
+    response = attach_coaching_path(response, doc, language == "ko")
     return validate_response(response, doc, attempt=attempt, previous=previous)
 
 
 def respond_with_ai(
     doc, request, *, generate=None, verify=None, attempt=None, previous=None
 ):
+    original_request = request
     # Recover exact selected IDs from legacy traces before using their evidence.
     doc = complete_document_evidence(doc)
+    doc, request = prepare_review_request(doc, request)
     # Validate identities/transitions BEFORE external model access or persistence.
     baseline, system_response = respond(
         doc, request, attempt=attempt, previous=previous
@@ -525,7 +658,13 @@ def respond_with_ai(
         try:
             plan = validate_plan(generate(context), context)
             effective = request.model_copy(
-                update={"action": plan.action, "findingId": plan.findingId}
+                update={
+                    "action": plan.action,
+                    "findingId": plan.findingId,
+                    "practiceStrategyId": plan.practice.strategyId
+                    if plan.practice
+                    else None,
+                }
             )
             updated, response = respond(
                 doc, effective, attempt=attempt, previous=previous
@@ -547,6 +686,7 @@ def respond_with_ai(
                     "state": updated["state"],
                     "dataOrigin": context["dataOrigin"],
                     "question": request.message,
+                    "practiceMethods": context["practiceMethods"],
                     "plan": plan.model_dump(),
                 }
             )
@@ -573,10 +713,28 @@ def respond_with_ai(
             )
             # Persist the user's actual question/action label, not an inferred prompt.
             updated["messages"][-2] = baseline["messages"][-2]
-            updated["state"]["lastAction"] = request.action
+            if original_request.action == "submit_review":
+                finding = selected_finding(doc, request.findingId)
+                picked = next(
+                    (
+                        row
+                        for row in profile(finding)["outcomes"]
+                        if row[0] == original_request.reviewOutcome
+                    ),
+                    None,
+                )
+                if picked:
+                    updated["messages"][-2]["text"] = picked[
+                        1 if request.language == "ko" else 2
+                    ]
+                    updated["messages"][-2]["translations"] = {
+                        "ko": {"text": picked[1]},
+                        "en": {"text": picked[2]},
+                    }
+            updated["state"]["lastAction"] = original_request.action
             for v in variants.values():
-                v["conversationState"]["lastAction"] = request.action
-            updated.setdefault("aiAudit", []).append(
+                v["conversationState"]["lastAction"] = original_request.action
+            updated["snapshot"].setdefault("aiAudit", []).append(
                 {
                     "revision": updated["revision"],
                     "model": MODEL,
@@ -586,7 +744,8 @@ def respond_with_ai(
                     "validated": True,
                 }
             )
-            updated["aiAudit"] = updated["aiAudit"][-40:]
+            updated["snapshot"]["aiAudit"] = updated["snapshot"]["aiAudit"][-40:]
+            updated.pop("aiAudit", None)
             return updated, response
         except (ValueError, TypeError, KeyError) as error:
             context["validationFeedback"] = str(error)[:300]

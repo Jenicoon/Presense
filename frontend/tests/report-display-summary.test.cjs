@@ -80,11 +80,11 @@ test('the main report explains an observable change and the next review action w
   const ko = reportDisplaySummary(report, true);
   assert.match(ko, /00:25–00:35/);
   assert.match(ko, /목소리가 더 높아/);
-  assert.match(ko, /의도한 강조/);
+  assert.match(ko, /문장/);
   assert.doesNotMatch(ko, /Hz|200|잘못|나쁨/);
   const en = reportDisplaySummary(report, false);
   assert.doesNotMatch(en, /[가-힣]/);
-  assert.match(en, /intentional/);
+  assert.match(en, /sentence/);
 });
 
 test('stress signal scores use a 100 point reference scale and never fabricate a missing score', () => {

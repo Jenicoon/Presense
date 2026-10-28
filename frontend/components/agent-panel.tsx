@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrainCircuit, Maximize2, Minimize2, RefreshCw, Send, X } from "lucide-react";
-import { actCoach, restoreCoach, activeCoachKey, practiceKey, type CoachAction, type CoachState, type CoachMessage } from "@/lib/coaching";
+import { actCoach, restoreCoach, activeCoachKey, practiceKey, type CoachAction, type CoachState, type CoachMessage, type CoachActionContext } from "@/lib/coaching";
 import { CoachComponents } from "@/components/coach-components";
 import { useLang } from "@/lib/i18n";
 import { loadAgentSessions, type PresentationRecord } from "@/lib/supabase/data";
@@ -141,7 +141,7 @@ export function AgentPanel({ userId }: { userId: string | null }) {
     if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages, open, busy]);
 
-  async function sendMessage(action: CoachAction = "ask", findingId?: string) {
+  async function sendMessage(action: CoachAction = "ask", findingId?: string, actionContext?: CoachActionContext) {
     const question = input.trim();
     const id=activeSessionRef.current || focusSessionId;
     if(busy || (action === "ask" && !question)) return;
@@ -149,7 +149,7 @@ export function AgentPanel({ userId }: { userId: string | null }) {
     setInput(""); setError(""); setBusy(true);
     if(question) setMessages(previous=>[...previous,{role:"user",text:question}]);
     try {
-      const response=await actCoach({sessionId:id,action,language:lang,message:question,findingId,revision,conversationState:coachState ?? undefined,previousAction});
+      const response=await actCoach({sessionId:id,action,language:lang,message:question,findingId,revision,conversationState:coachState ?? undefined,previousAction,...actionContext});
       if(activeSessionRef.current!==id) return;
       setCoachState(response.conversationState);setRevision(response.revision);setPreviousAction(action);
       if(languageRef.current === lang) setMessages(previous=>[...previous,{role:"agent",text:response.message,response}]);
@@ -228,7 +228,7 @@ export function AgentPanel({ userId }: { userId: string | null }) {
           <div className="agent-panel-messages" role="log" aria-live="polite" ref={messagesRef}>
             {messages.length === 0 && <div className="agent-panel-welcome"><BrainCircuit size={25} /><p>{t("agent.welcome")}</p></div>}
             {coachState && <p className="coach-stage">{lang === "ko" ? "진행 단계" : "Coaching stage"}: {({session_review:lang==="ko"?"보고서 검토":"Review", finding_selected:lang==="ko"?"발견 확인":"Finding", practice_created:lang==="ko"?"연습 준비":"Practice ready", recording:lang==="ko"?"녹화":"Recording", evaluating:lang==="ko"?"분석 중":"Evaluating", comparison_ready:lang==="ko"?"비교 완료":"Comparison ready", next_goal:lang==="ko"?"다음 목표":"Next goal", completed:lang==="ko"?"완료":"Completed"})[coachState.stage]}</p>}
-            {messages.map((message, index) => (historyExpanded || index >= historyStart) ? <div key={index} className={`agent-panel-message ${message.role}`}>{message.response && <span className="coach-response-source">{message.response.generation?.source === "ai" ? (lang === "ko" ? "AI가 작성한 코칭" : "AI-generated coaching") : (lang === "ko" ? "기본 안내" : "System guidance")}{message.response.generation?.dataOrigin === "synthetic" && <span> · {lang === "ko" ? "합성 예시 분석 기반" : "Synthetic sample analysis"}</span>}{message.response.generation?.dataOrigin === "stressid" && <span> · {lang === "ko" ? "StressID 실제 분석 기반" : "Real StressID analysis"}</span>}</span>}<p className="agent-message-text">{message.text}</p>{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id)=>void sendMessage(action,id)} />}</div> : null)}
+            {messages.map((message, index) => (historyExpanded || index >= historyStart) ? <div key={index} className={`agent-panel-message ${message.role}`}>{message.response && <span className="coach-response-source">{message.response.generation?.source === "ai" ? (lang === "ko" ? "AI가 작성한 코칭" : "AI-generated coaching") : (lang === "ko" ? "기본 안내" : "System guidance")}{message.response.generation?.dataOrigin === "synthetic" && <span> · {lang === "ko" ? "합성 예시 분석 기반" : "Synthetic sample analysis"}</span>}{message.response.generation?.dataOrigin === "stressid" && <span> · {lang === "ko" ? "StressID 실제 분석 기반" : "Real StressID analysis"}</span>}</span>}{message.supersededQuestion ? <details className="review-details"><summary>{lang === "ko" ? "이미 답변한 이전 확인 질문" : "Earlier question · already answered"}</summary><p className="agent-message-text">{message.text}</p></details> : <p className="agent-message-text">{message.text}</p>}{message.response && <CoachComponents components={message.response.components} ko={lang === "ko"} busy={busy || index !== messages.length-1} onAction={(action,id,context)=>void sendMessage(action,id,context)} />}</div> : null)}
             {busy && <div className="agent-panel-message agent pending">{t("agent.thinking")}</div>}
           </div>
 
