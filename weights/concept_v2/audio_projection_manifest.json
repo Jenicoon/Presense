@@ -1,0 +1,13 @@
+{
+  "source_model": "facebook/wav2vec2-base",
+  "student_sha256": "3dc8a3620832bf81ea909cb122c5033a3d3870d82cc57f7a6ecebec9a9f7e2e7",
+  "target_features": "cbm_w2v_feats.npy",
+  "method": "train-participant affine ridge; exported float32 validation",
+  "heldout_mae": 0.004430426247250008,
+  "heldout_r2": 0.9988611541503468,
+  "train_count": 457,
+  "validation_count": 121,
+  "raw_cache_sha256": "00e79e2e84b70057a709fa580e59f91371d8d09f5a8923eb96a91288ae2a6bb2",
+  "target_cache_sha256": "ec148334e39f1984a4e79b5933d8a915950b01797c71833e82f165002b1b846f",
+  "sample_order_sha256": "0dc7d1e64605da16a2223c328af820337d11acdb5003659e9a00fd7354a6aec3"
+}

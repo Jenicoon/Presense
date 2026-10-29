@@ -1,3 +1,4 @@
+import v2Guidance from "../../shared/concept-v2-guidance.json";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { bilingualLabel } from "@/lib/report-locale";
 import { agentNextPractice, type AgentReport } from "@/lib/agent-report";
@@ -26,9 +27,10 @@ export function conceptBarPercent(value: number): number {
 export function AgentObservationReport({ report, ko }: { report: AgentReport; ko: boolean }) {
   const observed = report.observationReport;
   if (!observed) return null; // Reports saved before this schema have only summaryText.
+  const isAudio=(id:string)=>id.startsWith("pitch_") || ["v2_mean_f0","v2_jitter","v2_shimmer","v2_hnr"].includes(id);
   const featureGroups = [
-    { label: ko ? "음성" : "Audio", items: observed.features.filter((item) => item.id.startsWith("pitch_")) },
-    { label: ko ? "영상" : "Video", items: observed.features.filter((item) => !item.id.startsWith("pitch_")) },
+    { label: ko ? "음성" : "Audio", items: observed.features.filter((item) => isAudio(item.id)) },
+    { label: ko ? "영상" : "Video", items: observed.features.filter((item) => !isAudio(item.id)) },
   ];
   const previous = observed.previousComparison;
   const phases = observed.phaseSummaries ?? [];
@@ -54,8 +56,8 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
       <h3>{ko ? "관찰된 모델 출력" : "Observed model outputs"}</h3>
       {observed.modelWindowCount !== undefined && <p>{ko ? `모델 분석 창 ${observed.modelWindowCount}개 · 각 창은 최대 10초이며 서로 겹칠 수 있습니다.` : `${observed.modelWindowCount} model analysis windows · each covers up to 10 seconds and may overlap.`}</p>}
       {observed.concepts.length > 0 && <div className="observation-section">
-        <strong>{ko ? "관련 패턴" : "Related patterns"}</strong>
-        <p>{ko ? "각 막대는 0–1 눈금으로 표시합니다. 값이 클수록 모델이 해당 이름의 패턴을 더 강하게 출력한 것이며, 높고 낮음 자체가 발표의 좋고 나쁨을 뜻하지 않습니다." : "Each bar uses a fixed 0–1 scale. A larger output means the model estimated more of that named pattern; higher or lower is not a presentation-quality grade."}</p>
+        <strong>{ko ? "모델이 예측한 특징" : "Model-predicted features"}</strong>
+        <p>{ko ? "막대는 학습 자료의 기준으로 환산한 예측값이며, 아래의 실제 측정값과 구분해서 보세요. 스트레스의 원인이나 발표의 좋고 나쁨을 뜻하지 않습니다." : "Bars show predictions relative to the training reference, separately from actual measurements below. They do not identify causes of stress or grade delivery."}</p>
         <div className="observation-scale"><span>0</span><span>1</span></div>
         <div className="observation-bars">{observed.concepts.map((item) => <div className="observation-bar-row" key={item.name}>
           <span>{measurementLabel(item.name, ko)}</span><div className="observation-bar-track" role="progressbar" aria-label={measurementLabel(item.name, ko)} aria-valuemin={0} aria-valuemax={1} aria-valuenow={conceptBarPercent(item.meanValue) / 100}><div className="observation-bar-fill" style={{ width: `${conceptBarPercent(item.meanValue)}%` }} /></div><b className={item.meanValue > 1 ? "observation-value-over-range" : undefined}>{item.meanValue.toFixed(2)}</b>
@@ -65,7 +67,7 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
       {featureGroups.map((group) => group.items.length > 0 && <div className="observation-section" key={group.label}>
         <strong>{group.label}</strong>
         <div className="observation-table-wrap"><table className="observation-table"><thead><tr><th>{ko ? "측정 항목" : "Measurement"}</th><th>{ko ? "평균" : "Mean"}</th><th>{ko ? "관측 범위" : "Observed range"}</th><th>{ko ? "어떻게 읽나요?" : "How to read it"}</th></tr></thead><tbody>
-          {group.items.map((item) => <tr key={item.id}><td>{bilingualLabel(item.label, ko, measurementLabel(item.id, ko))}</td><td>{fixedUnit(item.meanValue, item.unit)}</td><td>{fixedUnit(item.minValue, item.unit)}–{fixedUnit(item.maxValue, item.unit)}</td><td>{METRIC_EXPLANATIONS[item.id]?.[ko ? 0 : 1] ?? ""}</td></tr>)}
+          {group.items.map((item) => <tr key={item.id}><td>{bilingualLabel(item.label, ko, measurementLabel(item.id, ko))}</td><td>{fixedUnit(item.meanValue, item.unit)}</td><td>{fixedUnit(item.minValue, item.unit)}–{fixedUnit(item.maxValue, item.unit)}</td><td>{METRIC_EXPLANATIONS[item.id]?.[ko ? 0 : 1] ?? (v2Guidance as Record<string,{check:string[]}>)[item.id]?.check[ko ? 0 : 1] ?? ""}</td></tr>)}
         </tbody></table></div>
       </div>)}
     </div>}

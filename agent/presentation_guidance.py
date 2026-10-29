@@ -2,7 +2,7 @@
 
 from math import isfinite
 
-from .coaching_methods import profile
+from .coaching_methods import profile, V2_GUIDANCE
 
 
 def clock(ms):
@@ -131,6 +131,10 @@ def guidance(finding, ko):
             "1. Review the selected interval.\n2. Choose one delivery action yourself.\n3. Repeat the content for 30 seconds and compare recordings.",
         ),
     )
+    if finding.get("id") in V2_GUIDANCE:
+        view = V2_GUIDANCE[finding["id"]]
+        text = view["higher" if higher else "lower" if lower else "same" if comparable else "missing"]
+        values = (text[0],text[1],*view["title"],*view["goal"],*view["instruction"])
     observation = values[0 if ko else 1]
     if first:
         span = f"{clock(first['startMs'])}–{clock(first['endMs'])}"

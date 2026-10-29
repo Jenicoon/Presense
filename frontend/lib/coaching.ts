@@ -21,8 +21,8 @@ export type CoachAction =
   | "assess_delivery_achieved"
   | "assess_delivery_partial"
   | "assess_delivery_retry";
-export type ReviewOutcome = "intentional" | "effective" | "needs_contrast" | "needs_phrasing" | "unclear_speech" | "expression_mismatch" | "gaze_distracting" | "unsure";
-export type PracticeStrategy = "contrast" | "phrasing" | "two_versions" | "clear_phrases" | "expression" | "gaze_anchor";
+export type ReviewOutcome = "intentional" | "effective" | "needs_contrast" | "needs_phrasing" | "unclear_speech" | "expression_mismatch" | "gaze_distracting" | "needs_face_reset" | "unsure";
+export type PracticeStrategy = "contrast" | "phrasing" | "two_versions" | "clear_phrases" | "expression" | "gaze_anchor" | "face_reset";
 export type CoachActionContext = {reviewOutcome?: ReviewOutcome | null; practiceStrategyId?: PracticeStrategy | null};
 export type CoachState = {
   sessionId: string;

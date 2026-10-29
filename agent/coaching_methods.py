@@ -1,6 +1,8 @@
 """Actionable review paths; proposed exercises, never inferred delivery diagnoses."""
 
 import re
+import json
+from pathlib import Path
 from copy import deepcopy
 from typing import Literal
 
@@ -13,9 +15,10 @@ ReviewOutcome = Literal[
     "expression_mismatch",
     "gaze_distracting",
     "unsure",
+    "needs_face_reset",
 ]
 PracticeStrategy = Literal[
-    "contrast", "phrasing", "two_versions", "clear_phrases", "expression", "gaze_anchor"
+    "contrast", "phrasing", "two_versions", "clear_phrases", "expression", "gaze_anchor", "face_reset"
 ]
 
 REASK_INTENTION = re.compile(
@@ -183,7 +186,24 @@ PROFILES = {
         "strategies": ["gaze_anchor"],
     },
 }
+V2_GUIDANCE = json.loads((Path(__file__).resolve().parents[1]/"shared/concept-v2-guidance.json").read_text())
+METHODS["face_reset"] = {
+    "label": ("눈 주변을 편하게 두고 다시 말하기", "Repeat with comfortable eyes and gaze"),
+    "goal": ("잠깐 쉰 뒤 자연스럽게 눈을 깜박이고 같은 문장을 다시 말하기", "Take a brief break, blink naturally, and repeat the same sentence"),
+    "check": ("같은 조명과 카메라 위치에서 눈 주변이 편했는지 직접 확인하기", "Check your own comfort with the same lighting and camera position"),
+}
+for identity, view in V2_GUIDANCE.items():
+    base = view["profile"]
+    if base in PROFILES:
+        outcomes = list(PROFILES[base]["outcomes"])
+    elif base == "eye_reset":
+        outcomes = [("effective", "지금 표현이 편하고 자연스러워요", "This expression feels comfortable"), ("needs_face_reset", "잠깐 쉬고 다시 말해볼게요", "Take a brief break and repeat")]
+    else:
+        outcomes = [("effective", "지금 전달이 편하게 들려요", "The delivery sounds comfortable"), ("needs_phrasing", "문장 사이에 쉼이 필요해요", "I need pauses between thoughts"), ("unsure", "두 방식으로 비교해 볼게요", "Compare two versions")]
+    PROFILES[identity] = {"check":tuple(view["check"]), "outcomes":outcomes, "strategies":view["strategies"]}
+
 OUTCOME_METHOD = {
+    "needs_face_reset": "face_reset",
     "needs_contrast": "contrast",
     "needs_phrasing": "phrasing",
     "unclear_speech": "clear_phrases",

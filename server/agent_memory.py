@@ -1,12 +1,10 @@
 """Read only the authenticated presenter's prior structured agent memory."""
 from __future__ import annotations
 
-import hashlib
 import logging
 import math
 import re
 from functools import lru_cache
-from pathlib import Path
 
 import requests
 
@@ -31,7 +29,7 @@ def _validated_memory(raw: dict) -> dict | None:
     if not isinstance(raw.get("candidates"), list):
         return None
     candidates = []
-    for item in raw["candidates"][:5]:
+    for item in raw["candidates"][:7]:
         if not isinstance(item, dict) or not isinstance(item.get("candidateId"), str):
             continue
         value, count, quality = (item.get("observedValue"), item.get("observationCount"),
@@ -56,17 +54,8 @@ def _validated_memory(raw: dict) -> dict | None:
 
 @lru_cache(maxsize=1)
 def model_version() -> str:
-    root = Path(__file__).resolve().parents[1] / "weights"
-    names = ("student_kd_best.pt", "cbm_bi_residual_v2_w0.8_lc4.0_best.pt")
-    digest = hashlib.sha256()
-    try:
-        for name in names:
-            with (root / name).open("rb") as stream:
-                for block in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(block)
-    except OSError:
-        return "unknown"
-    return "student-cbm-" + digest.hexdigest()[:16]
+    from agent.model_contract import configured_model_version
+    return configured_model_version()
 
 
 def load_recent_memory(supabase_url: str, publishable_key: str, token: str,

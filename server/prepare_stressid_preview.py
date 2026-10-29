@@ -25,7 +25,7 @@ from server.inference import get_engine, predict
 BASE = "22222222-2222-4222-8222-222222222222"
 
 
-def prepare(video: Path, output: Path, ffmpeg: str, recorded_at: str | None = None):
+def prepare(video: Path, output: Path, ffmpeg: str, recorded_at: str | None = None, session_id: str = BASE):
     output.mkdir(parents=True, exist_ok=True)
     capture = cv2.VideoCapture(str(video))
     if not capture.isOpened():
@@ -74,6 +74,9 @@ def prepare(video: Path, output: Path, ffmpeg: str, recorded_at: str | None = No
         result = predict(np.stack(frames), audio, "Speaking")
         rows.append(
             {
+                "modelVersion": result["modelVersion"],
+                "metricDefinitionVersion": result["metricDefinitionVersion"],
+                "conceptDefinitionVersion": result["conceptDefinitionVersion"],
                 "segmentId": f"stressid-{start_ms}-{end_ms}",
                 "startMs": start_ms,
                 "endMs": end_ms,
@@ -98,7 +101,7 @@ def prepare(video: Path, output: Path, ffmpeg: str, recorded_at: str | None = No
         )
     capture.release()
     request = ReviewRequest(
-        sessionId=BASE, durationMs=duration_ms, sceneLabel="Live Camera", segments=rows
+        sessionId=session_id, durationMs=duration_ms, sceneLabel="Live Camera", segments=rows
     )
     report = generate_report(request, agent_mode=True, model_version=model_version())
     report.update(dataOrigin="stressid", coachingAvailable=True)
@@ -166,5 +169,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--ffmpeg", required=True)
     parser.add_argument("--recorded-at", default=None)
+    parser.add_argument("--session-id", default=BASE)
     args = parser.parse_args()
-    prepare(args.video, args.output, args.ffmpeg, args.recorded_at)
+    prepare(args.video, args.output, args.ffmpeg, args.recorded_at, args.session_id)

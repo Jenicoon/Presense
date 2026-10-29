@@ -10,6 +10,7 @@ function loadTs(file) {
   }).outputText;
   const exports = {};
   new Function('exports', 'require', js)(exports, (id) => {
+    if (id.endsWith("concept-v2-guidance.json")) return {default:JSON.parse(fs.readFileSync(path.join(__dirname,"../../shared/concept-v2-guidance.json"),"utf8"))};
     if (id === '@/lib/measurement-labels') return loadTs('../lib/measurement-labels.ts');
     if (id === '@/lib/report-locale') return loadTs('../lib/report-locale.ts');
     return {};
@@ -123,4 +124,16 @@ test('missing reference does not fabricate a mouth comparison or direction', () 
   const missing = findingGuidance({id:'lip_tension',independentObservations:8}, true);
   assert.match(missing.observation, /상세 관측 자료가 없습니다/);
   assert.doesNotMatch(missing.observation, /곳/);
+});
+
+
+test('new exact-measure guidance keeps jaw opening and jitter separate from legacy patterns', () => {
+  const {findingGuidance} = loadTs('../lib/report-locale.ts');
+  const jaw=findingGuidance({id:'v2_jaw_open',referenceValue:.1,observations:[{startMs:20000,endMs:30000,value:.3}]},true);
+  assert.match(jaw.observation,/턱을 여는 움직임/);
+  assert.match(jaw.question,/말이 급하게/);
+  assert.doesNotMatch(jaw.question,/덜 열|줄이/);
+  const jitter=findingGuidance({id:'v2_jitter',referenceValue:.01,observations:[{startMs:20000,endMs:30000,value:.02}]},false);
+  assert.match(jitter.observation,/cycle-to-cycle frequency variation/);
+  assert.doesNotMatch(Object.values(jitter).join(' '),/[가-힣]/);
 });

@@ -186,8 +186,9 @@ def new_document(request: ReviewRequest, report: dict, version: str) -> dict:
             "request": request.model_dump(),
             "report": report,
             "modelVersion": version,
+            "conceptDefinitionVersion": request.conceptDefinitionVersion or "legacy-seven-v1",
             "metricDefinitionVersion": report.get("agentMemory", {}).get(
-                "metricDefinitionVersion", "session-analysis-v4"
+                "metricDefinitionVersion", request.metricDefinitionVersion
             ),
         },
         "state": ConversationState(sessionId=request.sessionId).model_dump(),
@@ -198,6 +199,13 @@ def new_document(request: ReviewRequest, report: dict, version: str) -> dict:
 
 
 def measurement_name(key, ko):
+    from .model_contract import RAW_METRICS
+    from ai.concept_registry import PROPOSED_CONCEPTS_V2
+    for (_,raw_key,_,label),definition in zip(RAW_METRICS,PROPOSED_CONCEPTS_V2):
+        if key==raw_key:
+            return label.split(" / ")[0 if ko else 1]
+        if key==definition.model_name_ko:
+            return (definition.public_label_ko+" 예측값") if ko else (label.split(" / ")[1]+" prediction")
     names = {
         "f0_mean": ("평균 목소리 높이 (Hz)", "Mean voice pitch (Hz)"),
         "f0_std": ("목소리 높이 변동 (Hz)", "Voice pitch variation (Hz)"),
@@ -290,6 +298,7 @@ def compare_snapshots(before, after, practice=None):
         before["modelVersion"] != "unknown"
         and before["modelVersion"] == after["modelVersion"]
         and before["metricDefinitionVersion"] == after["metricDefinitionVersion"]
+        and before.get("conceptDefinitionVersion", "legacy-seven-v1") == after.get("conceptDefinitionVersion", "legacy-seven-v1")
         and bool(before["request"].get("sceneLabel"))
         and before["request"].get("sceneLabel") == after["request"].get("sceneLabel")
     )

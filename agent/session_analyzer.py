@@ -8,6 +8,8 @@ from collections import defaultdict
 from math import isfinite
 from statistics import median
 
+from .model_contract import RAW_METRICS, METRIC_VERSION
+from ai.concept_registry import PROPOSED_CONCEPTS_V2
 from .report_schema import ReviewRequest, SegmentAnalysis
 
 MEASUREMENT_INFO = {
@@ -22,7 +24,11 @@ MEASUREMENT_INFO = {
     ("video", "eye_contact_score"): ("gaze", "시선 안정도 추정치 / Gaze stability estimate",
                                       "gaze stability public speaking"),
 }
-RESEARCHABLE_IDS = frozenset(info[0] for info in MEASUREMENT_INFO.values())
+V2_INFO = {(modality,key):(identity,label,concept.research_query) for (modality,key,identity,label),concept in zip(RAW_METRICS,PROPOSED_CONCEPTS_V2)}
+V2_NOTES = {row[2]: concept.measurement_note for row,concept in zip(RAW_METRICS,PROPOSED_CONCEPTS_V2)}
+MEASUREMENT_INFO.update(V2_INFO)
+V2_UNITS = {"egemap_f0_semitone":"semitones", "egemap_jitter":"ratio", "egemap_shimmer_db":"dB", "egemap_hnr_db":"dB"}
+RESEARCHABLE_IDS = frozenset(info[0] for info in list(MEASUREMENT_INFO.values())+list(V2_INFO.values()))
 
 
 def metric(segment: SegmentAnalysis, modality: str, key: str) -> float | None:
@@ -117,7 +123,9 @@ def analyze_session(request: ReviewRequest):
 
     candidates = []
     for modality, key in _feature_keys(usable):
-        identity, label, query = MEASUREMENT_INFO.get(
+        if request.metricDefinitionVersion == METRIC_VERSION and (modality,key) not in V2_INFO:
+            continue
+        identity, label, query = (V2_INFO if request.metricDefinitionVersion == METRIC_VERSION else MEASUREMENT_INFO).get(
             (modality, key), (f"{modality}:{key}", f"{modality} · {key}",
                               f"{key.replace('_', ' ')} public speaking measurement"))
         series = [{"segmentId": s.segmentId, "startMs": s.startMs, "endMs": s.endMs,
@@ -133,6 +141,7 @@ def analyze_session(request: ReviewRequest):
             "durationMs": sum(end-start for start, end, _ in intervals(usable)),
             "ranges": _ranges(usable),
             "query": query,
+            "measurementNote": V2_NOTES.get(identity),
             "predictionConfidence": round(median(confidences), 4) if confidences else None,
             "measurementQuality": round(len(measured) / len(usable), 4),
             "independentObservations": _independent_count(measured),
@@ -161,7 +170,11 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
         if values:
             concepts.append({"name": name, "meanValue": round(sum(values) / len(values), 4),
                              "observations": len(values)})
-    concepts.sort(key=lambda row: (-row["meanValue"], row["name"]))
+    if request.metricDefinitionVersion==METRIC_VERSION:
+        order={c.model_name_ko:c.index for c in PROPOSED_CONCEPTS_V2}
+        concepts.sort(key=lambda row:order.get(row["name"],99))
+    else:
+        concepts.sort(key=lambda row: (-row["meanValue"], row["name"]))
 
     features = []
     for (modality, key), (identity, label, _) in MEASUREMENT_INFO.items():
@@ -173,7 +186,7 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
                              "minValue": round(min(values), 4),
                              "maxValue": round(max(values), 4),
                              "observations": len(values),
-                             "unit": "Hz" if key in {"f0_mean", "f0_std"} else ""})
+                             "unit": V2_UNITS.get(key, "Hz" if key in {"f0_mean", "f0_std"} else "")})
 
     patterns = []
     if peak:
@@ -196,7 +209,7 @@ def describe_observations(request: ReviewRequest, summary: dict) -> dict:
                              "value": round(focus_value, 4),
                              "comparisonValue": round(reference, 4),
                              "difference": round(delta, 4),
-                             "unit": "Hz" if key in {"f0_mean", "f0_std"} else "",
+                             "unit": V2_UNITS.get(key, "Hz" if key in {"f0_mean", "f0_std"} else ""),
                              "comparisonCount": len(others),
                              "relativeChange": abs(delta) / scale})
     patterns.sort(key=lambda row: (-row["relativeChange"], row["id"]))

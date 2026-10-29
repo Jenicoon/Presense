@@ -12,6 +12,9 @@ export type LiveInferenceFrame = {
   /** Max class probability of the binary softmax output, 0.5..1 (Progress Report §2.3). */
   confidence: number;
   timestampMs: number;
+  modelVersion?: string;
+  metricDefinitionVersion?: string;
+  conceptDefinitionVersion?: string;
   concepts?: Record<string, number>;
   audioFeatures?: Record<string, number | string | boolean>;
   videoFeatures?: Record<string, number | string | boolean>;
@@ -62,6 +65,9 @@ export async function inferMultimodalFrame(
   const data = await res.json();
   if(typeof data.stressScore !== "number" || !Number.isFinite(data.stressScore) || data.stressScore < 0 || data.stressScore > 1 || typeof data.confidence !== "number" || !Number.isFinite(data.confidence) || data.confidence < 0 || data.confidence > 1) throw new Error("Invalid analysis response.");
   return {
+    modelVersion: data.modelVersion,
+    metricDefinitionVersion: data.metricDefinitionVersion,
+    conceptDefinitionVersion: data.conceptDefinitionVersion,
     stressScore: data.stressScore,
     confidence: data.confidence,
     timestampMs: Date.now(),

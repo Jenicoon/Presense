@@ -120,10 +120,10 @@ def _decision_view(state: AgentState, rag) -> dict:
 
 # 3. 측정값과 이전 세션 비교: 기준값, 관측 횟수, 비교 가능성 계산.
 
-def _prior_candidate(prior: dict | None, identity: str, model_version: str, scene: str | None) -> dict | None:
+def _prior_candidate(prior: dict | None, identity: str, model_version: str, scene: str | None, metric_version: str = METRIC_DEFINITION_VERSION) -> dict | None:
     if not prior or model_version == "unknown" or prior.get("modelVersion") != model_version:
         return None
-    if prior.get("metricDefinitionVersion") != METRIC_DEFINITION_VERSION:
+    if prior.get("metricDefinitionVersion") != metric_version:
         return None
     if not scene or scene != prior.get("sceneLabel"):
         return None
@@ -142,7 +142,7 @@ def _has_comparison(state: AgentState, identity: str) -> bool:
             and isinstance(previous_duration, (int, float))
             and .5 <= state.request.durationMs / max(previous_duration, 1) <= 2
             and (previous := _prior_candidate(state.prior, identity, state.model_version,
-                                               state.request.sceneLabel)) is not None
+                                               state.request.sceneLabel, state.request.metricDefinitionVersion)) is not None
             and previous.get("metric") == current["metric"])
 
 
@@ -244,7 +244,7 @@ def _concept_result(state: AgentState, item: dict) -> dict:
 
 
 def _comparison_result(state: AgentState, item: dict) -> dict:
-    prior = _prior_candidate(state.prior, item["id"], state.model_version, state.request.sceneLabel)
+    prior = _prior_candidate(state.prior, item["id"], state.model_version, state.request.sceneLabel, state.request.metricDefinitionVersion)
     current, _, _ = _session_measurement(state.request, item)
     previous = prior.get("observedValue") if prior else None
     if previous is None or current is None:
@@ -622,7 +622,8 @@ def build_memory(report: dict, state: AgentState) -> dict:
     goal = ({"candidateId": focus["id"], "metric": focus["metric"],
              "action": focus["recommendation"]} if focus else None)
     return {"sessionId": report["sessionId"], "modelVersion": state.model_version,
-            "metricDefinitionVersion": METRIC_DEFINITION_VERSION,
+            "metricDefinitionVersion": state.request.metricDefinitionVersion,
+            "conceptDefinitionVersion": state.request.conceptDefinitionVersion or "legacy-seven-v1",
             "sceneLabel": state.request.sceneLabel, "durationMs": state.request.durationMs,
             "candidates": entries,
             "focusGoal": goal}
@@ -644,7 +645,7 @@ def measurement_decider(request, candidates):
             if not independent or row.startMs>=independent[-1].endMs: independent.append(row)
         if len(independent)<4: continue
         reference=median(metric(r,item["modality"],item["metric"]) for r in independent[:2])
-        floor={"f0_mean":100,"f0_std":20}.get(item["metric"],.15)
+        floor={"f0_mean":100,"f0_std":20,"egemap_f0_semitone":10,"egemap_jitter":.01,"egemap_shimmer_db":.2,"egemap_hnr_db":1}.get(item["metric"],.15)
         changed=[r for r in independent[2:] if abs(metric(r,item["modality"],item["metric"])-reference)>=max(abs(reference),floor)*.1]
         if len(changed)<2: continue
         direction=1 if metric(changed[0],item["modality"],item["metric"])>reference else -1

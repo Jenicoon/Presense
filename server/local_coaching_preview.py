@@ -1,7 +1,7 @@
-"""Loopback-only preview: real StressID inference + real Luxia coaching.
+"""Loopback-only preview of saved local inference; dataset AI egress is blocked.
 
 Auth and storage are local demo substitutes. Production app never imports this
-module. Dataset media stays local; only measurements/conversation reach Luxia.
+module. Dataset media and measurements stay local. External coaching is disabled for dataset examples.
 """
 
 from __future__ import annotations
@@ -80,10 +80,22 @@ app.dependency_overrides[module.require_authenticated_user] = lambda: {
     "sub": USER["id"]
 }
 module.load_recent_memory = lambda *_: None
-module._report_rag = lambda: None
+# Participant data is never eligible for external AI in this preview. The
+# standalone synthetic verifier is the authorized path for provider tests.
+if manifest["document"]["snapshot"].get("dataOrigin") != "synthetic":
+    module.luxia_api_key = ""
+    for document in documents.values():
+        document["snapshot"]["report"]["coachingAvailable"] = False
+        document["snapshot"]["report"]["coachingDisabledReason"] = "dataset_privacy"
+
+if os.getenv("PRESENSE_PREVIEW_RAG_DIR"):
+    from agent.rag_db import PaperRAG
+    module._report_rag = lambda: PaperRAG(db_path=os.environ["PRESENSE_PREVIEW_RAG_DIR"],sync=False)
+else:
+    module._report_rag = lambda: None
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3015", "http://127.0.0.1:3015"],
+    allow_origins=["http://localhost:3015", "http://127.0.0.1:3015", "http://localhost:3016", "http://127.0.0.1:3016"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

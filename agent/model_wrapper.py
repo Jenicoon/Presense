@@ -8,6 +8,8 @@ import numpy as np
 import cv2
 import sys
 from pathlib import Path
+from agent.model_contract import model_variant, bundle_directory, load_bundle, bundle_version, configured_model_version, METRIC_VERSION, CONCEPT_VERSION
+from ai.concept_registry import PROPOSED_CONCEPTS_V2
 
 _root = Path(__file__).resolve().parent.parent
 _ai   = _root / 'ai'
@@ -15,9 +17,8 @@ for p in [_root, _ai, _ai/'models', _ai/'data', _ai/'train']:
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from models_e2e import StudentCMABi, CBMWithResidual, GEO_INPUT_DIM, EGEMAP_DIM, FUSED_EXP_DIM
+from models_e2e import StudentCMABi, CBMWithResidual, GEO_INPUT_DIM, FUSED_EXP_DIM
 from dataset_e2e import TASK_TO_ID
-import config as _cfg
 
 _WEIGHTS_DIR = _root / 'weights'   # presense/weights/ — 추론용 가중치 폴더
 
@@ -101,6 +102,11 @@ class StressInferenceEngine:
             'cuda' if torch.cuda.is_available()           else 'cpu')
         print(f"Using device: {self.device}")
 
+        self.variant = model_variant()
+        self.bundle_dir = bundle_directory() if self.variant == "concept-v2" else _WEIGHTS_DIR
+        self.concept_names = CONCEPT_NAMES
+        self.metric_definition_version = "session-analysis-v4"
+        self.concept_definition_version = "legacy-seven-v1"
         self._load_model()
         self._load_feature_extractors()
         self._init_mediapipe()
@@ -114,6 +120,23 @@ class StressInferenceEngine:
     # ── 모델 로드 ──────────────────────────────────────────────────────────────
 
     def _load_model(self):
+        if self.variant == "concept-v2":
+            from agent.concept_v2 import ConceptModelV2
+            self.model_manifest = load_bundle(self.bundle_dir)
+            self.student_path = self.bundle_dir / "student.pt"
+            student = torch.load(self.student_path, map_location="cpu", weights_only=False)
+            head = torch.load(self.bundle_dir / "head.pt", map_location="cpu", weights_only=False)
+            training = head["manifest"]["training"]
+            if training["residualWeight"] != 1.0 or training["conceptCorrectionWeight"] != .03:
+                raise ValueError("Candidate formula does not match runtime")
+            self.model = ConceptModelV2(student["model_state_dict"], head["state_dict"]).to(self.device).eval()
+            self.model.requires_grad_(False)
+            self.temperature = 1.0
+            self.concept_names = [c.model_name_ko for c in PROPOSED_CONCEPTS_V2]
+            self.model_version = bundle_version(self.model_manifest)
+            self.metric_definition_version = METRIC_VERSION
+            self.concept_definition_version = CONCEPT_VERSION
+            return
         backbone_path = _WEIGHTS_DIR / 'student_kd_best.pt'
         cbm_path      = _WEIGHTS_DIR / 'cbm_bi_residual_v2_w0.8_lc4.0_best.pt'
 
@@ -122,6 +145,8 @@ class StressInferenceEngine:
         if not cbm_path.exists():
             print(f"⛔ CBM 없음: {cbm_path}"); self.model = None; return
 
+        self.student_path = backbone_path
+        self.model_version = configured_model_version()
         backbone_state = torch.load(backbone_path, map_location='cpu')['model_state_dict']
         cbm_ckpt       = torch.load(cbm_path,      map_location='cpu')
         cbm_state      = cbm_ckpt['cbm_state_dict']
@@ -148,12 +173,12 @@ class StressInferenceEngine:
             import torchvision.models as tv
             resnet = tv.resnet18(weights='IMAGENET1K_V1')
             self.resnet = nn.Sequential(*list(resnet.children())[:-1]).to(self.device)
-            if self.device in ('mps', 'cuda'):
+            if self.variant != 'concept-v2' and self.device in ('mps', 'cuda'):
                 self.resnet = self.resnet.half()
             self.resnet.eval()
             for p in self.resnet.parameters():
                 p.requires_grad = False
-            print("✅ ResNet18 로드" + (" (fp16)" if self.device in ('mps', 'cuda') else ""))
+            print("✅ ResNet18 로드" + (" (fp16)" if self.variant != "concept-v2" and self.device in ('mps', 'cuda') else ""))
         except Exception as e:
             print(f"⚠️  ResNet18 로드 실패: {e}"); self.resnet = None
 
@@ -166,7 +191,7 @@ class StressInferenceEngine:
             for p in self.wav2vec.parameters():
                 p.requires_grad = False
 
-            projection_dir = _WEIGHTS_DIR
+            projection_dir = self.bundle_dir
             weight_path = projection_dir / 'audio_projection_weight.npy'
             bias_path = projection_dir / 'audio_projection_bias.npy'
             manifest_path = projection_dir / 'audio_projection_manifest.json'
@@ -175,7 +200,7 @@ class StressInferenceEngine:
                     '검증된 오디오 투영이 없습니다. '
                     'ai/feature_analysis/recover_audio_projection.py를 실행하세요.')
             manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-            with (_WEIGHTS_DIR / 'student_kd_best.pt').open('rb') as source:
+            with self.student_path.open('rb') as source:
                 student_hash = hashlib.file_digest(source, 'sha256').hexdigest()
             if (manifest.get('source_model') != 'facebook/wav2vec2-base'
                     or manifest.get('student_sha256') != student_hash
@@ -196,6 +221,12 @@ class StressInferenceEngine:
             self.model = None
 
     def _load_geo_scaler(self):
+        if self.variant == 'concept-v2':
+            self.geo_mean = np.load(self.bundle_dir / 'geo_mean.npy')
+            self.geo_std = np.load(self.bundle_dir / 'geo_std.npy')
+            if self.geo_mean.shape != (24,) or self.geo_std.shape != (24,) or not (np.isfinite(self.geo_mean).all() and np.isfinite(self.geo_std).all() and (self.geo_std > 0).all()):
+                raise ValueError('Invalid V2 geometry normalization')
+            return
         mean_p = _WEIGHTS_DIR / 'geo_scaler_mean.npy'
         std_p  = _WEIGHTS_DIR / 'geo_scaler_std.npy'
         if mean_p.exists() and std_p.exists():
@@ -209,6 +240,12 @@ class StressInferenceEngine:
 
     def _load_ege_scaler(self):
         """학습 시 사용된 eGeMAPS 통계 로드 (z-score 정규화용)."""
+        if self.variant == 'concept-v2':
+            self._ege_mean = np.load(self.bundle_dir / 'ege_mean.npy')
+            self._ege_std = np.load(self.bundle_dir / 'ege_std.npy')
+            if self._ege_mean.shape != (88,) or self._ege_std.shape != (88,) or not (np.isfinite(self._ege_mean).all() and np.isfinite(self._ege_std).all()):
+                raise ValueError('Invalid V2 acoustic normalization')
+            return
         ege_path = _WEIGHTS_DIR / 'ege_maps_feats.npy'
         if ege_path.exists():
             ege_np = np.load(ege_path).astype(np.float32)
@@ -258,18 +295,24 @@ class StressInferenceEngine:
 
     def _extract_frame_features(self, video_np: np.ndarray) -> torch.Tensor:
         """(16, H, W, 3) uint8 BGR → (1, 16, 512) ResNet18 피처."""
+        if self.resnet is None and self.variant == 'concept-v2':
+            raise RuntimeError('V2 frame extractor unavailable')
         if self.resnet is None:
             return torch.zeros(1, 16, 512, device=self.device)
 
         frames = []
         for f in video_np:
             f_rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
-            f_res = cv2.resize(f_rgb, (224, 224)).astype(np.float32) / 255.0
+            if self.variant == 'concept-v2':
+                from PIL import Image
+                f_res = np.asarray(Image.fromarray(f_rgb).resize((224,224), Image.Resampling.BILINEAR),dtype=np.float32) / 255.0
+            else:
+                f_res = cv2.resize(f_rgb, (224, 224)).astype(np.float32) / 255.0
             f_norm = (f_res - IMAGENET_MEAN) / IMAGENET_STD
             frames.append(torch.from_numpy(f_norm.transpose(2, 0, 1)))
 
         frames_t = torch.stack(frames).to(self.device)  # (16, 3, 224, 224)
-        if self.device in ('mps', 'cuda'):
+        if self.variant != 'concept-v2' and self.device in ('mps', 'cuda'):
             frames_t = frames_t.half()
         with torch.no_grad():
             feat = self.resnet(frames_t).flatten(1).float()  # (16, 512)
@@ -288,6 +331,7 @@ class StressInferenceEngine:
 
     def _extract_ege_maps(self, audio_np: np.ndarray) -> torch.Tensor | None:
         """raw waveform → eGeMAPS v02 Functionals (1, 88), z-score 정규화."""
+        self._last_ege_raw = None
         if self._ege_mean is None:
             return None
         try:
@@ -304,18 +348,28 @@ class StressInferenceEngine:
                 wav = np.pad(wav, (0, min_len - len(wav)))
             feat = self._smile.process_signal(wav, sr)
             ege  = feat.values[0].astype(np.float32)
+            if self.variant == 'concept-v2':
+                expected = ['F0semitoneFrom27.5Hz_sma3nz_amean', 'jitterLocal_sma3nz_amean', 'shimmerLocaldB_sma3nz_amean', 'HNRdBACF_sma3nz_amean']
+                if ege.shape != (88,) or not np.isfinite(ege).all() or [feat.columns[i] for i in (0,30,32,34)] != expected:
+                    raise ValueError('eGeMAPS feature order mismatch')
+                self._last_ege_raw = ege.copy()
             ege  = (ege - self._ege_mean) / (self._ege_std + 1e-6)
             return torch.from_numpy(ege).unsqueeze(0).to(self.device)  # (1, 88)
         except Exception:
+            if self.variant == 'concept-v2':
+                raise
             return None
 
     def _extract_geometry(self, video_np: np.ndarray) -> torch.Tensor:
         """(16, H, W, 3) uint8 BGR → (1, 16, 24) geometry (z-scored)."""
+        if self.face_mesh is None and self.variant == 'concept-v2':
+            raise RuntimeError('V2 face extractor unavailable')
         if self.face_mesh is None:
             return torch.zeros(1, 16, GEO_INPUT_DIM, device=self.device)
 
         mp    = self._mp
         geo   = np.zeros((16, GEO_INPUT_DIM), dtype=np.float32)
+        self._last_blendshape_valid = np.zeros(16,dtype=bool)
 
         for fi, frame in enumerate(video_np):
             rgb    = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -328,10 +382,12 @@ class StressInferenceEngine:
                 bs  = res.face_blendshapes[0]              if res.face_blendshapes               else None
                 tm  = res.facial_transformation_matrixes[0] if res.facial_transformation_matrixes else None
                 geo[fi] = self._frame_geom(lm, bs, tm)
+                self._last_blendshape_valid[fi] = bs is not None
             except Exception:
                 pass
 
-        geo_scaled = (geo - self.geo_mean) / (self.geo_std + 1e-8)
+        self._last_geo_raw = geo.copy()
+        geo_scaled = (geo - self.geo_mean) / (self.geo_std if self.variant == "concept-v2" else self.geo_std + 1e-8)
         return torch.from_numpy(geo_scaled).unsqueeze(0).to(self.device)  # (1, 16, 24)
 
     @staticmethod
@@ -425,11 +481,18 @@ class StressInferenceEngine:
         if self.model is None:
             raise RuntimeError('Student-CBM 모델 또는 필수 특징 추출기가 준비되지 않았습니다.')
 
+        if self.variant == 'concept-v2' and (video_np.ndim!=4 or video_np.shape[0]!=16 or audio_np.shape!=(160000,) or not np.isfinite(audio_np).all()):
+            raise ValueError('V2 expects exactly 16 frames and 10 seconds of 16 kHz mono audio')
         ff  = self._extract_frame_features(video_np)   # (1, 16, 512)
         ae  = self._extract_audio_embedding(audio_np)  # (1, 256)
         geo = self._extract_geometry(video_np)          # (1, 16, 24)
         ege = self._extract_ege_maps(audio_np)          # (1, 88) or None
 
+        if self.variant == 'concept-v2':
+            expected_shapes = [(1,16,512),(1,256),(1,16,24),(1,88)]
+            for value, shape in zip((ff,ae,geo,ege),expected_shapes):
+                if value is None or tuple(value.shape) != shape or not torch.isfinite(value).all():
+                    raise ValueError('V2 live input shape or normalization mismatch')
         with torch.no_grad():
             final_logits, c_pred, attn = self.model(ff, ae, geo, self.task_id, ege=ege)
 
@@ -441,14 +504,14 @@ class StressInferenceEngine:
 
         concept_contrib = {
             name: round(float(v), 3)
-            for name, v in zip(CONCEPT_NAMES, c_pred_np)
+            for name, v in zip(self.concept_names, c_pred_np)
         }
 
         # 개념 기여도 → 모달리티 주도 계산
         _AUDIO_CONCEPTS = {'목소리 거칠기', '음색 불안정성', '음성 두께', '음성 피치'}
         _VIDEO_CONCEPTS = {'표정 변화량', '입술 긴장도', '눈썹 찡그림'}
-        audio_w = sum(abs(concept_contrib[n]) for n in _AUDIO_CONCEPTS)
-        video_w = sum(abs(concept_contrib[n]) for n in _VIDEO_CONCEPTS)
+        audio_w = sum(abs(concept_contrib.get(n,0)) for n in _AUDIO_CONCEPTS)
+        video_w = sum(abs(concept_contrib.get(n,0)) for n in _VIDEO_CONCEPTS)
         total   = audio_w + video_w + 1e-8
         gate_w  = [round(video_w / total, 3), round(audio_w / total, 3)]
         if gate_w[0] > 0.6:
@@ -458,7 +521,13 @@ class StressInferenceEngine:
         else:
             dominant = '복합'
 
-        audio_feat = self.analyze_audio(audio_np)
+        if self.variant == 'concept-v2':
+            # Auxiliary predictions do not constitute modality attribution.
+            gate_w, dominant = None, 'not_estimated'
+            raw = self._last_ege_raw
+            audio_feat = ({key:float(raw[index]) for key,index in [('egemap_f0_semitone',0),('egemap_jitter',30),('egemap_shimmer_db',32),('egemap_hnr_db',34)]} if raw is not None and raw[0] > 0 else {})
+        else:
+            audio_feat = self.analyze_audio(audio_np)
         video_feat = self._analyze_video_from_geo(video_np, geo[0].cpu().numpy())
 
         if record_session:
@@ -531,6 +600,15 @@ class StressInferenceEngine:
         이미 추출한 geometry (16, 24) 에서 피드백용 지표 재활용.
         geometry는 z-scored이므로 역변환 후 사용.
         """
+        if self.variant == 'concept-v2':
+            raw = self._last_geo_raw
+            face_valid = np.any(raw != 0,axis=1)
+            movement_valid = face_valid & self._last_blendshape_valid
+            result = {'face_detected':bool(movement_valid.sum() >= 13),'valid_face_frames':int(face_valid.sum()),'valid_movement_frames':int(movement_valid.sum())}
+            if movement_valid.any():
+                for key,indices in [('brow_down',[14,15]),('eye_squint',[19,20]),('jaw_open',[21])]:
+                    result[key] = float(raw[movement_valid][:,indices].mean())
+            return result
         geo_raw = geo_scaled * self.geo_std + self.geo_mean  # (16, 24) 원래 스케일
 
         # 움직임 (raw 프레임)

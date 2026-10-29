@@ -1,3 +1,4 @@
+import v2Guidance from "../../shared/concept-v2-guidance.json";
 import type { AgentReport } from "@/lib/agent-report";
 import { measurementLabel } from "@/lib/measurement-labels";
 
@@ -77,7 +78,9 @@ export function findingGuidance(finding: Finding, ko: boolean) {
     lip_tension: [direction === null ? "앞부분과 입이 벌어진 정도를 비교할 자료가 부족해요" : direction > 0 ? "입이 벌어진 정도가 앞부분보다 컸어요" : direction < 0 ? "입이 벌어진 정도가 앞부분보다 작았어요" : "입이 벌어진 정도는 앞부분과 비슷했어요", direction === null ? "there is not enough data to compare mouth opening with earlier in the presentation" : direction > 0 ? "your mouth was more open than earlier in the presentation" : direction < 0 ? "your mouth was less open than earlier in the presentation" : "your mouth opening was similar to earlier in the presentation", "말소리가 또렷하게 들리는지 듣기", "Listen for clear speech", "전달할 문장을 나눠 다시 말하기", "Break a sentence into clear phrases"],
     gaze: ["카메라 기준 시선 움직임에 차이가 있었어요", "the camera's gaze estimate changed", "시선이 전달 의도와 맞는지 보기", "Review whether gaze matches your intention", "핵심 문장을 말할 때 카메라 바라보기", "Look toward the camera for the key sentence"],
   };
-  const row = choices[finding.id] ?? ["발표 중 관측값에 변화가 있었어요", "an observed measurement changed", "선택 구간의 전달을 확인하기", "Review delivery in the selected interval", "한 가지 전달 목표로 다시 발표하기", "Repeat with one delivery goal"];
+  const v2 = (v2Guidance as Record<string,{higher:string[];lower:string[];same:string[];missing:string[];title:string[];goal:string[];check:string[]}>)[finding.id];
+  const v2Observation = v2?.[direction === null ? "missing" : direction > 0 ? "higher" : direction < 0 ? "lower" : "same"];
+  const row = v2 ? [...v2Observation!,...v2.title,...v2.goal] : choices[finding.id] ?? ["발표 중 관측값에 변화가 있었어요", "an observed measurement changed", "선택 구간의 전달을 확인하기", "Review delivery in the selected interval", "한 가지 전달 목표로 다시 발표하기", "Repeat with one delivery goal"];
   let observation = row[ko ? 0 : 1];
   if (first) observation = ko ? `${time(first.startMs)}–${time(first.endMs)}, ${finding.id === "pitch_change" && direction ? "앞부분과 비교해 " : ""}${observation}` : `In ${time(first.startMs)}–${time(first.endMs)}, ${observation}${finding.id === "pitch_change" && direction ? " compared with earlier intervals" : ""}.`;
   if (ko) observation += ".";
@@ -85,7 +88,7 @@ export function findingGuidance(finding: Finding, ko: boolean) {
   const count = finding.observations?.length ?? 0;
   if (count > 1) observation += ko ? ` 함께 확인할 영상은 ${count}곳이에요.` : ` There are ${count} recorded intervals to review together.`;
   return { title: row[ko ? 2 : 3], goal: row[ko ? 4 : 5], observation,
-    question: ({
+    question: v2 ? v2.check[ko ? 0 : 1] : ({
       pitch_change: ["높낮이가 바뀌는 순간에 중요한 문장이 구분되는지 들어보세요. 문장 끝의 쉼과 다음 문장 시작도 따로 들어보세요.", "Listen for whether a pitch change marks a key sentence. Separately check sentence-end pauses and the next sentence start."],
       pitch_variability: ["고른 구간을 듣고 가장 중요한 문장 하나를 직접 골라보세요. 그 문장이 나머지와 구분되는지, 의미가 끝나기 전에 끊겨 들리는지 확인하세요.", "Choose the key sentence yourself. Listen for whether it stands out and whether the thought sounds interrupted before it is complete."],
       lip_tension: ["입 모양만으로 발음이 좋거나 나쁜지는 알 수 없어요. 이 장면을 소리와 함께 재생해 보세요. 잘 들리면 지금 방식을 유지하고, 다시 듣게 된 문장이 있다면 그 문장만 짧게 나눠 연습해요.", "Mouth opening alone cannot tell us whether pronunciation is clear. Play this interval with sound. Keep your delivery if it is clear; if you need to replay a sentence, rehearse that sentence in short phrases."],

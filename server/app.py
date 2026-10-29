@@ -25,7 +25,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from inference import get_engine, health, predict
 from agent.report_schema import ReviewRequest
 from agent.coaching import localized_messages, CoachRequest, new_document
-from agent.coach_ai import AIUnavailable, PROMPT, VERIFY_PROMPT, respond_with_ai
+from agent.coach_ai import AIUnavailable, VERIFY_PROMPT, coaching_prompt, respond_with_ai
 from agent.finding_evidence import complete_document_evidence
 from datetime import datetime, timezone
 from agent.report_agent import generate_report, luxia_decide_action, luxia_synthesize
@@ -181,7 +181,7 @@ def _coach_store(user, credentials):
 
 def _generate_coaching(context):
     from agent.report_agent import _luxia_json
-    return _luxia_json(PROMPT, context, 2600, read_timeout=35)
+    return _luxia_json(coaching_prompt(context), context, 2600, read_timeout=35)
 
 
 def _verify_coaching(context):
@@ -240,6 +240,7 @@ def create_agent_report(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict:
     """Run a bounded post-session agent and retain verifiable memory in its report."""
+    observed_version = body.modelVersion or model_version()
     try:
         rag = _report_rag()
     except Exception as error:
@@ -258,18 +259,18 @@ def create_agent_report(
             if memory and goal:
                 prior = {**memory, "focusGoal": {"candidateId": goal_id, "metric": goal["metric"]}}
                 previous_coaching = {"previousSessionId": memory["sessionId"], "goalLabel": goal["label"],
-                                     "comparable": memory["modelVersion"] == model_version() and memory.get("metricDefinitionVersion") == "session-analysis-v4" and memory.get("sceneLabel") == body.sceneLabel,
+                                     "comparable": memory["modelVersion"] == observed_version and memory.get("metricDefinitionVersion") == body.metricDefinitionVersion and memory.get("sceneLabel") == body.sceneLabel,
                                      "lastOutcome": next((p["comparison"]["outcome"] for p in reversed(previous_doc["practices"]) if p.get("comparison")), None)}
     except HTTPException:
         pass
     report = generate_report(body, rag=rag,
                            synthesize=luxia_synthesize if luxia_api_key else None,
                            decide=luxia_decide_action if luxia_api_key else None,
-                           prior_memory=prior, model_version=model_version(), agent_mode=True)
+                           prior_memory=prior, model_version=observed_version, agent_mode=True)
     if previous_coaching: report["previousCoaching"] = previous_coaching
     try:
         store = _coach_store(_user, credentials)
-        doc = new_document(body, report, model_version())
+        doc = new_document(body, report, observed_version)
         doc["snapshot"]["recordedAt"] = datetime.now(timezone.utc).isoformat()
         if body.practiceContext:
             parent = store.get(body.practiceContext.sessionId)

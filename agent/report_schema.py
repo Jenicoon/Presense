@@ -17,6 +17,9 @@ class SignalQuality(Contract):
 
 
 class SegmentAnalysis(Contract):
+    modelVersion: str | None = Field(default=None, max_length=100)
+    metricDefinitionVersion: str | None = Field(default=None, max_length=100)
+    conceptDefinitionVersion: str | None = Field(default=None, max_length=100)
     segmentId: str = Field(min_length=1, max_length=100)
     startMs: int = Field(ge=0)
     endMs: int = Field(gt=0)
@@ -47,6 +50,9 @@ class ReviewRequest(Contract):
     sessionId: str = Field(min_length=1, max_length=100)
     durationMs: int = Field(gt=0, le=14_400_000)
     language: Literal["ko", "en"] = "ko"
+    modelVersion: str | None = Field(default=None, max_length=100)
+    metricDefinitionVersion: str = Field(default="session-analysis-v4", max_length=100)
+    conceptDefinitionVersion: str | None = Field(default=None, max_length=100)
     source: Literal["live"] = "live"
     sceneLabel: str | None = Field(default=None, max_length=120)
     practiceContext: PracticeContext | None = None
@@ -54,6 +60,27 @@ class ReviewRequest(Contract):
 
     @model_validator(mode="after")
     def valid_session(self):
+        for field in ("modelVersion", "metricDefinitionVersion", "conceptDefinitionVersion"):
+            values = {getattr(row,field) for row in self.segments}
+            specified = values - {None}
+            if len(specified)>1 or (specified and None in values):
+                raise ValueError("A session cannot mix model or metric definition versions")
+            if specified:
+                value=next(iter(specified))
+                if field in self.model_fields_set and getattr(self,field)!=value:
+                    raise ValueError("Session and window versions differ")
+                setattr(self,field,value)
+        from .model_contract import RAW_METRICS
+        new_keys={key for _,key,_,_ in RAW_METRICS}
+        if self.metricDefinitionVersion!="session-analysis-v5-exact7" and (any(new_keys.intersection(row.audioFeatures.keys()|row.videoFeatures.keys()) for row in self.segments) or (self.modelVersion or "").startswith("exact7-v2-")):
+            raise ValueError("New measurements cannot use legacy definitions")
+        if self.metricDefinitionVersion=="session-analysis-v5-exact7":
+            if not self.modelVersion or not self.modelVersion.startswith("exact7-v2-") or self.conceptDefinitionVersion!="literature-exact7-v2":
+                raise ValueError("V2 measurements require their paired model and concept definition versions")
+            from ai.concept_registry import PROPOSED_CONCEPTS_V2
+            names={c.model_name_ko for c in PROPOSED_CONCEPTS_V2}
+            if any(not set(row.concepts).issubset(names) for row in self.segments):
+                raise ValueError("Legacy concept names cannot label V2 predictions")
         ids = [s.segmentId for s in self.segments]
         if len(ids) != len(set(ids)):
             raise ValueError("Segment IDs must be unique.")

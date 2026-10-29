@@ -4,6 +4,9 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { INFERENCE_URL, type LiveInferenceFrame } from "@/lib/live-signal";
 
 export type ReportSegment = {
+  modelVersion?: string;
+  metricDefinitionVersion?: string;
+  conceptDefinitionVersion?: string;
   segmentId: string;
   startMs: number;
   endMs: number;
@@ -42,6 +45,7 @@ export type AgentReport = {
   observationEvidenceIds?: string[];
   rawSegments?: ReportSegment[];
   coachingAvailable?: boolean;
+  coachingDisabledReason?: "dataset_privacy";
   previousCoaching?: { previousSessionId:string;goalLabel:string;comparable:boolean;lastOutcome:string|null };
   priorities: Array<{
     metric?: string;
@@ -157,6 +161,7 @@ function finiteFeatures(values: Record<string, unknown>): Record<string, number 
 
 export function toReportSegment(frame: LiveInferenceFrame, index: number, endMs: number): ReportSegment {
   return {
+    ...(frame.modelVersion ? {modelVersion:frame.modelVersion, metricDefinitionVersion:frame.metricDefinitionVersion, conceptDefinitionVersion:frame.conceptDefinitionVersion} : {}),
     segmentId: `capture-${index}`,
     startMs: Math.max(0, endMs - 10_000),
     endMs,

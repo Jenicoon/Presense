@@ -1,0 +1,277 @@
+{
+  "v2_mean_f0": {
+    "title": [
+      "중요한 문장이 구분되는지 듣기",
+      "Listen for the key sentence"
+    ],
+    "higher": [
+      "평균적인 목소리 높이가 앞부분보다 높게 측정됐어요",
+      "Mean voice pitch was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "평균적인 목소리 높이가 앞부분보다 낮게 측정됐어요",
+      "Mean voice pitch was lower than earlier in the presentation"
+    ],
+    "same": [
+      "평균적인 목소리 높이는 앞부분과 비슷했어요",
+      "Mean voice pitch was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "목소리가 높거나 낮다는 이유로 고칠 필요는 없어요. 중요한 문장 하나를 직접 골라 잘 구분되는지 듣고, 문장 끝의 쉼도 확인해 보세요.",
+      "Pitch direction alone does not call for correction. Choose a key sentence yourself and listen for emphasis and sentence-end pauses."
+    ],
+    "goal": [
+      "한 문장만 골라 강조를 바꿔 말하기",
+      "Try a different emphasis for one sentence"
+    ],
+    "instruction": [
+      "문장 하나를 직접 고르세요.\n평소 방식과 다른 강조로 같은 문장을 다시 말하세요.\n어느 방식이 뜻을 잘 전달하는지 녹음을 비교하세요.",
+      "Choose a sentence yourself.\nRepeat it naturally and with a different emphasis.\nCompare which recording expresses your meaning."
+    ],
+    "strategies": [
+      "contrast",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "pitch_change"
+  },
+  "v2_jitter": {
+    "title": [
+      "실제 말소리를 듣고 비교하기",
+      "Listen and compare the actual speech"
+    ],
+    "higher": [
+      "아주 짧은 소리 단위에서 높낮이가 달라지는 정도가 앞부분보다 크게 측정됐어요",
+      "cycle-to-cycle frequency variation was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "아주 짧은 소리 단위에서 높낮이가 달라지는 정도가 앞부분보다 작게 측정됐어요",
+      "cycle-to-cycle frequency variation was lower than earlier in the presentation"
+    ],
+    "same": [
+      "아주 짧은 소리 단위에서 높낮이가 달라지는 정도는 앞부분과 비슷했어요",
+      "cycle-to-cycle frequency variation was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "이 수치만으로 목소리가 나쁘거나 발음이 흐리다고 판단할 수 없어요. 소리를 들으며 다시 듣게 되는 문장이 있는지 확인하세요. 잘 들리면 유지하고, 필요하면 같은 문장을 편한 목소리로 다시 녹음해 비교해요.",
+      "This measurement alone does not establish poor voice or pronunciation. Listen for any sentence that needs replaying. Keep clear delivery, or record the same sentence comfortably and compare."
+    ],
+    "goal": [
+      "직접 고른 문장을 편한 목소리로 다시 말하기",
+      "Repeat a self-selected sentence comfortably"
+    ],
+    "instruction": [
+      "다시 말할 문장을 직접 고르세요.\n뜻이 끝나는 곳에서 편하게 쉬며 같은 내용을 말하세요.\n두 녹음에서 말이 또렷하게 들리는지 직접 비교하세요.",
+      "Choose a sentence yourself.\nRepeat it with a comfortable pause at the end of a thought.\nListen back and compare clarity yourself."
+    ],
+    "strategies": [
+      "clear_phrases",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "lip_tension"
+  },
+  "v2_shimmer": {
+    "title": [
+      "실제 말소리를 듣고 비교하기",
+      "Listen and compare the actual speech"
+    ],
+    "higher": [
+      "아주 짧은 소리 단위에서 크기가 달라지는 정도가 앞부분보다 크게 측정됐어요",
+      "cycle-to-cycle amplitude variation was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "아주 짧은 소리 단위에서 크기가 달라지는 정도가 앞부분보다 작게 측정됐어요",
+      "cycle-to-cycle amplitude variation was lower than earlier in the presentation"
+    ],
+    "same": [
+      "아주 짧은 소리 단위에서 크기가 달라지는 정도는 앞부분과 비슷했어요",
+      "cycle-to-cycle amplitude variation was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "이 수치만으로 목소리가 나쁘거나 발음이 흐리다고 판단할 수 없어요. 소리를 들으며 다시 듣게 되는 문장이 있는지 확인하세요. 잘 들리면 유지하고, 필요하면 같은 문장을 편한 목소리로 다시 녹음해 비교해요.",
+      "This measurement alone does not establish poor voice or pronunciation. Listen for any sentence that needs replaying. Keep clear delivery, or record the same sentence comfortably and compare."
+    ],
+    "goal": [
+      "직접 고른 문장을 편한 목소리로 다시 말하기",
+      "Repeat a self-selected sentence comfortably"
+    ],
+    "instruction": [
+      "다시 말할 문장을 직접 고르세요.\n뜻이 끝나는 곳에서 편하게 쉬며 같은 내용을 말하세요.\n두 녹음에서 말이 또렷하게 들리는지 직접 비교하세요.",
+      "Choose a sentence yourself.\nRepeat it with a comfortable pause at the end of a thought.\nListen back and compare clarity yourself."
+    ],
+    "strategies": [
+      "clear_phrases",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "lip_tension"
+  },
+  "v2_hnr": {
+    "title": [
+      "실제 말소리를 듣고 비교하기",
+      "Listen and compare the actual speech"
+    ],
+    "higher": [
+      "목소리의 규칙적인 성분을 잡음 성분과 비교한 값이 앞부분보다 크게 측정됐어요",
+      "the voice harmonics-to-noise ratio was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "목소리의 규칙적인 성분을 잡음 성분과 비교한 값이 앞부분보다 작게 측정됐어요",
+      "the voice harmonics-to-noise ratio was lower than earlier in the presentation"
+    ],
+    "same": [
+      "목소리의 규칙적인 성분을 잡음 성분과 비교한 값은 앞부분과 비슷했어요",
+      "the voice harmonics-to-noise ratio was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "이 수치만으로 목소리가 나쁘거나 발음이 흐리다고 판단할 수 없어요. 소리를 들으며 다시 듣게 되는 문장이 있는지 확인하세요. 잘 들리면 유지하고, 필요하면 같은 문장을 편한 목소리로 다시 녹음해 비교해요.",
+      "This measurement alone does not establish poor voice or pronunciation. Listen for any sentence that needs replaying. Keep clear delivery, or record the same sentence comfortably and compare."
+    ],
+    "goal": [
+      "직접 고른 문장을 편한 목소리로 다시 말하기",
+      "Repeat a self-selected sentence comfortably"
+    ],
+    "instruction": [
+      "다시 말할 문장을 직접 고르세요.\n뜻이 끝나는 곳에서 편하게 쉬며 같은 내용을 말하세요.\n두 녹음에서 말이 또렷하게 들리는지 직접 비교하세요.",
+      "Choose a sentence yourself.\nRepeat it with a comfortable pause at the end of a thought.\nListen back and compare clarity yourself."
+    ],
+    "strategies": [
+      "clear_phrases",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "lip_tension"
+  },
+  "v2_brow_down": {
+    "title": [
+      "눈썹 움직임과 전달 의도 함께 보기",
+      "Review brow movement with your intended expression"
+    ],
+    "higher": [
+      "눈썹을 내리는 움직임이 앞부분보다 크게 측정됐어요",
+      "Brow lowering movement was greater than earlier in the presentation"
+    ],
+    "lower": [
+      "눈썹을 내리는 움직임이 앞부분보다 작게 측정됐어요",
+      "Brow lowering movement was smaller than earlier in the presentation"
+    ],
+    "same": [
+      "눈썹을 내리는 움직임은 앞부분과 비슷했어요",
+      "Brow lowering movement was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "같은 장면을 소리 없이 한 번, 소리와 함께 한 번 보세요. 전달하려던 느낌은 직접 정하고 표정이 그 느낌과 맞는지 확인하세요. 움직임의 크기만으로 감정은 판단하지 않아요.",
+      "Watch once without sound, then with sound. Choose the intended feeling yourself and compare the expression. Movement magnitude alone does not identify emotion."
+    ],
+    "goal": [
+      "같은 문장을 두 표정으로 말하고 비교하기",
+      "Compare two expressions for the same sentence"
+    ],
+    "instruction": [
+      "전달할 느낌을 직접 정하세요.\n같은 문장을 두 표정으로 말해 보세요.\n영상과 소리를 함께 보고 표현을 직접 선택하세요.",
+      "Choose your intended feeling.\nSay the same sentence with two expressions.\nWatch with sound and choose your expression."
+    ],
+    "strategies": [
+      "expression"
+    ],
+    "profile": "brow_tension"
+  },
+  "v2_eye_squint": {
+    "title": [
+      "눈 주변과 시선을 편하게 두고 확인하기",
+      "Review comfortable eyes and gaze"
+    ],
+    "higher": [
+      "눈꺼풀을 좁히는 움직임이 앞부분보다 크게 측정됐어요",
+      "Eyelid tightening movement was greater than earlier in the presentation"
+    ],
+    "lower": [
+      "눈꺼풀을 좁히는 움직임이 앞부분보다 작게 측정됐어요",
+      "Eyelid tightening movement was smaller than earlier in the presentation"
+    ],
+    "same": [
+      "눈꺼풀을 좁히는 움직임은 앞부분과 비슷했어요",
+      "Eyelid tightening movement was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "조명이나 안경 때문에 눈이 불편하지 않았는지 함께 확인하세요. 원하면 잠깐 쉬고 자연스럽게 눈을 깜박인 뒤, 얼굴과 시선을 편하게 두고 같은 문장을 다시 녹음해요.",
+      "Check whether lighting or glasses made your eyes uncomfortable. Optionally take a brief break, blink naturally, then record the same sentence with a comfortable face and gaze."
+    ],
+    "goal": [
+      "잠깐 쉬고 같은 문장 다시 녹음하기",
+      "Take a brief break and repeat the sentence"
+    ],
+    "instruction": [
+      "카메라와 조명을 같은 위치에 두고 잠깐 쉬세요.\n눈을 자연스럽게 깜박이고 편하게 시선을 두세요.\n같은 문장을 말한 두 영상을 비교하세요.",
+      "Keep camera and lighting in the same position and take a brief break.\nBlink naturally and let your gaze rest comfortably.\nCompare recordings of the same sentence."
+    ],
+    "strategies": [
+      "face_reset"
+    ],
+    "profile": "eye_reset"
+  },
+  "v2_jaw_open": {
+    "title": [
+      "말이 급하게 이어졌는지 직접 듣기",
+      "Listen for rushed delivery yourself"
+    ],
+    "higher": [
+      "턱을 여는 움직임이 앞부분보다 크게 측정됐어요",
+      "Jaw opening movement was greater than earlier in the presentation"
+    ],
+    "lower": [
+      "턱을 여는 움직임이 앞부분보다 작게 측정됐어요",
+      "Jaw opening movement was smaller than earlier in the presentation"
+    ],
+    "same": [
+      "턱을 여는 움직임은 앞부분과 비슷했어요",
+      "Jaw opening movement was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "턱 움직임은 말하는 내용과 조음에 따라 달라져요. 소리와 함께 재생해 말이 급하게 이어졌는지 직접 확인하세요. 편하게 들리면 유지하고, 쉼이 필요하면 문장 하나를 골라 뜻이 끝나는 곳에서 쉬며 다시 말해요.",
+      "Jaw movement depends on speech content and articulation. Play with sound and judge rushed delivery yourself. Keep comfortable delivery, or choose one sentence and pause at a completed thought."
+    ],
+    "goal": [
+      "뜻이 끝나는 곳에서 쉬고 같은 문장 다시 말하기",
+      "Pause at a completed thought and repeat the sentence"
+    ],
+    "instruction": [
+      "문장 하나를 직접 고르세요.\n의미가 끝나는 곳에서 쉬고 다음 문장을 시작하세요.\n같은 조건에서 녹음하고 두 영상을 소리와 함께 비교하세요.",
+      "Choose one sentence yourself.\nPause at the completed thought before starting the next sentence.\nRecord under matching conditions and compare with sound."
+    ],
+    "strategies": [
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "jaw_review"
+  }
+}

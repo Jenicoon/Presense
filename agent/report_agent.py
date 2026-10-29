@@ -25,12 +25,28 @@ _EVIDENCE_TERMS = {
     "lip_tension": re.compile(r"\b(?:lip[- ]?(?:tighten\w*|compress\w*|tension)|AU\s?2[34])\b", re.I),
     "brow_tension": re.compile(r"\b(?:brow[- ]?(?:lower\w*|furrow\w*|tension)|eyebrow|AU\s?0?4)\b", re.I),
     "gaze": re.compile(r"\b(?:gaze|eye[- ]?contact|visual attention)\b", re.I),
+    "concept_spectral_contrast": re.compile(r"\b(?:spectral|spectrum|voice quality|harmonic|HNR|cepstral)\b", re.I),
+    "concept_tonnetz_variability": re.compile(r"\b(?:tonnetz|tonal|chroma|harmonic|pitch class)\b", re.I),
+    "concept_mfcc_spectral_envelope": re.compile(r"\b(?:MFCC|mel.frequency cepstr|cepstral|spectral envelope)\b", re.I),
+    "concept_mean_f0": re.compile(r"\b(?:pitch|fundamental frequency|F0)\b", re.I),
+    "concept_facial_variability": re.compile(r"\b(?:facial|action unit|expression|AU\s?\d+)\b", re.I),
+    "concept_mouth_aperture": re.compile(r"\b(?:mouth|lip|AU\s?2[034])\b", re.I),
+    "concept_inner_brow_distance": re.compile(r"\b(?:brow|eyebrow|corrugator|AU\s?0?4)\b", re.I),
+    "v2_mean_f0": re.compile(r"\b(?:F0semitoneFrom27\.5Hz_sma3nz_amean|fundamental frequency|F0)\b", re.I),
+    "v2_jitter": re.compile(r"\b(?:jitterLocal_sma3nz_amean|jitter)\b", re.I),
+    "v2_shimmer": re.compile(r"\b(?:shimmerLocaldB_sma3nz_amean|shimmer)\b", re.I),
+    "v2_hnr": re.compile(r"\b(?:HNRdBACF_sma3nz_amean|harmonics.to.noise|HNR)\b", re.I),
+    "v2_voiced_segments_per_sec": re.compile(r"\b(?:VoicedSegmentsPerSec|voiced segments per second|speech rate)\b", re.I),
+    "v2_mean_voiced_segment_length": re.compile(r"\b(?:MeanVoicedSegmentLengthSec|(?:mean )?voiced segment length)\b", re.I),
+    "v2_brow_down": re.compile(r"\b(?:browDown(?:Left|Right)?|AU\s?0?4|brow lowerer)\b", re.I),
+    "v2_eye_squint": re.compile(r"\b(?:eyeSquint(?:Left|Right)?|AU\s?0?7|eyelid tightener)\b", re.I),
+    "v2_jaw_open": re.compile(r"\b(?:jawOpen|AU\s?0?26|jaw (?:drop|open))\b", re.I),
 }
 _UNMEASURED_PAPER_TOPICS = {
     ("Blasberg_2023_facial_stress.pdf", "brow_tension"),
 }
 _PSYCHOLOGICAL_OVERCLAIM = re.compile(r"(?:긴장|불안).{0,16}(?:드러|나타|보여|보입|확인)")
-_CAUSAL_OVERCLAIM = re.compile(r"(?:때문에\s*스트레스|스트레스.{0,16}원인|(?:눈썹|입술|시선|음성|목소리).{0,20}(?:스트레스|불안).{0,12}(?:유발|원인)|caused?\s+(?:the\s+)?stress|stress.{0,25}caused by)", re.I)
+_CAUSAL_OVERCLAIM = re.compile(r"(?:때문에\s*스트레스|스트레스.{0,16}원인|(?:눈썹|눈꺼풀|턱|입술|시선|음성|목소리).{0,20}(?:스트레스|불안).{0,12}(?:유발|원인)|caused?\s+(?:the\s+)?stress|stress.{0,25}caused by)", re.I)
 _UNVERIFIED_IMPROVEMENT = re.compile(r"(?:실력이|발표가|전달력이).{0,12}(?:개선되|향상되|좋아졌)|(?:전달|명확성).{0,16}(?:높일\s*수|향상시킬\s*수|개선할\s*수)|(?:improved|better)\s+(?:presentation|delivery|skill)", re.I)
 _MEASUREMENT_NOTES = {
     "pitch_change": "Mean acoustic fundamental frequency (F0) in the selected intervals; compare with earlier intervals only when a valid reference exists. Not a stress diagnosis.",
@@ -45,7 +61,15 @@ _METRIC_LANGUAGE_GUARDS = {
     "gaze": re.compile(r"청중.{0,8}(?:피했|외면)|눈을\s*마주치지|avoided?\s+(?:the\s+)?audience", re.I),
     "pitch_change": re.compile(r"불안해서\s*목소리|의도적으로\s*목소리.{0,8}(?:높|낮)|목소리.{0,8}떨렸", re.I),
     "pitch_variability": re.compile(r"불안해서\s*목소리|의도적으로\s*억양|말투가\s*산만했", re.I),
+    "concept:목소리 거칠기": re.compile(r"목소리.{0,8}거칠|쉰\s*목소리|rough\s*voice", re.I),
+    "concept:음색 불안정성": re.compile(r"음색.{0,8}불안정|목소리.{0,8}불안정|unstable\s*(?:tone|voice)", re.I),
+    "concept:음성 두께": re.compile(r"목소리.{0,8}(?:두껍|얇)|voice.{0,8}(?:thick|thin)", re.I),
+    "concept:음성 피치": re.compile(r"불안해서\s*목소리|목소리.{0,8}떨렸", re.I),
+    "concept:표정 변화량": re.compile(r"감정.{0,8}(?:드러|나타)|표정.{0,8}(?:좋|나쁘|굳)", re.I),
+    "concept:입술 긴장도": re.compile(r"입술.{0,8}(?:꽉\s*다물|긴장했)|발음.{0,8}(?:뭉개|불명확)", re.I),
+    "concept:눈썹 찡그림": re.compile(r"눈썹.{0,8}찡그|찡그림|불안한\s*표정", re.I),
 }
+_METRIC_LANGUAGE_GUARDS["v2_jaw_open"] = re.compile(r"(?:턱|입).{0,15}(?:줄이|덜\s*열|작게\s*열|닫)|(?:reduce|less|close).{0,15}(?:jaw|mouth)",re.I)
 _STRONG_LANGUAGE = re.compile(r"확실히|반드시|분명히|뚜렷하게|지속적으로|definitely|certainly|clearly", re.I)
 _UNOBSERVED_CONTENT = re.compile(r"핵심\s*단어|특정\s*단어|그\s*단어|해당\s*문장|(?:설명|질문|결론)\s*모드|(?:청중|관객).{0,8}(?:반응|집중|조건)|audience\s+(?:reaction|attention|condition)", re.I)
 _PRACTICE_ACTION = re.compile(r"연습|다시\s*말|다시\s*녹음|재녹음|rehears|record\s+again|try\s+again", re.I)
@@ -63,7 +87,7 @@ def _clock(ms: int) -> str:
 
 # 2. 논문 근거 적합성과 조언 범위
 
-def _eligible_evidence(issue_id: str, hit: Evidence) -> bool:
+def _eligible_evidence(issue_id: str, hit: Evidence, research_topic: str | None = None) -> bool:
     """Keep excerpts about the measured feature; exclude known non-measurements.
 
     This is a relevance guard, not a claim that an exercise was experimentally
@@ -71,19 +95,21 @@ def _eligible_evidence(issue_id: str, hit: Evidence) -> bool:
     """
     if (hit.source, issue_id) in _UNMEASURED_PAPER_TOPICS:
         return False
-    if hit.topics and issue_id not in hit.topics:
+    topic = research_topic or issue_id
+    if hit.topics and topic not in hit.topics:
         return False
     if (hit.source == "Ringgold_2025_tsst_facial.pdf" and issue_id == "brow_tension"
             and re.search(r"facial expressions did not significantly improve model fit", hit.text, re.I)):
         # This result is about the limits of AU-based stress inference, which
         # directly constrains interpretation of our brow proxy.
         return True
-    pattern = _EVIDENCE_TERMS.get(issue_id)
+    pattern = _EVIDENCE_TERMS.get(topic)
     return bool(pattern and pattern.search(hit.text))
 
 
-def _research_fit(hits: list[Evidence], issue_id: str) -> str:
-    if any(hit.applicability == "direct" and issue_id in hit.topics for hit in hits):
+def _research_fit(hits: list[Evidence], issue_id: str, research_topic: str | None = None) -> str:
+    topic = research_topic or issue_id
+    if any(hit.applicability == "direct" and topic in hit.topics for hit in hits):
         return "direct"
     return "related" if hits else "none"
 
@@ -95,7 +121,7 @@ def _advice_mode(issue: dict, research_fit: str, hits: list[Evidence]) -> str:
     if (confidence is None or confidence < .7 or issue["measurementQuality"] < .8
             or issue["independentObservations"] < 2 or research_fit != "direct"
             or not any(hit.evidenceRole == "practice_specific" and hit.applicability == "direct"
-                       and issue["id"] in hit.topics for hit in hits)):
+                       and (issue.get("researchTopic") or issue["id"]) in hit.topics for hit in hits)):
         return "review"
     return "conditional_practice"
 
@@ -276,7 +302,10 @@ def _observation_text(issue: dict, ko: bool) -> str:
         "gaze": ("시선 안정도 추정치", "gaze stability estimate"),
     }
     label = labels.get(issue["id"], (issue["metric"], issue["metric"]))[0 if ko else 1]
-    unit = " Hz" if issue["id"] in {"pitch_change", "pitch_variability"} else ""
+    if issue["id"].startswith("v2_"):
+        label = issue["label"].split(" / ")[0 if ko else -1]
+    from .session_analyzer import V2_UNITS
+    unit = (" " + V2_UNITS[issue["metric"]]) if issue["metric"] in V2_UNITS else " Hz" if issue["id"] in {"pitch_change", "pitch_variability"} else ""
     return (f"{clock} 구간의 {label}는 {value:.2f}{unit}였습니다."
             if ko else f"The {label} was {value:.2f}{unit} at {clock}.")
 
@@ -377,7 +406,7 @@ def _observed_summary(observations: dict, ko: bool) -> str:
             descriptions.append(f"{label} {pattern['value']:.2f}{unit}"
                                 + (f"(다른 창 중앙값 {pattern['comparisonValue']:.2f}{unit})" if ko else
                                    f" (other-window median {pattern['comparisonValue']:.2f}{unit})"))
-        sentences.append((f"같은 구간에서 " if ko else "In that interval, ")
+        sentences.append(("같은 구간에서 " if ko else "In that interval, ")
                          + " · ".join(descriptions) + ("가 관측됐습니다." if ko else " were observed."))
     elif observations["features"]:
         features = {row["id"]: row for row in observations["features"]}
@@ -462,7 +491,7 @@ def _previous_observation(request: ReviewRequest, observations: dict,
             continue
         if not .5 <= request.durationMs / max(record["durationMs"], 1) <= 2:
             continue
-        candidate = _prior_candidate(record, identity, model_version, request.sceneLabel)
+        candidate = _prior_candidate(record, identity, model_version, request.sceneLabel, request.metricDefinitionVersion)
         if candidate and candidate.get("metric") == key:
             previous_records.append((record, candidate))
     if not previous_records:
@@ -488,9 +517,15 @@ def _parse_json_object(content: str) -> dict:
     value = content.strip()
     if value.startswith("```"):
         lines = value.splitlines()
-        if len(lines) < 3 or lines[0].lower() not in {"```", "```json"} or lines[-1] != "```":
+        if len(lines) < 3 or lines[0].lower() not in {"```", "```json"} or "```" not in lines[1:]:
             raise ValueError("Invalid fenced JSON response")
-        value = "\n".join(lines[1:-1])
+        closing = lines.index("```", 1)
+        trailing = "\n".join(lines[closing + 1:])
+        if "```" in trailing or re.search(r"[{}]", trailing):
+            raise ValueError("Ambiguous multiple JSON objects")
+        # Provider rationale outside the one JSON fence is discarded, never
+        # rendered or used as a fact. The object still passes all schema guards.
+        value = "\n".join(lines[1:closing])
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
         raise ValueError("Expected a JSON object")
@@ -521,7 +556,7 @@ def _luxia_json(system_prompt: str, context: dict, max_tokens: int, read_timeout
     response = requests.post(
         "https://bridge.luxiacloud.com/luxia/v1/chat",
         headers={"apikey": key, "Content-Type": "application/json"},
-        json={"model": "luxia3-llm-32b-0731", "max_tokens": max_tokens,
+        json={"model": "luxia3-llm-32b-0731", "max_tokens": max_tokens, "temperature": 0,
               "messages": [{"role": "system", "content": system_prompt},
                            {"role": "user", "content": json.dumps(context, ensure_ascii=False)}]},
         timeout=(5, read_timeout),
@@ -563,7 +598,10 @@ _DECISION_PROMPT = dedent("""
     only when it could change that interpretation; eligibility alone is not a
     reason to call it. Concepts are co-observations, not causes or a repair for
     weak measurements. Never repeat a tool for the same candidate.
-    For finish, select only finishEligibleCandidateIds. If paper search is
+    An initially empty finishEligibleCandidateIds means nothing is checked yet.
+    If repeated relative feature changes are present, inspect a suitable later
+    interval before concluding no finding. Stable values do not need a forced
+    finding. For finish, select only finishEligibleCandidateIds. If paper search is
     unavailable, finish with checked measurements when useful; the server
     will show measured facts without research-backed coaching. Never request
     an action absent from its eligible list, when provided, or already in toolResults.
@@ -667,6 +705,15 @@ _SYNTHESIS_PROMPT = dedent("""
     say '목소리 높이', not '피치'. Avoid raw keys, concept scores, percentages,
     diagnoses, and promises of improvement. Quote at most 25 words per paper.
     Maximum 350 characters for summary and 240 per recommendation.
+    Session score statistics are already displayed by the application. Do not
+    repeat a mean/maximum stress score or confidence in summary prose. Discuss
+    only the selected issue's actual measurement and earlier reference.
+    V2 eye_squint is eyelid tightening, not gaze or facial emotion. V2 jaw_open
+    is jaw opening, not unclear speech or rushing. Do not prescribe reducing
+    jaw opening. Acoustic jitter/shimmer/HNR do not diagnose how speech sounds.
+    For dataOrigin=synthetic explicitly treat all measurements as invented
+    test values: no recording exists, so proposed viewing steps concern a
+    future self-recording rather than observed participant behavior.
 """).strip()
 
 
@@ -831,7 +878,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
             "reviewInterval": f"{_clock(leading_range['startMs'])}–{_clock(leading_range['endMs'])}" if leading_range else None,
             "summary": {k: v for k, v in summary.items() if k != "timeline"},
             "issues": [{**{key: value for key, value in issue.items() if key not in {"recommendation", "query"}},
-                        "measurementNote": _MEASUREMENT_NOTES.get(issue["id"], ""),
+                        "measurementNote": issue.get("measurementNote") or _MEASUREMENT_NOTES.get(issue["id"], ""),
                         "retrievedEvidenceIds": search_results[issue["id"]]} for issue in priorities],
             "evidence": [{**item, "text": " ".join(item["text"].split()[:120])}
                          for item in evidence.values()],
@@ -980,5 +1027,18 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     report["presenterSummary"] = {"ko": session_summary(report, True), "en": session_summary(report, False)}
     report["rawSegments"] = [s.model_dump() for s in request.segments]
     report["modelVersion"] = model_version
-    report["metricDefinitionVersion"] = "session-analysis-v4"
+    report["metricDefinitionVersion"] = request.metricDefinitionVersion
+    report["conceptDefinitionVersion"] = request.conceptDefinitionVersion or "legacy-seven-v1"
+    if request.metricDefinitionVersion == "session-analysis-v5-exact7":
+        from .model_contract import load_bundle, bundle_directory, bundle_version
+        try:
+            bundle=load_bundle(bundle_directory())
+            if bundle_version(bundle)==model_version:
+                report["modelMetadata"]={key:bundle[key] for key in ("conceptNames","scaling","formula","featureContract","limitations")}
+        except (OSError, ValueError):
+            pass  # Historical versions retain their saved metadata; never use a different bundle.
+        report["limitations"].extend([
+            "눈꺼풀 조임 예측은 참가자 구성에 민감할 수 있습니다." if request.language=="ko" else "Eyelid-tightening predictions can be sensitive to participant composition.",
+            "특징 예측값은 스트레스의 원인이나 분류 성능 향상의 증거가 아닙니다." if request.language=="ko" else "Feature predictions do not establish stress causes or classification accuracy gains."
+        ])
     return report
