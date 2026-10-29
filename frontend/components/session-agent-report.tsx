@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, Gauge, Layers3, ScanLine, Sparkles } from "lucide-react";
 import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
+import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence } from "@/components/agent-observation-report";
 import type { AgentReport } from "@/lib/agent-report";
 import { completeReportEvidence } from "@/lib/finding-evidence";
@@ -52,10 +53,20 @@ export function mergeTimeline(
   }
   return result;
 }
-export function SessionAgentReport({ report, language, onSeek }: {
+/** Use the same real-time axis and gap handling in the original dashboard. */
+export function ReportStressChart({ report, language, onSeek }: {
+  report: AgentReport; language: "ko" | "en"; onSeek?: (ms: number) => void;
+}) {
+  const duration = Number(report.analysis.durationMs ?? 0);
+  const cells = withGaps(mergeTimeline((report.analysis.timeline ?? []) as TimelineCell[], duration), duration);
+  return <StressChart cells={cells} durationMs={duration} language={language} onSelect={onSeek} />;
+}
+
+export function SessionAgentReport({ report, language, onSeek, showTimeline = true }: {
   report: AgentReport;
   language: "ko" | "en";
   onSeek?: (ms: number) => void;
+  showTimeline?: boolean;
 }) {
   report = completeReportEvidence(report);
   const ko = language === "ko";
@@ -106,65 +117,11 @@ export function SessionAgentReport({ report, language, onSeek }: {
         <button type="button" className="btn btn-primary" onClick={() => open(first?.id)}>{hasSavedCoaching ? (ko ? "저장된 코칭 이어가기" : "Continue saved coaching") : first ? (ko ? "이 구간 함께 확인하기" : "Review this interval together") : ko ? "코치와 살펴보기" : "Review with coach"}<ArrowRight size={15} /></button>}
     </div>
     {report.previousCoaching && <p className="review-context">{ko ? "이전 목표" : "Previous goal"} · {bilingualLabel(report.previousCoaching.goalLabel, ko, ko ? "저장된 연습 목표" : "Saved practice goal")}{!report.previousCoaching.comparable && (ko ? " · 분석 조건이 달라 수치 비교를 보류합니다." : " · Analysis conditions differ; numerical comparison is unavailable.")}</p>}
+    {showTimeline && <div className="review-timeline-layout">
     <section className="review-section review-timeline">
-      <div className="review-section-heading"><div><h3>{ko ? "시간별 스트레스 신호" : "Stress signal over time"}</h3><p>{ko ? "구간을 선택해 당시의 발표를 확인하세요." : "Select an interval to review that moment."}</p></div><span className="review-scale">{ko ? "0–100 · AI 추정" : "0–100 · AI estimate"}</span></div>
-      <figure className="stress-line-chart">
-        <svg
-          viewBox="0 0 650 220"
-          role="img"
-          aria-label={
-            ko ? "실제 관측 구간별 모델 점수" : "Model scores at observed times"
-          }
-        >
-          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
-            <g key={v}>
-              <line
-                x1="40"
-                x2="630"
-                y1={180 - v * 160}
-                y2={180 - v * 160}
-                className="stress-line-grid"
-              />
-              <text x="4" y={184 - v * 160} className="stress-line-label">
-                {v * 100}
-              </text>
-            </g>
-          ))}
-          {cells.map((c, i) =>
-            c.stressScore === null ? (
-              <rect
-                key={i}
-                x={40 + (c.startMs / Math.max(duration, 1)) * 590}
-                y="20"
-                width={((c.endMs - c.startMs) / Math.max(duration, 1)) * 590}
-                height="160"
-                fill="var(--border)"
-                opacity=".35"
-              >
-                <title>
-                  {clock(c.startMs)}–{clock(c.endMs)} ·{" "}
-                  {ko ? "분석 자료 없음" : "No analysis data"}
-                </title>
-              </rect>
-            ) : (
-              <line
-                key={i}
-                x1={40 + (c.startMs / Math.max(duration, 1)) * 590}
-                x2={40 + (c.endMs / Math.max(duration, 1)) * 590}
-                y1={180 - c.stressScore * 160}
-                y2={180 - c.stressScore * 160}
-                className="stress-line-path"
-              />
-            ),
-          )}
-          <text x="40" y="210" className="stress-line-label">
-            00:00
-          </text>
-          <text x="580" y="210" className="stress-line-label">
-            {clock(duration)}
-          </text>
-        </svg>
-      </figure>
+      <div className="panel-head"><div className="panel-head-left"><h3 className="panel-title">{ko ? "세션 스트레스 신호 타임라인" : "Session Stress Signal Timeline"}</h3><span className="panel-subtitle">{ko ? "발표 후 전체 흐름" : "Post-session overview"}</span></div><Layers3 size={16} color="var(--text-secondary)" /></div>
+      <StressChart cells={cells} durationMs={duration} language={language} onSelect={onSeek} />
+      <details className="review-details review-timeline-intervals"><summary>{ko ? "구간별 점수 모두 보기" : "View all interval scores"}</summary>
       <div className="video-timeline actual-timeline">
         {cells.map((c, i) => (
           <button
@@ -188,9 +145,18 @@ export function SessionAgentReport({ report, language, onSeek }: {
         ))}
       </div>
 
+      </details>
       <div className="review-timeline-key"><span><i />{ko ? "관측된 스트레스 신호" : "Observed stress signal"}</span><span><i className="gap" />{ko ? "분석 자료 없음" : "No analysis data"}</span></div>
       <details className="review-details review-method"><summary>{ko ? "타임라인 읽는 법" : "How to read the timeline"}</summary><p>{ko ? "회색은 분석 자료가 없는 시간입니다. 겹친 시간은 한 번만 반영하고, 같은 시점의 점수는 평균합니다. 낮은 점수도 모두 표시합니다. 도입·전개·핵심·마무리는 시간 표시 구간입니다." : "Gray marks time without analysis data. Overlap counts once; concurrent scores are averaged. Low scores remain visible. Open / Build / Core / Close are time divisions for display."}</p>{original.length > 120 && <p>{ko ? "많은 관측은 묶어 표시하며 원본은 아래에서 확인할 수 있습니다." : "Dense observations are grouped for display. Original results are available below."}</p>}</details>
     </section>
+    <aside className="review-section review-timeline-aside" aria-label={ko ? "발표 분석 요약" : "Presentation analysis summary"}>
+      <div className="panel-head"><div className="panel-head-left"><h3 className="panel-title">{ko ? "발표 분석" : "Presentation Analysis"}</h3><span className="panel-subtitle">{ko ? "이번 세션에서 확인할 것" : "What to review"}</span></div><Sparkles size={16} color="var(--text-secondary)" /></div>
+      <div className="coach-stack">
+        <div className={`coach-card ${first ? "coach-alert" : "coach-ok"}`}><h4>{ko ? "확인할 부분" : "Review focus"}</h4><p>{first ? findingGuidance(first, ko).observation : Number(a.coverage ?? 0) < .5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient data to judge major issues.") : (ko ? "반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found.")}</p>{first?.observations?.[0] && onSeek && <button type="button" className="review-time-link" onClick={() => onSeek(first.observations![0].startMs)}>{ko ? "근거 영상 보기" : "View supporting video"}<ArrowRight size={13} /></button>}</div>
+        <div className="coach-card coach-data"><h4>{ko ? "스트레스 신호가 가장 높았던 구간" : "Peak stress signal"}</h4><p>{typeof a.peakStress === "number" ? signalScore(a.peakStress) : (ko ? "분석 자료 없음" : "No analysis data")}{peak && <><br /><button type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(peak.startMs)}>{clock(peak.startMs)}–{clock(peak.endMs)}{onSeek && <ArrowRight size={13} />}</button></>}</p></div>
+      </div>
+    </aside>
+    </div>}
     <section className="review-findings"><div className="review-section-heading"><div><h3>{ko ? "함께 확인할 부분" : "What to review together"}</h3><p>{ko ? "반복된 관측과 실제 측정값을 함께 살펴보세요." : "Review repeated observations alongside the measurements."}</p></div><span className="review-count">{report.priorities.length}</span></div>
     {report.priorities.length === 0 ? <div className="review-empty"><ScanLine size={21} /><p>{Number(a.coverage ?? 0) < 0.5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient analysis data to judge major issues.") : ko ? "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found in this session."}</p></div> : report.priorities.slice(0, 3).map((f, index) => {
       const text = findingText(f, ko);

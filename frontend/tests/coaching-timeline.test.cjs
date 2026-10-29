@@ -67,3 +67,32 @@ test("dense overlapping results are grouped for display without bridging a gap o
     1,
   );
 });
+
+const chartSource = ts.createSourceFile('chart.tsx', fs.readFileSync(__dirname + '/../components/stress-chart.tsx', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const runFunction = chartSource.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'timelineRuns');
+const timelineRuns = new Function(ts.transpileModule(runFunction.getText(chartSource).replace('export ', ''), {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText + ';return timelineRuns')();
+
+test('line chart uses real interval times and breaks before unobserved time', () => {
+  const cells = [
+    {startMs:5000,endMs:10000,stressScore:.2},
+    {startMs:10000,endMs:15000,stressScore:.8},
+    {startMs:15000,endMs:20000,stressScore:null},
+    {startMs:20000,endMs:30000,stressScore:.4},
+  ];
+  const runs = timelineRuns(cells, 35000);
+  assert.deepEqual(runs.map(run => run.map(cell => cell.startMs)), [[5000,10000],[20000]]);
+  assert.deepEqual(runs.flat().map(cell => cell.stressScore), [.2,.8,.4]);
+  assert.equal(cells.length, 4);
+});
+
+test('line chart keeps a real zero but never substitutes invalid or missing scores', () => {
+  const runs = timelineRuns([
+    {startMs:0,endMs:5000,stressScore:0},
+    {startMs:5000,endMs:10000,stressScore:NaN},
+    {startMs:10000,endMs:15000,stressScore:.5},
+    {startMs:15000,endMs:25000,stressScore:.7},
+  ], 20000);
+  assert.deepEqual(runs.flat().map(cell => cell.stressScore), [0,.5]);
+  assert.equal(runs.length, 2);
+  assert.deepEqual(timelineRuns([{startMs:0,endMs:10000,stressScore:null}],10000), []);
+});

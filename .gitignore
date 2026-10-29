@@ -65,7 +65,7 @@ Thumbs.db
 /frontend/node_modules
 
 # Separate local preview build; V2 model bundle is versioned.
-.next-concept-v2/
+.next-*/
 
 # Private local request/response audits are never committed.
 /local-validation/

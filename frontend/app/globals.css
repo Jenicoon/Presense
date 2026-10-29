@@ -2000,7 +2000,7 @@ h1, h2, h3 { margin: 0; }
 .review-section-heading p { color: #64748b; font-size: 12px; line-height: 1.7; margin-top: 4px; }
 .review-scale { color: #64748b; font-size: 11px; white-space: nowrap; }
 .review-timeline .stress-line-chart { margin: 16px 0 0; }
-.review-timeline .stress-line-chart svg { max-height: 220px; }
+.review-timeline .stress-line-chart svg { max-height: none; }
 .review-timeline .actual-timeline { padding: 0; height: 18px; margin: 8px 0 12px; gap: 3px; }
 .review-timeline .actual-timeline button { height: 18px; border-radius: 3px; }
 .review-timeline-key { display: flex; flex-wrap: wrap; gap: 16px; color: #64748b; font-size: 11px; }
@@ -2155,4 +2155,33 @@ h1, h2, h3 { margin: 0; }
   .agent-resume-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding: 8px 14px; }
   .agent-resume-notice p { display: none; }
   .agent-resume-notice button { padding: 0; }
+}
+
+/* Reuse the original post-session line chart and adjacent analysis cards. */
+.review-timeline-layout { display: grid; grid-template-columns: minmax(0, 1fr) 238px; align-items: stretch; gap: 14px; }
+.review-timeline .panel-head, .review-timeline-aside .panel-head { margin-bottom: 12px; }
+.review-timeline .panel-title, .review-timeline-aside .panel-title { font-size: 14px; margin: 0; }
+.review-timeline .stress-line-chart { margin: 8px 0 4px; }
+.review-timeline-aside { padding: 18px 16px; }
+.review-timeline-aside .coach-card { padding: 14px; }
+.review-timeline-aside .coach-card h4 { font-size: 12px; line-height: 1.6; margin: 0 0 7px; }
+.review-timeline-aside .coach-alert h4 { color: var(--accent-alert); }
+.review-timeline-aside .coach-data h4 { color: var(--accent); }
+.review-timeline-aside .coach-ok h4 { color: var(--accent-ok); }
+.review-timeline-aside .coach-card p { font-size: 13px; line-height: 1.8; word-break: keep-all; overflow-wrap: anywhere; }
+.review-timeline-aside .review-time-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; white-space: normal; line-height: 1.6; }
+.stress-line-time { fill: var(--text-secondary); font-size: 9px; font-variant-numeric: tabular-nums; }
+.stress-line-gap { fill: var(--border); opacity: .45; }
+.stress-line-hit { fill: transparent; }
+.stress-line-control[role="button"] { cursor: pointer; outline: none; }
+.stress-line-control:hover .stress-line-point, .stress-line-control:focus-visible .stress-line-point, .stress-line-control.selected .stress-line-point { fill: var(--accent-light); stroke-width: 3; r: 5; }
+.stress-line-control:focus-visible .stress-line-hit { fill: var(--accent-light); }
+.stress-line-selection { font-size: 12px; color: var(--accent); text-align: center; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.review-timeline-intervals { margin-top: 6px; }
+@media (max-width: 900px) {
+  .review-timeline-layout { grid-template-columns: 1fr; }
+  .review-timeline-aside .coach-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .review-timeline-aside .coach-stack { grid-template-columns: 1fr; }
 }
