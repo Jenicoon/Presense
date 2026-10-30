@@ -16,6 +16,7 @@ export type LiveInferenceFrame = {
   audioFeatures?: Record<string, number | string | boolean>;
   videoFeatures?: Record<string, number | string | boolean>;
   quality?: { faceDetected: boolean; audioValid: boolean };
+  modelVersion?: string;
 };
 
 export type SignalSource = "simulated" | "live";
@@ -68,6 +69,7 @@ export async function inferMultimodalFrame(
     audioFeatures: data.audioFeatures ?? {},
     videoFeatures: data.videoFeatures ?? {},
     quality: data.quality ?? { faceDetected: false, audioValid: false },
+    modelVersion: data.modelVersion,
   };
 }
 

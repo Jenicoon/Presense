@@ -42,3 +42,23 @@ test('specific generated report is retained verbatim', () => {
   const report = { summaryText: '구간별 관찰 내용입니다.' };
   assert.equal(reportDisplaySummary(report, true), report.summaryText);
 });
+
+const practiceDeclaration = source.statements.find((item) => ts.isFunctionDeclaration(item) && item.name?.text === 'agentNextPractice');
+assert.ok(practiceDeclaration);
+const practiceCode = ts.transpileModule(practiceDeclaration.getText(source), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText;
+const agentNextPractice = new Function('exports', `${practiceCode}; return agentNextPractice;`)({});
+
+test('answer changes coaching without altering the measured score', () => {
+  const report = { priorities: [], observationReport: { peakSegment: { stressScore: .8 } },
+    reflection: { segmentId: 'peak', answer: null } };
+  const originalScore = report.observationReport.peakSegment.stressScore;
+  report.reflection.answer = 'intentional';
+  assert.match(agentNextPractice(report, true), /의도적으로 강조한/);
+  report.reflection.answer = 'unintentional';
+  assert.match(agentNextPractice(report, true), /다음 발표/);
+  report.reflection.answer = 'unsure';
+  assert.match(agentNextPractice(report, true), /영상을 다시 보며/);
+  assert.equal(report.observationReport.peakSegment.stressScore, originalScore);
+});

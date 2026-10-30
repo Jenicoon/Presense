@@ -15,6 +15,7 @@ cd server
 Set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `LUXIA_API_KEY` in `server/.env`. Keep the Luxia key on the server. Set `NEXT_PUBLIC_SIGNAL_SOURCE=live` and `NEXT_PUBLIC_INFERENCE_URL=http://localhost:8000` in `frontend/.env.local`. The same Supabase project must be used on both sides.
 
 Apply `frontend/supabase/migrations/20261006_agent_report.sql` before saving generated reports. It adds the `presentation_records.agent_report` JSON column used for history and prior-session Agent memory.
+Apply `frontend/supabase/migrations/20261030_user_calibrations.sql` before using persistent personal baselines. It creates a user-owned calibration record with row-level security. Restart the inference server after updating it so `/health`, `/infer`, and `/agent/report` return the model version and baseline comparison fields.
 
 The model loads its Student and CBM checkpoints from `weights/`. The audio projection files and manifest in that directory must match `student_kd_best.pt`; a mismatch prevents model initialization. The paper index is optional for basic report generation. To build it locally, use `python -m agent.download_papers` followed by `python -m agent.index_papers` from the repository root.
 

@@ -33,6 +33,7 @@ function setup(options = {}) {
   new Function('require', 'module', 'exports', code)((name) => {
     if (name === '@/lib/supabase/client') return { getSupabaseBrowserClient: () => client };
     if (name === '@/lib/app-data') return {};
+    if (name === '@/lib/agent-report') return { agentNextPractice: () => 'Adjusted practice' };
     throw new Error(`Unexpected import: ${name}`);
   }, module, module.exports);
   return { api: module.exports, events };

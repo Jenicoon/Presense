@@ -3,7 +3,8 @@ import {
   buildDefaultSectionSettings,
 } from "@/lib/app-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { AgentReport } from "@/lib/agent-report";
+import { agentNextPractice, type AgentReport } from "@/lib/agent-report";
+import type { DriftObservation, PersonalCalibration } from "@/lib/calibration";
 
 export type PresentationRecord = {
   id: string;
@@ -91,6 +92,66 @@ export async function ensureUserProfile(userId: string, email: string | undefine
   if (error) {
     throw error;
   }
+}
+
+export async function loadUserCalibration(userId: string): Promise<PersonalCalibration | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("user_calibrations")
+    .select("baseline_score, sample_count, model_version, calibrated_at, last_prompted_at")
+    .eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  return data ? {
+    score: Number(data.baseline_score), sampleCount: Number(data.sample_count),
+    modelVersion: data.model_version, calibratedAt: data.calibrated_at,
+    lastPromptedAt: data.last_prompted_at,
+  } : null;
+}
+
+export async function saveUserCalibration(userId: string, calibration: PersonalCalibration): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error("기준선을 저장하려면 로그인해 주세요.");
+  const { error } = await supabase.from("user_calibrations").upsert({
+    user_id: userId, baseline_score: calibration.score, sample_count: calibration.sampleCount,
+    model_version: calibration.modelVersion, calibrated_at: calibration.calibratedAt,
+    last_prompted_at: null,
+  }, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
+export async function markCalibrationPrompted(userId: string, at: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return;
+  const { error } = await supabase.from("user_calibrations").update({ last_prompted_at: at }).eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function loadRecentDriftObservations(): Promise<DriftObservation[]> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("presentation_records")
+    .select("scene_label, session_date, agent_report").order("session_date", { ascending: false }).limit(15);
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const report = row.agent_report as AgentReport | null;
+    return {
+      score: report?.observationReport?.averageStressScore ?? null,
+      coverage: report?.observationReport?.coverage ?? 0,
+      sceneLabel: row.scene_label ?? "",
+      modelVersion: report?.modelVersion ?? "",
+      sessionDate: row.session_date,
+    };
+  });
+}
+
+export async function saveSessionReflection(sessionId: string, report: AgentReport): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error("보고서 응답을 저장하려면 로그인해 주세요.");
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw authError ?? new Error("로그인 세션을 확인할 수 없습니다.");
+  const { error } = await supabase.from("presentation_records")
+    .update({ agent_report: report, next_action: agentNextPractice(report, false) }).eq("id", sessionId).eq("user_id", user.id);
+  if (error) throw error;
 }
 
 export async function loadDashboardData() {

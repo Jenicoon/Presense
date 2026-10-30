@@ -202,7 +202,8 @@ def warmup() -> None:
 @app.get("/health")
 def get_health() -> dict:
     status = health()
-    return {"status": "ok" if status["checkpointLoaded"] else "degraded", **status}
+    return {"status": "ok" if status["checkpointLoaded"] else "degraded", **status,
+            "modelVersion": model_version()}
 
 
 @app.post("/agent/chat")
@@ -236,7 +237,7 @@ def chat_with_agent(
     context: list[str] = []
     if body.report:
         context.append(
-            f"Current unsaved session: starting stress {body.report.startBaseline:.0%}; "
+            f"Current unsaved session: personal baseline {body.report.startBaseline:.0%}; "
             f"average {body.report.averageStress:.0%}; peak {body.report.peakValue}%; "
             f"peak phase {body.report.peakPhase}; highest-average phase {body.report.mostStressfulPhase}; "
             f"model confidence {body.report.confidence:.0%}. These are model scores, not a high-stress classification."
@@ -337,6 +338,6 @@ async def infer(
         audio_samples = audio_samples[-target_samples:]
 
     try:
-        return predict(np.stack(decoded_frames), audio_samples, task)
+        return {**predict(np.stack(decoded_frames), audio_samples, task), "modelVersion": model_version()}
     except Exception as error:
         raise HTTPException(500, str(error)) from error

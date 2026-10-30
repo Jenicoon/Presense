@@ -45,6 +45,9 @@ class ReviewRequest(Contract):
     source: Literal["live"] = "live"
     sceneLabel: str | None = Field(default=None, max_length=120)
     segments: list[SegmentAnalysis] = Field(min_length=1, max_length=7200)
+    personalBaseline: Probability | None = None
+    baselineSampleCount: int | None = Field(default=None, ge=3, le=100)
+    baselineModelVersion: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def valid_session(self):
@@ -53,6 +56,9 @@ class ReviewRequest(Contract):
             raise ValueError("Segment IDs must be unique.")
         if any(s.endMs > self.durationMs for s in self.segments):
             raise ValueError("Capture windows must fall inside the presentation.")
+        baseline_fields = (self.personalBaseline, self.baselineSampleCount, self.baselineModelVersion)
+        if any(value is not None for value in baseline_fields) and not all(value is not None for value in baseline_fields):
+            raise ValueError("Personal baseline, sample count, and model version must be provided together.")
         return self
 
 
