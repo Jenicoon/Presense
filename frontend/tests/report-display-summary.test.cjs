@@ -137,3 +137,26 @@ test('new exact-measure guidance keeps jaw opening and jitter separate from lega
   assert.match(jitter.observation,/cycle-to-cycle frequency variation/);
   assert.doesNotMatch(Object.values(jitter).join(' '),/[가-힣]/);
 });
+
+test('answer changes coaching without altering the measured score', () => {
+  const report = { priorities: [], observationReport: { peakSegment: { stressScore: .8 } },
+    reflection: { segmentId: 'peak', answer: null } };
+  const originalScore = report.observationReport.peakSegment.stressScore;
+  report.reflection.answer = 'intentional';
+  assert.match(agentNextPractice(report, true), /의도적으로 강조한/);
+  report.reflection.answer = 'unintentional';
+  assert.match(agentNextPractice(report, true), /다음 발표/);
+  report.reflection.answer = 'unsure';
+  assert.match(agentNextPractice(report, true), /영상을 다시 보며/);
+  assert.equal(report.observationReport.peakSegment.stressScore, originalScore);
+});
+
+
+test('reflection preserves the selected language for advice from another saved finding', () => {
+  const report = {priorities: [{id:'pitch_change', label:'평균 목소리 높이 / Mean voice pitch',
+    ranges:[{startMs:20000,endMs:30000}], practiceSuggestion:'한국어 연습 제안',
+    referenceValue:100, observations:[{startMs:20000,endMs:30000,value:150}]}],
+    reflection:{segmentId:'peak',startMs:0,endMs:10000,answer:'intentional'}};
+  assert.doesNotMatch(agentNextPractice(report, false), /[가-힣]/);
+  assert.match(agentNextPractice(report, true), /한국어 연습 제안/);
+});

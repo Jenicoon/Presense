@@ -14,18 +14,22 @@ function visit(node) {
 visit(source);
 assert.ok(handler);
 const js = ts.transpileModule(handler, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-function setup(respond = async () => ({ stressScore: 0.4, confidence: 0.6 }), overrides = {}) {
+function setup(respond = async () => ({ stressScore: 0.4, confidence: 0.6, modelVersion: 'v1', quality: { audioValid: true, faceDetected: true } }), overrides = {}) {
   const results = [], phases = [];
-  const refs = { generation: { current: 0 }, inFlight: { current: false }, active: { current: false }, baseline: { current: null } };
+  const refs = { generation: { current: 0 }, inFlight: { current: false }, active: { current: false }, baseline: { current: null }, samples: { current: [] } };
   const env = {
     recordingActiveRef: refs.active, preparationFrameRef: refs.baseline,
+    calibrationSamplesRef: refs.samples, calibrationModelVersion: 'v1',
+    addCalibrationSample: (samples, frame, capturedAtMs) => [...samples, { stressScore: frame.stressScore, capturedAtMs }],
+    calibrationMedian: (samples) => samples.length >= 3 ? 0.4 : null,
+    setCalibrationCount() {},
     inferInFlightRef: refs.inFlight,
     analysisGenerationRef: refs.generation,
     inferenceAbortRef: { current: null },
     frameBufferRef: { current: Array.from({ length: 16 }, () => new Blob(['frame'])) },
     getRecentAudioPcm: () => new Float32Array(160000),
     setLiveStatus: () => {}, setPreparationPhase: (phase) => phases.push(phase),
-    setModelConnected: () => {}, SIGNAL_SOURCE: 'live',
+    setModelConnected: () => {}, SIGNAL_SOURCE: 'live', calibration: null,
     inferMultimodalFrame: respond, applyFrame: (frame) => results.push(frame),
     sessionStartedAtRef: { current: performance.now() - 11_000 },
     reportSegmentsRef: { current: [] },
@@ -37,9 +41,10 @@ function setup(respond = async () => ({ stressScore: 0.4, confidence: 0.6 }), ov
 test('preparation checks the model without adding any recorded results', async () => {
   const state = setup();
   await state.request(true);
-  assert.deepEqual(state.phases, ['analyzing', 'ready']);
+  assert.deepEqual(state.phases, ['analyzing', 'collecting']);
   assert.deepEqual(state.results, []);
   assert.equal(state.refs.baseline.current.stressScore, 0.4);
+  assert.equal(state.refs.samples.current.length, 1);
 });
 test('normal recording stores the current model result', async () => {
   const state = setup();
@@ -168,6 +173,7 @@ test('stopping clears media and baseline, invalidates requests, and stops timers
   const controller = new AbortController();
   const env = {
     recordingActiveRef: { current: true }, preparationFrameRef: { current: { stressScore: 0.8 } },
+    calibrationSamplesRef: { current: [{ stressScore: .8 }] }, setCalibrationCount() {},
     analysisGenerationRef: { current: 1 }, inferenceAbortRef: { current: controller },
     inferInFlightRef: { current: true }, audioChunksRef: { current: [new Float32Array(100)] },
     frameBufferRef: { current: [new Blob(['old'])] }, collectionTickRef: { current: 1 },
@@ -180,6 +186,7 @@ test('stopping clears media and baseline, invalidates requests, and stops timers
   assert.equal(controller.signal.aborted, true);
   assert.equal(env.analysisGenerationRef.current, 2);
   assert.equal(env.preparationFrameRef.current, null);
+  assert.deepEqual(env.calibrationSamplesRef.current, []);
   assert.equal(env.recordingActiveRef.current, false);
   assert.deepEqual(env.audioChunksRef.current, []);
   assert.deepEqual(env.frameBufferRef.current, []);

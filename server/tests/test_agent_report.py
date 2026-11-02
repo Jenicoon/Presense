@@ -91,6 +91,31 @@ class AgentReportTests(unittest.TestCase):
         self.assertEqual(observed["peakConcepts"][0]["value"], .8)
         self.assertEqual(observed["peakConcepts"][0]["comparisonValue"], .4)
 
+    def test_personal_baseline_is_reported_without_changing_model_scores(self):
+        windows = [segment("one", 0, 10000, .3), segment("peak", 10000, 20000, .8),
+                   segment("three", 20000, 30000, .4)]
+        request = ReviewRequest(sessionId="s", durationMs=30000, segments=windows,
+                                personalBaseline=.25, baselineSampleCount=3,
+                                baselineModelVersion="model-v1")
+        report = self.report(request, selected=(), model_version="model-v1")
+        baseline = report["observationReport"]["personalBaseline"]
+        self.assertEqual(baseline["score"], .25)
+        self.assertAlmostEqual(baseline["averageDifference"], .25)
+        self.assertAlmostEqual(baseline["peakDifference"], .55)
+        self.assertEqual(report["observationReport"]["peakSegment"]["stressScore"], .8)
+        self.assertEqual(report["reflection"]["segmentId"], "peak")
+        self.assertIsNone(report["reflection"]["answer"])
+
+    def test_changed_model_does_not_apply_old_baseline_and_flat_scores_get_general_question(self):
+        request = ReviewRequest(sessionId="s", durationMs=20000,
+                                segments=[segment("one", 0, 10000, .8), segment("two", 10000, 20000, .8)],
+                                personalBaseline=.2, baselineSampleCount=3,
+                                baselineModelVersion="old-model")
+        report = self.report(request, selected=(), model_version="new-model")
+        self.assertNotIn("personalBaseline", report["observationReport"])
+        self.assertEqual(report["reflection"]["kind"], "overall")
+        self.assertNotIn("강조한 부분", report["reflection"]["question"])
+
     def test_summary_connects_peak_phase_feature_and_concept(self):
         windows = [segment("opening", 0, 10000, .2),
                    segment("middle", 10000, 20000, .7, pitch=160),

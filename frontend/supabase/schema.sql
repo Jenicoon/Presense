@@ -54,15 +54,26 @@ create table if not exists public.user_settings (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.user_calibrations (
+  user_id uuid primary key references auth.users on delete cascade,
+  baseline_score numeric(6, 4) not null check (baseline_score >= 0 and baseline_score <= 1),
+  sample_count integer not null check (sample_count >= 3),
+  model_version text not null,
+  calibrated_at timestamptz not null default timezone('utc', now()),
+  last_prompted_at timestamptz
+);
+
 grant select, insert, update, delete on public.profiles to authenticated;
 grant select, insert, update, delete on public.presentation_records to authenticated;
 grant select, insert, update, delete on public.diagnosis_history to authenticated;
 grant select, insert, update, delete on public.user_settings to authenticated;
+grant select, insert, update, delete on public.user_calibrations to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.presentation_records enable row level security;
 alter table public.diagnosis_history enable row level security;
 alter table public.user_settings enable row level security;
+alter table public.user_calibrations enable row level security;
 
 create policy "Users can manage their own profile"
 on public.profiles
@@ -85,6 +96,11 @@ with check ((select auth.uid()) = user_id);
 create policy "Users can manage their own settings"
 on public.user_settings
 for all
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can manage their own calibration"
+on public.user_calibrations for all
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 

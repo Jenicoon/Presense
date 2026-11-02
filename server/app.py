@@ -170,7 +170,8 @@ def warmup() -> None:
 @app.get("/health")
 def get_health() -> dict:
     status = health()
-    return {"status": "ok" if status["checkpointLoaded"] else "degraded", **status}
+    return {"status": "ok" if status["checkpointLoaded"] else "degraded", **status,
+            "modelVersion": model_version()}
 
 
 def _coach_store(user, credentials):
@@ -313,6 +314,6 @@ async def infer(
         audio_samples = audio_samples[-target_samples:]
 
     try:
-        return predict(np.stack(decoded_frames), audio_samples, task)
+        return {**predict(np.stack(decoded_frames), audio_samples, task), "modelVersion": model_version()}
     except Exception as error:
         raise HTTPException(500, str(error)) from error

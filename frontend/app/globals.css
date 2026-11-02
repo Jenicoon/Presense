@@ -1324,6 +1324,8 @@ h1, h2, h3 { margin: 0; }
 .coach-ok h3 { color: var(--accent-ok); }
 .coach-data { background: var(--accent-light); border-color: rgba(37,99,235,0.2); }
 .coach-data h3 { color: var(--accent); }
+.agent-reflection-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.agent-reflection-options .btn { white-space: normal; }
 
 .observation-section { margin-top: 14px; }
 .observation-section > strong { display: block; margin-bottom: 8px; font-size: 12px; }

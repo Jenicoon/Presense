@@ -9,7 +9,8 @@ import { StressChart } from "@/components/stress-chart";
 import { AgentObservationReport } from "@/components/agent-observation-report";
 import { durationText, sceneText, signalScore } from "@/lib/report-locale";
 import { reportDisplaySummary } from "@/lib/agent-report";
-import { deletePracticeSession, loadSessionHistory, type SessionHistoryRecord } from "@/lib/supabase/data";
+import { deletePracticeSession, loadSessionHistory, saveSessionReflection, type SessionHistoryRecord } from "@/lib/supabase/data";
+import type { AgentReport } from "@/lib/agent-report";
 
 function severity(score: number) { return !Number.isFinite(score) ? "sev-unknown" : score >= 0.7 ? "sev-high" : score >= 0.5 ? "sev-medium" : "sev-low"; }
 
@@ -34,9 +35,11 @@ function Timeline({ values, onSelect }: { values: number[]; onSelect?: (index: n
   </div>;
 }
 
-function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord; ko: boolean; t: (key: string, fallback?: string) => string; onClose: () => void }) {
+function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: SessionHistoryRecord; ko: boolean; t: (key: string, fallback?: string) => string; onClose: () => void; onReportUpdate: (report: AgentReport) => Promise<void> }) {
   const { toggle } = useLang();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [answerError, setAnswerError] = useState("");
+  const [answerBusy, setAnswerBusy] = useState(false);
   const durationProbeRef = useRef(false);
   const requestedSeekRef=useRef<number | null>(null);
   useEffect(()=>{const at=Number(new URLSearchParams(window.location.search).get("at"));requestedSeekRef.current=Number.isFinite(at)&&at>=0?at/1000:null;},[]);
@@ -93,6 +96,15 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     video.currentTime = ((bin + 0.5) / Math.max(record.timeline.length, 1)) * duration;
     void video.play().catch(() => undefined);
   }
+  async function answerReflection(answer: "intentional" | "unintentional" | "unsure") {
+    if (!record.agentReport?.reflection || answerBusy) return;
+    setAnswerError("");
+    setAnswerBusy(true);
+    const next = { ...record.agentReport, reflection: { ...record.agentReport.reflection, answer } };
+    try { await onReportUpdate(next); }
+    catch (error) { setAnswerError(error instanceof Error ? error.message : "응답을 저장하지 못했습니다."); }
+    finally { setAnswerBusy(false); }
+  }
   return <div className="modal-backdrop" onClick={onClose} role="presentation"><section className="card history-review-modal" role="dialog" aria-modal="true" aria-labelledby="history-review-title" onClick={(event) => event.stopPropagation()}>
     <div className="review-modal-controls"><button type="button" onClick={toggle} aria-label={ko ? "영어로 보기" : "View in Korean"}><Languages size={15} /><span>{ko ? "EN" : "한국어"}</span></button><button type="button" onClick={onClose} aria-label={ko ? "세션 리뷰 닫기" : "Close session review"}><X size={18} /></button></div>
     <div className="diagnosis-modal-eyebrow">{ko ? "세션 리뷰" : "Session review"}</div>
@@ -106,7 +118,7 @@ function ReviewModal({ record, ko, t, onClose }: { record: SessionHistoryRecord;
     </div>
     {record.agentReport && <>
       <SessionAgentReport report={record.agentReport} language={ko ? "ko" : "en"} onSeek={record.videoUrl ? ms=>{if(videoRef.current){videoRef.current.currentTime=ms/1000;void videoRef.current.play().catch(()=>undefined);}} : undefined} />
-      <details className="review-details review-supplement"><summary>{ko ? "발표 흐름과 상세 측정값" : "Session patterns and detailed measurements"}</summary><AgentObservationReport report={record.agentReport} ko={ko} /></details>
+      <details className="review-details review-supplement"><summary>{ko ? "발표 흐름과 상세 측정값" : "Session patterns and detailed measurements"}</summary><AgentObservationReport report={record.agentReport} ko={ko} onAnswer={answerBusy ? undefined : answer => void answerReflection(answer)} />{answerError && <p role="alert" className="error-msg">{answerError}</p>}</details>
     </>}
     {!record.agentReport && <div className="history-review-section"><div className="history-review-section-head"><div><strong>{ko ? "모델 신호 타임라인" : "Model signal timeline"}</strong><span>{record.videoUrl ? (ko ? "구간을 누르면 영상의 해당 시점으로 이동합니다" : "Select a segment to jump to that moment in the video") : (ko ? "영상 없이도 저장된 스트레스 신호 점수를 확인할 수 있습니다" : "Saved model scores are available without video")}</span></div><strong className="history-peak">{peak ? `${peak}% ${ko ? "최고" : "peak"}` : "–"}</strong></div><Timeline values={record.timeline} onSelect={record.videoUrl ? seekToBin : undefined} /><div className="video-timeline-legend"><span><i className="low" />{ko ? "낮은 스트레스 신호 점수" : "Lower model score"}</span><span><i className="mid" />{ko ? "중간 스트레스 신호 점수" : "Middle model score"}</span><span><i className="high" />{ko ? "높은 스트레스 신호 점수" : "Higher model score"}</span></div></div>}
     {!record.agentReport && <div className="history-review-coaching"><div className="coach-card coach-alert"><h3>{ko ? "세션 결과" : "Session result"}</h3><p>{localizeRecordText(record.result, t)}</p></div><div className="coach-card coach-data"><h3>{ko ? "발표 분석" : "Presentation analysis"}</h3><p>{localizeRecordText(record.diagnosis, t)}</p></div><div className="coach-card coach-ok"><h3>{ko ? "다음 연습 포인트" : "Next practice focus"}</h3><p>{localizeRecordText(record.nextAction, t)}</p></div></div>}
@@ -165,6 +177,9 @@ export function SessionHistory() {
     {loading ? <p className="state-loading"><LoaderCircle size={16} /> {ko ? "기록을 불러오는 중..." : "Loading history..."}</p> : null}{error ? <p className="error-msg">{error}</p> : null}{!loading && !error && records.length === 0 ? <div className="state-empty history-platform-empty"><BrainCircuit size={24} /><strong>{ko ? "아직 저장된 세션이 없습니다" : "No saved sessions yet"}</strong><span>{ko ? "연습 종료 후 저장하면 이곳에 표시됩니다." : "Save a session after practice and it will appear here."}</span></div> : null}
     {records.length > 0 ? <div className="card history-table-card"><div className="history-panel-header"><div className="panel-head-left"><span className="panel-title">{ko ? "세션 기록" : "Session records"}</span><span className="panel-subtitle">{ko ? "저장된 분석 결과" : "Saved analysis results"}</span></div><CalendarDays size={16} color="var(--text-secondary)" /></div><div className="table-wrap"><table className="data-table"><thead><tr><th>{ko ? "날짜" : "Date"}</th><th>{ko ? "세션" : "Session"}</th><th>{ko ? "시간" : "Duration"}</th><th>{ko ? "평균 스트레스 신호" : "Mean stress signal score"}</th><th>{ko ? "영상" : "Video"}</th><th>{ko ? "보기" : "Review"}</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td className="td-mono">{record.date}</td><td style={{ fontWeight: 500 }}>{record.title}<small className="history-scene">{sceneText(record.sceneLabel, ko)}</small></td><td className="td-mono">{durationText(record.duration, ko)}</td><td><span className={`severity-pill ${severity(Number(record.stressAverage))}`}>{signalScore(record.stressAverage)}</span></td><td>{record.videoUrl ? <Film size={15} color="var(--accent)" /> : <span className="history-muted">–</span>}</td><td><div className="history-table-actions"><button type="button" className="table-action" onClick={() => setSelectedId(record.id)}>{ko ? "상세 보기" : "View details"}</button><button type="button" className="history-delete" onClick={() => void handleDelete(record)} aria-label={ko ? "기록 삭제" : "Delete record"}><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div></div> : null}
     {!loading && selectedId && !selected && <p role="status">{ko?"선택한 세션의 저장된 영상 기록이 없습니다. 영상을 저장한 세션에서 다시 확인해 주세요.":"No saved video record exists for the selected session. Open a session with a saved recording."}</p>}
-    {selected ? <ReviewModal record={selected} ko={ko} t={t} onClose={closeReview} /> : null}
+    {selected ? <ReviewModal record={selected} ko={ko} t={t} onClose={closeReview} onReportUpdate={async (next) => {
+      await saveSessionReflection(selected.id, next);
+      setRecords((items) => items.map((item) => item.id === selected.id ? { ...item, agentReport: next } : item));
+    }} /> : null}
   </main>;
 }

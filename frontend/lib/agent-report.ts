@@ -23,6 +23,7 @@ export type AgentReport = {
   schemaVersion: string;
   language?: "ko" | "en";
   sessionId: string;
+  modelVersion?: string;
   status: "complete" | "limited";
   summaryText: string;
   presenterSummary?: { ko: string; en: string };
@@ -41,6 +42,15 @@ export type AgentReport = {
     previousComparison?: { metricId: string; previousSessionId: string; previousSessionCount?: number; previousValue: number; currentValue: number; difference: number; unit: string; label: string } | null;
     phaseSummaries?: Array<{ startMs: number; endMs: number; observedMs: number; averageStressScore: number | null }>;
     peakConcepts?: Array<{ name: string; value: number; comparisonValue: number; difference: number }>;
+    personalBaseline?: { score: number; sampleCount: number; averageDifference: number | null; peakDifference: number | null };
+  };
+  reflection?: {
+    kind?: "peak" | "overall";
+    segmentId: string;
+    startMs: number;
+    endMs: number;
+    question: string;
+    answer: "intentional" | "unintentional" | "unsure" | null;
   };
   observationEvidenceIds?: string[];
   rawSegments?: ReportSegment[];
@@ -131,6 +141,31 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
 }
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
+  const reflection = report.reflection;
+  if (reflection?.kind === "overall" && reflection.answer === "intentional") return ko
+    ? "의도한 전달 방식으로 기록했습니다. 영상을 다시 보며 목소리와 표정이 전달하려던 내용과 맞는지 확인해 보세요."
+    : "Recorded as intended delivery. Replay the recording and check whether your voice and expression matched your intent.";
+  if (reflection?.kind === "overall" && reflection.answer === "unintentional") return ko
+    ? "다음 발표에서는 도입부를 짧게 다시 녹화하고, 말하는 속도와 목소리 크기를 의도한 수준으로 조정해 비교해 보세요."
+    : "Record the opening again, adjust pace and volume toward your intent, and compare both takes.";
+  if (reflection?.kind === "overall" && reflection.answer === "unsure") return ko
+    ? "발표 영상을 도입·중반·마무리로 나눠 보며 속도·목소리 크기·표정이 전달 목표와 맞는지 확인하세요."
+    : "Review the opening, middle, and closing for pace, volume, and expression against your delivery goal.";
+  if (reflection?.answer === "intentional") {
+    const unrelated = report.priorities.find((item) => !(item.ranges ?? []).some((range) =>
+      range.startMs < reflection.endMs && range.endMs > reflection.startMs));
+    const otherPractice = unrelated?.practiceSuggestion || unrelated?.reviewAction || unrelated?.recommendation;
+    if (otherPractice && unrelated) return matchesLanguage(otherPractice, ko) ? otherPractice : findingText(unrelated, ko).practice;
+    return ko
+      ? "의도적으로 강조한 구간으로 기록했습니다. 영상을 보며 강조가 전달하려던 내용과 맞는지 확인하고, 다음 발표에서도 같은 의도를 유지해 보세요."
+      : "Recorded as intentional emphasis. Review whether the delivery matched your intent, then try it again in the next take.";
+  }
+  if (reflection?.answer === "unintentional") return ko
+    ? "다음 발표에서는 해당 구간 앞에서 잠깐 멈추고 호흡을 정리한 뒤 같은 문장을 다시 말해 보세요. 두 녹화의 전달 차이를 비교하세요."
+    : "In the next take, pause and reset your breath before that interval. Compare how the same sentence comes across in both recordings.";
+  if (reflection?.answer === "unsure") return ko
+    ? "해당 영상을 다시 보며 목소리 크기·속도·표정이 전달하려던 내용과 맞는지 확인하세요. 점수만으로 의도를 판단하지 않습니다."
+    : "Replay that interval and check whether volume, pace, and expression fit your intent. The score alone cannot tell.";
   if (report.analysis && report.priorities.length) return findingGuidance(report.priorities[0], ko).goal;
   if(report.priorities.length === 0) return Number(report.analysis?.coverage ?? 0)<.5
     ? (ko ? "분석 자료가 부족합니다. 카메라와 마이크를 확인한 뒤 관측 자료를 더 모아 주세요." : "Analysis data is limited. Check the camera and microphone and collect more observations.")
@@ -146,6 +181,32 @@ export function agentNextPractice(report: AgentReport, ko: boolean): string {
   }
   return ko ? "모델 점수가 가장 높았던 구간의 실제 영상·음성을 확인하고, 같은 발표를 다시 녹화해 비교해 보세요." :
     "Review the recording at the highest model-score interval, then record the same talk again for comparison.";
+}
+
+export function agentReflectionInterpretation(report: AgentReport, ko: boolean): string | null {
+  if (report.reflection?.kind === "overall") {
+    if (report.reflection.answer === "intentional") return ko ? "의도한 전달 방식으로 기록했습니다. 모델 점수만으로 품질을 판단하지 않습니다." : "Recorded as intended delivery. The model score alone does not rate its quality.";
+    if (report.reflection.answer === "unintentional") return ko ? "의도와 다른 전달로 기록했습니다. 아래 연습안을 확인하세요." : "Recorded as different from your intent. See the practice step below.";
+    if (report.reflection.answer === "unsure") return ko ? "판단을 보류했습니다. 영상 확인 기준을 아래에 안내합니다." : "Intent remains undecided. Use the recording review guide below.";
+  }
+  switch (report.reflection?.answer) {
+    case "intentional": return ko
+      ? "의도한 강조로 기록했습니다. 이 점수만으로 문제 구간이라고 판단하지 않습니다."
+      : "Recorded as intentional emphasis. The score alone does not make this a problem interval.";
+    case "unintentional": return ko
+      ? "의도하지 않은 변화로 기록했습니다. 아래에 다음 발표에서 해볼 연습을 제안합니다."
+      : "Recorded as an unintentional change. The next practice step is shown below.";
+    case "unsure": return ko
+      ? "의도 판단을 보류했습니다. 영상에서 확인할 기준을 아래에 안내합니다."
+      : "Intent remains undecided. Review the recording using the guide below.";
+    default: return null;
+  }
+}
+
+export function showPriorityAdvice(report: AgentReport, ranges: Array<{ startMs: number; endMs: number }>): boolean {
+  const reflection = report.reflection;
+  if (!reflection?.answer || reflection.kind === "overall") return true;
+  return !ranges.some((range) => range.startMs < reflection.endMs && range.endMs > reflection.startMs);
 }
 
 function finiteNumbers(values: Record<string, unknown>): Record<string, number> {
@@ -181,6 +242,9 @@ export async function generateAgentReport(input: {
   sceneLabel: string;
   segments: ReportSegment[];
   practiceContext?: { sessionId: string; practiceId: string };
+  personalBaseline?: number;
+  baselineSampleCount?: number;
+  baselineModelVersion?: string;
 }): Promise<AgentReport> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) throw new Error("보고서를 생성하려면 로그인해 주세요.");

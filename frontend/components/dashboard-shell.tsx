@@ -20,9 +20,10 @@ import {
 } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { initialTimeline, postSessionHighlights, practiceScenes, samplePresentation } from "@/lib/dashboard-data";
-import { createSimulatedSignal, inferMultimodalFrame, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
+import { createSimulatedSignal, inferMultimodalFrame, INFERENCE_URL, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
+import { addCalibrationSample, calibrationMedian, suggestRecalibration, type CalibrationSample, type PersonalCalibration } from "@/lib/calibration";
 import { useLang } from "@/lib/i18n";
-import { savePracticeSession } from "@/lib/supabase/data";
+import { loadRecentDriftObservations, loadUserCalibration, markCalibrationPrompted, savePracticeSession, saveSessionReflection, saveUserCalibration } from "@/lib/supabase/data";
 import { agentNextPractice, generateAgentReport, reportDisplaySummary, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
 import { signalScore } from "@/lib/report-locale";
 import { SessionAgentReport, ReportStressChart } from "@/components/session-agent-report";
@@ -189,7 +190,7 @@ function DeckPreview({
 }
 
 export function DashboardShell() {
-  const { hasEnv, user } = useSupabaseAuth();
+  const { hasEnv, user, isLoading: authLoading } = useSupabaseAuth();
   const { lang, t } = useLang();
   const mainVideoRef = useRef<HTMLVideoElement | null>(null);
   const pipVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -220,12 +221,14 @@ export function DashboardShell() {
   const inferenceAbortRef = useRef<AbortController | null>(null);
   const recordingActiveRef = useRef(false);
   const preparationFrameRef = useRef<LiveInferenceFrame | null>(null);
+  const calibrationSamplesRef = useRef<CalibrationSample[]>([]);
   const startBaselineRef = useRef(0);
   const sessionStartedAtRef = useRef(0);
   const sessionIdRef = useRef("");
   const attemptContextRef = useRef<PracticeContext | null>(null);
   const reportSegmentsRef = useRef<ReportSegment[]>([]);
-  const reportRequestRef = useRef<{ sessionId: string; durationMs: number; language: "ko" | "en"; sceneLabel: string; segments: ReportSegment[] } | null>(null);
+  const reportRequestRef = useRef<{ sessionId: string; durationMs: number; language: "ko" | "en"; sceneLabel: string; segments: ReportSegment[];
+    personalBaseline?: number; baselineSampleCount?: number; baselineModelVersion?: string; practiceContext?: PracticeContext } | null>(null);
 
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -238,6 +241,14 @@ export function DashboardShell() {
   const [collectedFrames, setCollectedFrames] = useState(0);
   const [audioRunning, setAudioRunning] = useState(false);
   const [preparationComplete, setPreparationComplete] = useState(false);
+  const [calibration, setCalibration] = useState<PersonalCalibration | null>(null);
+  const [calibrationLoading, setCalibrationLoading] = useState(SIGNAL_SOURCE === "live");
+  const [calibrationSaving, setCalibrationSaving] = useState(false);
+  const [calibrationCount, setCalibrationCount] = useState(0);
+  const [calibrationModelVersion, setCalibrationModelVersion] = useState("");
+  const [recalibrating, setRecalibrating] = useState(false);
+  const [recalibrationSuggested, setRecalibrationSuggested] = useState(false);
+  const [calibrationError, setCalibrationError] = useState("");
   const [preparationPhase, setPreparationPhase] = useState<"collecting" | "analyzing" | "ready" | "error">("collecting");
   const [audioSeconds, setAudioSeconds] = useState(0);
   const [voiceDetected, setVoiceDetected] = useState(false);
@@ -246,6 +257,8 @@ export function DashboardShell() {
   const [agentReport, setAgentReport] = useState<AgentReport | null>(null);
   const [agentReportLoading, setAgentReportLoading] = useState(false);
   const [agentReportError, setAgentReportError] = useState("");
+  const [reflectionSaving, setReflectionSaving] = useState(false);
+  const [reflectionError, setReflectionError] = useState("");
   const [selectedScene, setSelectedScene] = useState<SceneId>("camera");
   const [deck, setDeck] = useState<DeckFile | null>(SAMPLE_DECK);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -261,17 +274,56 @@ export function DashboardShell() {
   const [recordingFinalizing, setRecordingFinalizing] = useState(false);
 
   useEffect(() => {
-    if (!preparationComplete) preparationDialogRef.current?.showModal();
-  }, [preparationComplete]);
+    if (!authLoading && !calibrationLoading && !preparationComplete && !preparationDialogRef.current?.open) preparationDialogRef.current?.showModal();
+  }, [authLoading, calibrationLoading, preparationComplete]);
+
+  useEffect(() => {
+    if (SIGNAL_SOURCE !== "live") return;
+    if (authLoading) return;
+    let cancelled = false;
+    setCalibrationLoading(true);
+    setCalibration(null);
+    setPreparationComplete(false);
+    setPreparationPhase("collecting");
+    setRecalibrating(false);
+    setCalibrationModelVersion("");
+    calibrationSamplesRef.current = [];
+    preparationFrameRef.current = null;
+    setCalibrationCount(0);
+    setCalibrationError("");
+    if (!user?.id) { setCalibrationLoading(false); return; }
+    void Promise.all([
+      fetch(`${INFERENCE_URL.replace(/\/$/, "")}/health`).then(async (response) => {
+        if (!response.ok) throw new Error("분석 서버의 모델 버전을 확인하지 못했습니다.");
+        const status = await response.json();
+        if (typeof status.modelVersion !== "string" || status.modelVersion === "unknown") throw new Error("모델 버전을 확인하지 못했습니다.");
+        return status.modelVersion as string;
+      }),
+      loadUserCalibration(user.id),
+    ]).then(([version, saved]) => {
+      if (cancelled) return;
+      setCalibrationModelVersion(version);
+      if (saved?.modelVersion === version) {
+        setCalibration(saved);
+        setPreparationComplete(true);
+        setPreparationPhase("ready");
+        preparationDialogRef.current?.close();
+      }
+    }).catch((error) => {
+      if (!cancelled) setCalibrationError(error instanceof Error ? error.message : "기준선을 불러오지 못했습니다.");
+    }).finally(() => { if (!cancelled) setCalibrationLoading(false); });
+    return () => { cancelled = true; };
+  }, [user?.id, authLoading]);
 
   useEffect(() => {
     if (sessionState === "live" || sessionState === "starting" || preparationPhase === "error") return;
+    if (SIGNAL_SOURCE === "live" && (calibrationLoading || (calibration && !recalibrating))) return;
     if (collectedFrames < 16 || audioSeconds < 10 || !voiceDetected) return;
     void requestLiveFrame(true);
     const timer = window.setInterval(() => void requestLiveFrame(true), 1000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionState, preparationPhase, collectedFrames, audioSeconds, voiceDetected]);
+  }, [sessionState, preparationPhase, collectedFrames, audioSeconds, voiceDetected, calibrationLoading, calibration, recalibrating]);
 
   useEffect(() => {
     let cancelled = false;
@@ -377,6 +429,8 @@ export function DashboardShell() {
   function stopAnalysis() {
     recordingActiveRef.current = false;
     preparationFrameRef.current = null;
+    calibrationSamplesRef.current = [];
+    setCalibrationCount(0);
     analysisGenerationRef.current += 1;
     inferenceAbortRef.current?.abort();
     inferenceAbortRef.current = null;
@@ -597,13 +651,26 @@ export function DashboardShell() {
       inferenceAbortRef.current = controller;
       timeout = setTimeout(() => controller.abort(), 90_000);
       setLiveStatus("analyzing");
-      const captureEndMs = preparation ? 0 : Math.floor(performance.now() - sessionStartedAtRef.current);
+      const capturedAtMs = performance.now();
+      const captureEndMs = preparation ? 0 : Math.floor(capturedAtMs - sessionStartedAtRef.current);
       const frame = await inferMultimodalFrame([...frameBufferRef.current], audio, "Speaking", controller.signal);
       if (generation !== analysisGenerationRef.current) return;
       if (preparation && recordingActiveRef.current) return;
+      if (!preparation && calibration && frame.modelVersion !== calibration.modelVersion) {
+        setLiveStatus("error");
+        setErrorMessage(lang === "ko" ? "분석 모델이 변경되었습니다. 현재 연습을 마치고 기준선을 다시 측정해 주세요." :
+          "The analysis model changed. End this practice and remeasure your baseline.");
+        return;
+      }
       if (preparation) {
         preparationFrameRef.current = frame;
-        setPreparationPhase("ready");
+        if (SIGNAL_SOURCE === "live" && frame.modelVersion === calibrationModelVersion) {
+          calibrationSamplesRef.current = addCalibrationSample(calibrationSamplesRef.current, frame, capturedAtMs);
+          setCalibrationCount(calibrationSamplesRef.current.length);
+          setPreparationPhase(calibrationMedian(calibrationSamplesRef.current) === null ? "collecting" : "ready");
+        } else {
+          setPreparationPhase("collecting");
+        }
       }
       else {
         applyFrame(frame);
@@ -632,15 +699,60 @@ export function DashboardShell() {
     }
   }
 
+  async function completePreparation() {
+    if (SIGNAL_SOURCE !== "live") {
+      setPreparationComplete(true);
+      preparationDialogRef.current?.close();
+      return;
+    }
+    const score = calibrationMedian(calibrationSamplesRef.current);
+    if (score === null || !user?.id || !calibrationModelVersion || calibrationSaving) return;
+    const next: PersonalCalibration = {
+      score: Math.round(score * 10_000) / 10_000,
+      sampleCount: calibrationSamplesRef.current.length,
+      modelVersion: calibrationModelVersion,
+      calibratedAt: new Date().toISOString(),
+    };
+    setCalibrationSaving(true);
+    setCalibrationError("");
+    try {
+      await saveUserCalibration(user.id, next);
+      setCalibration(next);
+      setRecalibrating(false);
+      setRecalibrationSuggested(false);
+      setPreparationComplete(true);
+      preparationDialogRef.current?.close();
+    } catch (error) {
+      setCalibrationError(error instanceof Error ? error.message : "기준선을 저장하지 못했습니다.");
+    } finally {
+      setCalibrationSaving(false);
+    }
+  }
+
+  function beginRecalibration() {
+    if (sessionState === "live" || sessionState === "starting") return;
+    calibrationSamplesRef.current = [];
+    setCalibrationCount(0);
+    setRecalibrating(true);
+    setPreparationComplete(false);
+    setPreparationPhase("collecting");
+    setCalibrationError("");
+    setRecalibrationSuggested(false);
+    saveCompleteDialogRef.current?.close();
+  }
+
   async function handleStartSession() {
-    if (!preparationComplete || preparationPhase !== "ready" || !preparationFrameRef.current || recordingActiveRef.current || saving || recordingFinalizing) return;
+    if (!preparationComplete || preparationPhase !== "ready" || (SIGNAL_SOURCE === "live" && !calibration) ||
+        (SIGNAL_SOURCE !== "live" && !preparationFrameRef.current) || recordingActiveRef.current || saving || reflectionSaving || recordingFinalizing) return;
     const baseline = preparationFrameRef.current;
-    if (Date.now() - baseline.timestampMs > 30_000 || !streamRef.current?.getTracks().every((track) => track.readyState === "live") || audioContextRef.current?.state !== "running") {
+    if ((SIGNAL_SOURCE !== "live" && (!baseline || Date.now() - baseline.timestampMs > 30_000)) ||
+        !streamRef.current?.getTracks().every((track) => track.readyState === "live") || audioContextRef.current?.state !== "running") {
       preparationFrameRef.current = null;
-      setPreparationPhase("collecting");
+      if (SIGNAL_SOURCE !== "live") setPreparationPhase("collecting");
       void startPreview();
       return;
     }
+    const baselineScore = SIGNAL_SOURCE === "live" ? calibration!.score : baseline!.stressScore;
     recordingActiveRef.current = true;
     saveCompleteDialogRef.current?.close();
     // Keep only this session's warm-up buffer; the previous session was cleared on stop.
@@ -650,6 +762,7 @@ export function DashboardShell() {
       setReport(null);
       setAgentReport(null);
       setAgentReportError("");
+      setReflectionError("");
       setAgentReportLoading(false);
       reportRequestRef.current = null;
       reportSegmentsRef.current = [];
@@ -657,11 +770,11 @@ export function DashboardShell() {
       try { attemptContextRef.current = user ? JSON.parse(window.localStorage.getItem(practiceKey(user.id)) ?? "null") : null; } catch { attemptContextRef.current = null; }
       setElapsed(0);
       setTimeline(initialTimeline);
-      setStressScore(baseline.stressScore);
-      setConfidence(baseline.confidence);
-      startBaselineRef.current = baseline.stressScore;
+      setStressScore(baselineScore);
+      setConfidence(SIGNAL_SOURCE === "live" ? 0 : baseline!.confidence);
+      startBaselineRef.current = baselineScore;
       // Keep the last verified connection status, not the preparation score.
-      stressHistoryRef.current = [baseline.stressScore];
+      stressHistoryRef.current = [baselineScore];
       signalRef.current = createSimulatedSignal();
       signalRef.current.reset();
       setLiveStatus("ok");
@@ -754,6 +867,21 @@ export function DashboardShell() {
     }
   }
 
+  async function answerReportReflection(answer: "intentional" | "unintentional" | "unsure") {
+    if (!agentReport?.reflection || reflectionSaving || saving) return;
+    const next = { ...agentReport, reflection: { ...agentReport.reflection, answer } };
+    setReflectionError("");
+    setAgentReport(next);
+    if (saved) {
+      setReflectionSaving(true);
+      try { await saveSessionReflection(sessionIdRef.current, next); }
+      catch (error) {
+        setAgentReport(agentReport);
+        setReflectionError(error instanceof Error ? error.message : "응답을 저장하지 못했습니다.");
+      } finally { setReflectionSaving(false); }
+    }
+  }
+
   async function handleStopSession() {
     if (!recordingActiveRef.current) return;
     stopSessionRecording();
@@ -764,7 +892,7 @@ export function DashboardShell() {
     while(inferInFlightRef.current && performance.now()<until) await new Promise(resolve=>window.setTimeout(resolve,100));
     stopAnalysis();
     setSessionState("ended");
-    setPreparationPhase("collecting");
+    setPreparationPhase(calibration ? "ready" : "collecting");
     setModelConnected(false);
     // New generation, new buffers, no previous session responses or baseline.
     void startPreview();
@@ -810,6 +938,8 @@ export function DashboardShell() {
           sceneLabel: activeScene.label,
           segments,
           ...(attemptContextRef.current ? {practiceContext:attemptContextRef.current} : {}),
+          ...(calibration ? { personalBaseline: calibration.score,
+            baselineSampleCount: calibration.sampleCount, baselineModelVersion: calibration.modelVersion } : {}),
         };
         void requestAgentReport();
       }
@@ -860,6 +990,16 @@ export function DashboardShell() {
         agentReport,
       });
       setSaved(true);
+      if (calibration && agentReport) {
+        void loadRecentDriftObservations().then((rows) => {
+          if (suggestRecalibration(rows, calibration, activeScene.label)) {
+            const at = new Date().toISOString();
+            setRecalibrationSuggested(true);
+            setCalibration((current) => current ? { ...current, lastPromptedAt: at } : current);
+            if (user?.id) void markCalibrationPrompted(user.id, at).catch(() => undefined);
+          }
+        }).catch(() => undefined);
+      }
       window.dispatchEvent(new Event("presense:session-saved"));
       setSaveStatus(result?.warning ?? t("status.saved"));
       setSaveDialogOpen(false);
@@ -1016,7 +1156,7 @@ export function DashboardShell() {
             type="button"
             className="btn btn-primary"
             onClick={handleStartSession}
-            disabled={!preparationComplete || preparationPhase !== "ready" || sessionState === "starting" || sessionState === "live" || saving || recordingFinalizing}
+            disabled={!preparationComplete || preparationPhase !== "ready" || !cameraReady || !audioRunning || sessionState === "starting" || sessionState === "live" || saving || reflectionSaving || recordingFinalizing}
           >
             <Play size={14} />
             {t("btn.startSession")}
@@ -1028,13 +1168,17 @@ export function DashboardShell() {
         <div className="practice-setup-card" role="status">
           <div>
             {preparationPhase === "ready"
-              ? (lang === "ko" ? "분석 준비 완료 · 시작하면 현재 준비값부터 바로 기록합니다." : "Analysis ready · Start recording with the current baseline.")
+              ? SIGNAL_SOURCE === "live" ? (lang === "ko" ? `기기 준비 완료 · 저장된 개인 기준선 ${Math.round((calibration?.score ?? 0) * 100)}/100을 사용합니다.` : `Devices ready · Using your saved baseline of ${Math.round((calibration?.score ?? 0) * 100)}/100.`)
+                : (lang === "ko" ? "데모 분석 준비 완료" : "Demo analysis ready")
               : preparationPhase === "error"
               ? (lang === "ko" ? "분석 준비에 실패했습니다. 서버를 확인한 뒤 다시 시도해 주세요." : "Preparation failed. Check the server and retry.")
               : (lang === "ko" ? "새 세션 준비 중 · 카메라를 보며 짧게 말해 주세요. 새 영상·음성 수집 및 모델 분석이 완료되면 시작할 수 있습니다." : "Preparing a new session · Look at the camera and speak briefly. Start becomes available after fresh data collection and analysis.")}
             <small style={{ display: "block" }}>{lang === "ko" ? "준비 중에는 카메라·마이크 분석만 진행하며 녹화하지 않습니다. 이전 세션 데이터는 사용하지 않습니다." : "Camera and microphone analysis continues without recording. Previous session data is not reused."}</small>
           </div>
-          {(preparationPhase === "error" || !audioRunning) && <button className="btn btn-outline" onClick={() => { setPreparationPhase("collecting"); void startPreview(); }}>{lang === "ko" ? "다시 준비" : "Retry preparation"}</button>}
+          <div className="agent-reflection-options">
+            {SIGNAL_SOURCE === "live" && calibration && <button className="btn btn-outline" type="button" onClick={beginRecalibration}>{lang === "ko" ? "기준선 다시 측정" : "Recalibrate"}</button>}
+            {(preparationPhase === "error" || !audioRunning) && <button className="btn btn-outline" onClick={() => { setPreparationPhase(calibration ? "ready" : "collecting"); void startPreview(); }}>{lang === "ko" ? "기기 다시 확인" : "Retry devices"}</button>}
+          </div>
         </div>
       )}
 
@@ -1137,7 +1281,7 @@ export function DashboardShell() {
             <div className="signal-label">
               <Gauge size={11} style={{ display: "inline", marginRight: 4 }} />
               {t("signal.liveStress")}
-              {sessionState === "live" && stressHistoryRef.current.length === 1 && <small style={{ display: "block" }}>{lang === "ko" ? "시작 기준값 · 이번 세션 준비 구간 포함" : "Starting baseline · Includes this session's warm-up"}</small>}
+              {sessionState === "live" && stressHistoryRef.current.length === 1 && <small style={{ display: "block" }}>{lang === "ko" ? "저장된 개인 기준선 · 발표 점수에는 미포함" : "Saved personal baseline · excluded from presentation scores"}</small>}
             </div>
             <div className={`signal-value ${sessionState === "live" ? (stressScore > 0.65 ? "alert" : "ok") : "data"}`}>
               {sessionState === "live" && confidence > 0 ? stressScore.toFixed(2) : "—"}
@@ -1277,12 +1421,13 @@ export function DashboardShell() {
 
               {SIGNAL_SOURCE === "live" && <div className="coach-stack" aria-live="polite">
                 {agentReportLoading && <p role="status">{lang === "ko" ? "구간별 분석 보고서를 생성하고 있습니다…" : "Generating the segment analysis report…"}</p>}
-                {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
+                {agentReportError && <div><p role="alert" className="error-msg">{agentReportError}</p>{reportRequestRef.current && !saved && <button type="button" className="btn btn-outline" onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}</div>}
+                {reflectionError && <p role="alert" className="error-msg">{reflectionError}</p>}
                 {agentReport && <>
                   <h3 className="report-panel-title">{lang === "ko" ? "발표 분석 보고서" : "Presentation analysis report"}</h3>
                   <SessionAgentReport report={agentReport} language={lang} showTimeline={false} onSeek={recordedVideoUrl ? (ms)=>{const video=sessionVideoRef.current;if(video) {video.currentTime=ms/1000;void video.play().catch(()=>undefined);}} : undefined} />
-                  <AgentObservationReport report={agentReport} ko={lang === "ko"} />
-                  {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
+                  <AgentObservationReport report={agentReport} ko={lang === "ko"} onAnswer={reflectionSaving || saving ? undefined : answer => void answerReportReflection(answer)} />
+                  {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && !saved && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}
               </div>}
 
@@ -1360,31 +1505,33 @@ export function DashboardShell() {
       )}
       <dialog ref={preparationDialogRef} className="save-modal preparation-dialog" aria-labelledby="preparation-title" aria-describedby="preparation-description" onCancel={(event) => event.preventDefault()}>
         <span className="save-modal-eyebrow">{lang === "ko" ? "연습 전 준비" : "Before you practice"}</span>
-        <h2 id="preparation-title">{lang === "ko" ? "카메라와 마이크를 확인할게요." : "Let's check your camera and microphone."}</h2>
-        <p id="preparation-description">{lang === "ko" ? "얼굴이 화면에 잘 보이도록 앉은 뒤, 아래 문장을 평소 발표하듯 자연스럽게 읽어주세요." : "Sit so your face is clearly visible, then read the sentence below in your normal presentation voice."}</p>
+        <h2 id="preparation-title">{SIGNAL_SOURCE === "live" ? (lang === "ko" ? "개인 기준선을 측정할게요." : "Let's measure your personal baseline.") : (lang === "ko" ? "카메라와 마이크를 확인할게요." : "Let's check your camera and microphone.")}</h2>
+        <p id="preparation-description">{SIGNAL_SOURCE === "live" ? (lang === "ko" ? "얼굴이 화면에 잘 보이도록 앉은 뒤, 아래 문장을 평소 발표하듯 약 30초 동안 반복해서 읽어주세요." : "Sit with your face visible and repeat the sentence in your usual presentation voice for about 30 seconds.") : (lang === "ko" ? "얼굴이 화면에 잘 보이도록 앉은 뒤, 아래 문장을 평소 발표하듯 읽어주세요." : "Sit so your face is visible, then read the sentence in your presentation voice.")}</p>
         <video className="preparation-video" ref={preparationVideoRef} autoPlay muted playsInline />
         <blockquote className="preparation-script">{lang === "ko" ? "안녕하세요. 지금부터 발표 연습을 시작하겠습니다. 오늘 준비한 내용을 여러분께 차근차근 설명하겠습니다." : "Hello. I am about to begin my presentation practice. I will explain the material I have prepared, step by step."}</blockquote>
-        <p className="preparation-privacy">{lang === "ko" ? "읽는 동안 영상·음성을 분석합니다. 준비 완료 후에도 분석을 유지하며, 시작할 때 최신 준비 분석값 하나를 시작 기준값으로 기록합니다. 준비 중 원본 영상·음성은 저장하지 않습니다." : "Analysis continues after preparation. The latest preparation score is saved as the starting baseline when you start. Raw preparation video and audio are not saved."}</p>
+        <p className="preparation-privacy">{SIGNAL_SOURCE === "live" ? (lang === "ko" ? "서로 겹치지 않는 유효한 10초 분석 창 3개 이상의 중앙값을 계정에 저장해 다음 연습에도 사용합니다. 준비 영상·음성 원본은 저장하지 않습니다." : "We save the median of at least three separate valid 10-second windows to your account for future sessions. Raw preparation video and audio are not saved.") : (lang === "ko" ? "현재는 데모 분석 모드입니다. 준비 중 원본 영상·음성은 저장하지 않습니다." : "This is demo analysis mode. Raw preparation video and audio are not saved.")}</p>
         <ul className="preparation-checks">
           <li>{lang === "ko" ? "영상 수집" : "Video collection"}: {collectedFrames}/16</li>
           <li>{lang === "ko" ? "음성 수집" : "Audio collection"}: {audioSeconds}/10{lang === "ko" ? "초" : "s"}</li>
           <li>{voiceDetected ? (lang === "ko" ? "마이크 소리 감지됨" : "Microphone sound detected") : (lang === "ko" ? "마이크에 문장을 읽어주세요" : "Read the sentence into your microphone")}</li>
+          {SIGNAL_SOURCE === "live" && <li>{lang === "ko" ? `유효한 독립 분석 창: ${calibrationCount}/3개 이상` : `Separate valid windows: ${calibrationCount}/3 or more`}</li>}
         </ul>
         {!audioRunning && <button autoFocus type="button" className="btn btn-outline" onClick={() => void startPreview()}>{t("note.prepareButton")}</button>}
         {errorMessage && <p role="alert" className="error-msg">{errorMessage}</p>}
+        {calibrationError && <p role="alert" className="error-msg">{calibrationError}</p>}
         <p role="status" className="preparation-status">{preparationPhase === "ready"
-          ? (lang === "ko" ? (SIGNAL_SOURCE === "live" ? "모델 응답 확인 완료! 준비 완료를 누른 뒤 시작해 주세요." : "기기 준비 완료! 현재는 데모 분석 모드입니다.") : (SIGNAL_SOURCE === "live" ? "Model response verified! Confirm readiness, then start practice." : "Devices are ready. Demo analysis mode is active."))
+          ? (lang === "ko" ? (SIGNAL_SOURCE === "live" ? "개인 기준선 계산 준비 완료. 저장 후 다음 연습에도 사용합니다." : "기기 준비 완료! 현재는 데모 분석 모드입니다.") : (SIGNAL_SOURCE === "live" ? "Baseline ready. Save it for future sessions." : "Devices are ready. Demo analysis mode is active."))
           : preparationPhase === "analyzing" ? (lang === "ko" ? "모델 응답을 확인하고 있어요. 잠시 기다려주세요…" : "Checking the model response. Please wait…")
           : preparationPhase === "error" ? (lang === "ko" ? "모델 확인에 실패했습니다. 서버 상태를 확인하고 다시 시도해 주세요." : "Model check failed. Check the server and retry.")
-          : (lang === "ko" ? "준비 데이터를 모으고 있어요. 문장을 다 읽었다면 잠시 기다려주세요." : "Collecting preparation data. If you have finished reading, please wait.")}</p>
+          : (lang === "ko" ? "유효한 분석 창을 모으고 있어요. 카메라를 보며 계속 말해 주세요." : "Collecting valid windows. Keep speaking while facing the camera.")}</p>
         <div className="save-modal-actions">
-          <a className="btn btn-outline" href="/dashboard">{lang === "ko" ? "나가기" : "Leave"}</a>
+          {recalibrating && calibration ? <button type="button" className="btn btn-outline" onClick={() => {
+            setRecalibrating(false); setPreparationComplete(true); setPreparationPhase("ready");
+            calibrationSamplesRef.current = []; setCalibrationCount(0); preparationDialogRef.current?.close();
+          }}>{lang === "ko" ? "기존 기준선 유지" : "Keep current baseline"}</button> : <a className="btn btn-outline" href="/dashboard">{lang === "ko" ? "나가기" : "Leave"}</a>}
           {!audioRunning && <button type="button" className="btn btn-outline" onClick={()=>{const context=audioContextRef.current;if(context)void context.resume().catch(()=>setAudioRunning(false));else void startPreview();}}>{lang === "ko" ? "마이크 활성화" : "Enable microphone"}</button>}
           {preparationPhase === "error" && <button type="button" className="btn btn-outline" onClick={() => setPreparationPhase("collecting")}>{lang === "ko" ? "다시 확인" : "Retry"}</button>}
-          <button type="button" className="btn btn-primary" disabled={preparationPhase !== "ready"} onClick={() => {
-            setPreparationComplete(true);
-            preparationDialogRef.current?.close();
-          }}>{lang === "ko" ? "준비 완료" : "Ready"}</button>
+          <button type="button" className="btn btn-primary" disabled={preparationPhase !== "ready" || calibrationSaving} onClick={() => void completePreparation()}>{calibrationSaving ? (lang === "ko" ? "저장 중…" : "Saving…") : SIGNAL_SOURCE === "live" ? (lang === "ko" ? "기준선 저장" : "Save baseline") : (lang === "ko" ? "준비 완료" : "Ready")}</button>
         </div>
       </dialog>
       <dialog ref={saveCompleteDialogRef} className="save-modal save-complete-dialog" aria-labelledby="save-complete-title" aria-describedby="save-complete-description">
@@ -1392,6 +1539,11 @@ export function DashboardShell() {
         <h2 id="save-complete-title">{lang === "ko" ? "세션이 저장되었어요!" : "Your session has been saved!"}</h2>
         <p id="save-complete-description">{lang === "ko" ? "아래에서 분석 결과를 보세요!" : "See your analysis results below!"}</p>
         {saveStatus && <p role="status">{saveStatus}</p>}
+        {recalibrationSuggested && <div className="coach-card coach-data">
+          <strong>{lang === "ko" ? "개인 기준선을 다시 측정해 볼까요?" : "Would you like to remeasure your baseline?"}</strong>
+          <p>{lang === "ko" ? "비슷한 환경의 최근 연습 3건에서 모델 점수가 기준선과 반복적으로 달랐습니다. 발표 방식의 변화일 수도 있어 현재 기준선은 자동으로 바꾸지 않습니다." : "Three recent sessions in a similar setting differed from your baseline. This could reflect delivery changes, so your baseline stays unchanged unless you choose to remeasure."}</p>
+          <div className="agent-reflection-options"><button type="button" className="btn btn-primary" onClick={beginRecalibration}>{lang === "ko" ? "다시 측정" : "Remeasure"}</button><button type="button" className="btn btn-outline" onClick={() => setRecalibrationSuggested(false)}>{lang === "ko" ? "나중에" : "Later"}</button></div>
+        </div>}
         <div className="save-modal-actions">
           <button type="button" className="btn btn-primary" autoFocus onClick={() => {
             saveCompleteDialogRef.current?.close();

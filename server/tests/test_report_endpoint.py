@@ -127,6 +127,20 @@ class ReportEndpointTests(unittest.TestCase):
                 self.assertEqual(report["previousCoaching"]["lastOutcome"],"partial")
         finally:self.module.app.dependency_overrides.clear()
 
+    def test_authenticated_report_accepts_personal_baseline_fields(self):
+        self.module.app.dependency_overrides[self.module.require_authenticated_user] = lambda: {"sub": "test"}
+        payload = {**self.payload, "personalBaseline": .3, "baselineSampleCount": 3,
+                   "baselineModelVersion": "test-model"}
+        try:
+            with patch.object(self.module, "model_version", return_value="test-model"):
+                response = self.client.post("/agent/report", json=payload)
+            self.assertEqual(response.status_code, 200)
+            baseline = response.json()["observationReport"]["personalBaseline"]
+            self.assertEqual(baseline["sampleCount"], 3)
+            self.assertEqual(baseline["peakDifference"], .5)
+        finally:
+            self.module.app.dependency_overrides.clear()
+
 
 if __name__ == "__main__":
     unittest.main()

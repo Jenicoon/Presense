@@ -4,7 +4,7 @@ import { ArrowRight, Clock3, Gauge, Layers3, ScanLine, Sparkles } from "lucide-r
 import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
 import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence } from "@/components/agent-observation-report";
-import type { AgentReport } from "@/lib/agent-report";
+import { agentNextPractice, agentReflectionInterpretation, showPriorityAdvice, type AgentReport } from "@/lib/agent-report";
 import { completeReportEvidence } from "@/lib/finding-evidence";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { clock, restoreCoach } from "@/lib/coaching";
@@ -170,7 +170,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
           <span>{measurementLabel(f.metric ?? "", ko)}<strong>{Number(o.value.toFixed(2))}</strong></span>
           <span>{ko ? "스트레스 신호 점수" : "Stress signal score"}<strong>{signalScore(o.stressScore)}</strong></span>
         </div>)}</div></details>
-        <div className="review-finding-action"><div><strong>{ko ? "영상에서 확인할 것" : "What to check"}</strong><p>{view.question}</p></div><div><strong>{ko ? "다음 연습" : "Next exercise"}</strong><p>{view.goal}</p></div></div>
+        <div className="review-finding-action"><div><strong>{ko ? "영상에서 확인할 것" : "What to check"}</strong><p>{showPriorityAdvice(report, f.ranges ?? []) ? view.question : agentReflectionInterpretation(report, ko)}</p></div><div><strong>{ko ? "다음 연습" : "Next exercise"}</strong><p>{showPriorityAdvice(report, f.ranges ?? []) ? view.goal : agentNextPractice(report, ko)}</p></div></div>
         <details className="review-details"><summary>{ko ? "관련 패턴 값과 참고 근거" : "Related patterns and sources"}</summary>{f.observations?.map(o => <p key={o.segmentId}>{clock(o.startMs)}–{clock(o.endMs)} · {Object.entries(o.conceptValues).map(([k, v]) => `${measurementLabel(k, ko)} ${v.toFixed(3)}`).join(" · ")}</p>)}<AgentEvidence report={report} ids={f.evidenceIds} ko={ko} /></details>
         <button type="button" className="btn btn-outline" disabled={report.coachingAvailable === false} onClick={() => open(f.id)}>{ko ? "이 구간 함께 확인하기" : "Review this interval together"}<ArrowRight size={14} /></button>
       </article>;

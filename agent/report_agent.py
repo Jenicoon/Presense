@@ -732,6 +732,16 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     # 1. Whole-session measurements. 2. Inventory of valid model outputs.
     summary, candidates = analyze_session(request)
     observation_report = describe_observations(request, summary)
+    if (request.personalBaseline is not None and request.baselineSampleCount is not None
+            and request.baselineModelVersion == model_version and model_version != "unknown"):
+        baseline = request.personalBaseline
+        average = observation_report["averageStressScore"]
+        peak = observation_report["peakSegment"]
+        observation_report["personalBaseline"] = {
+            "score": baseline, "sampleCount": request.baselineSampleCount,
+            "averageDifference": round(average - baseline, 4) if average is not None else None,
+            "peakDifference": round(peak["stressScore"] - baseline, 4) if peak else None,
+        }
     observation_report["practiceFocus"] = _practice_focus(observation_report, request.language == "ko")
     observation_report["previousComparison"] = _previous_observation(
         request, observation_report, prior_memory, model_version)
@@ -999,7 +1009,7 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
             "detectedErrors": verification["finalErrors"].get("coaching", {}).get(issue["id"], []),
         })
     report = {
-        "schemaVersion": "1.0", "sessionId": request.sessionId, "language": request.language,
+        "schemaVersion": "1.1", "sessionId": request.sessionId, "language": request.language,
         "status": "complete" if ((synthesis and priorities and all(issue["evidenceIds"] for issue in priorities))
                                  or (not priorities and agent_state is not None
                                      and agent_state.stop_reason not in {"action_limit", "decision_unavailable"})) else "limited",
@@ -1014,6 +1024,23 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
         "researchActions": research_actions,
         "claimVerification": verification,
     }
+    peak = observation_report["peakSegment"]
+    average = observation_report["averageStressScore"]
+    if peak and average is not None:
+        distinct_peak = peak["stressScore"] >= .65 and peak["stressScore"] - average >= .05
+        start, end = peak["startMs"] // 1000, peak["endMs"] // 1000
+        interval = f"{start // 60:02d}:{start % 60:02d}–{end // 60:02d}:{end % 60:02d}"
+        report["reflection"] = {
+            "kind": "peak" if distinct_peak else "overall",
+            "segmentId": peak["segmentId"] if distinct_peak else "overall",
+            "startMs": peak["startMs"] if distinct_peak else 0,
+            "endMs": peak["endMs"] if distinct_peak else request.durationMs,
+            "question": ((f"{interval} 구간은 의도적으로 강조한 부분인가요?" if ko else
+                          f"Was {interval} an intentional emphasis?") if distinct_peak else
+                         ("이번 발표의 전달 방식이 의도한 대로였나요?" if ko else
+                          "Did this presentation come across as you intended?")),
+            "answer": None,
+        }
     if agent_state is not None:
         report["agentRun"] = {"stopReason": agent_state.stop_reason, "actions": agent_state.actions,
                               "decisions": agent_state.decisions,

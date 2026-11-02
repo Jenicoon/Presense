@@ -1,7 +1,7 @@
 import v2Guidance from "../../shared/concept-v2-guidance.json";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { bilingualLabel } from "@/lib/report-locale";
-import { agentNextPractice, type AgentReport } from "@/lib/agent-report";
+import { agentNextPractice, agentReflectionInterpretation, type AgentReport } from "@/lib/agent-report";
 
 function time(ms: number): string {
   const seconds = Math.floor(ms / 1000);
@@ -24,7 +24,10 @@ export function conceptBarPercent(value: number): number {
   return Math.max(0, Math.min(1, value)) * 100;
 }
 
-export function AgentObservationReport({ report, ko }: { report: AgentReport; ko: boolean }) {
+export function AgentObservationReport({ report, ko, onAnswer }: {
+  report: AgentReport; ko: boolean;
+  onAnswer?: (answer: "intentional" | "unintentional" | "unsure") => void;
+}) {
   const observed = report.observationReport;
   if (!observed) return null; // Reports saved before this schema have only summaryText.
   const isAudio=(id:string)=>id.startsWith("pitch_") || ["v2_mean_f0","v2_jitter","v2_shimmer","v2_hnr"].includes(id);
@@ -39,7 +42,31 @@ export function AgentObservationReport({ report, ko }: { report: AgentReport; ko
   const last = phases[2]?.averageStressScore;
   const comparablePhases = phases.length === 3 && phases[0].observedMs >= (phases[0].endMs - phases[0].startMs) / 2
     && phases[2].observedMs >= (phases[2].endMs - phases[2].startMs) / 2;
+  const baseline = observed.personalBaseline;
+  const reflection = report.reflection;
+  const answerLabels = ko
+    ? { intentional: "네, 의도했어요", unintentional: "아니요", unsure: "잘 모르겠어요" }
+    : { intentional: "Yes, intentional", unintentional: "No", unsure: "I'm not sure" };
+  const signedPoints = (value: number | null) => value === null ? "—" : `${Math.round(value * 100) > 0 ? "+" : ""}${Math.round(value * 100)}${ko ? "점" : " points"}`;
   return <div className="coach-stack">
+    {baseline && <div className="coach-card coach-data">
+      <h3>{ko ? "개인 기준선과 비교" : "Compared with your personal baseline"}</h3>
+      <p>{ko ? `준비 단계의 독립된 유효 분석 창 ${baseline.sampleCount}개 중앙값: ${Math.round(baseline.score * 100)}/100` :
+        `Median of ${baseline.sampleCount} separate valid preparation windows: ${Math.round(baseline.score * 100)}/100`}</p>
+      <p>{ko ? `발표 평균 차이 ${signedPoints(baseline.averageDifference)} · 최고 구간 차이 ${signedPoints(baseline.peakDifference)}` :
+        `Session mean difference ${signedPoints(baseline.averageDifference)} · peak difference ${signedPoints(baseline.peakDifference)}`}</p>
+      <small>{ko ? "차이는 모델 점수의 차이이며 실제 긴장 원인이나 발표 품질을 뜻하지 않습니다." : "These are differences in model scores, not a diagnosis or a presentation-quality grade."}</small>
+    </div>}
+    {reflection && <div className="coach-card coach-data">
+      <h3>{ko ? "Agent의 확인 질문" : "Agent follow-up"}</h3>
+      <p>{reflection.kind === "overall" ? (ko ? "이번 발표의 전달 방식이 의도한 대로였나요?" : "Did this presentation come across as you intended?") :
+        ko ? `${time(reflection.startMs)}–${time(reflection.endMs)} 구간은 의도적으로 강조한 부분인가요?` :
+        `Was ${time(reflection.startMs)}–${time(reflection.endMs)} an intentional emphasis?`}</p>
+      <div className="agent-reflection-options">{(["intentional", "unintentional", "unsure"] as const).map((answer) =>
+        <button key={answer} type="button" className={reflection.answer === answer ? "btn btn-primary" : "btn btn-outline"}
+          aria-pressed={reflection.answer === answer} disabled={!onAnswer} onClick={() => onAnswer?.(answer)}>{answerLabels[answer]}</button>)}</div>
+      {reflection.answer && <p>Agent: {agentReflectionInterpretation(report, ko)}</p>}
+    </div>}
     {phases.some((item) => item.averageStressScore !== null) && <div className="coach-card coach-data">
       <h3>{ko ? "발표 흐름" : "How the session changed"}</h3>
       <p>{ko ? "숫자가 낮으면 해당 구간을 모델이 스트레스 쪽으로 분류한 정도가 낮다는 뜻입니다. 전달이 좋았는지는 영상과 함께 확인하세요." : "A lower number means the model leaned less toward its stress class in that interval. Review the recording to judge delivery."}</p>
