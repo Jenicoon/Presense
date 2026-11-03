@@ -93,6 +93,7 @@ export function AgentPanel({ userId }: { userId: string | null }) {
   useEffect(() => {
     if(!preferencesLoaded) return;
     window.sessionStorage.setItem(OPEN_KEY, open ? "1" : "0");
+    window.dispatchEvent(new CustomEvent("presense:agent-visibility", {detail: {open}}));
     if (open) {
       void refreshSessions();
       window.setTimeout(() => inputRef.current?.focus(), 0);

@@ -54,7 +54,7 @@ module.model_version = lambda: "test-model"
 module.luxia_api_key = ""
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3015", "http://127.0.0.1:3015"],
+    allow_origins=["http://localhost:3015", "http://127.0.0.1:3015", "http://127.0.0.1:3016"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -70,9 +70,11 @@ for identity, date, changed in (
 ):
     doc = document(identity, changed=changed)
     doc["snapshot"]["recordedAt"] = date
+    doc["snapshot"]["dataOrigin"] = "synthetic"
     doc["snapshot"]["request"]["sceneLabel"] = "Live Camera"
     DOCS[identity] = doc
     report = doc["snapshot"]["report"]
+    report["dataOrigin"] = "synthetic"
     RECORDS.insert(
         0,
         {
@@ -92,6 +94,26 @@ for identity, date, changed in (
             "agent_report": report,
         },
     )
+
+
+# Optional synthetic documents include actual, prevalidated AI task output.
+# No provider is called by this loopback browser harness.
+if os.getenv("PRESENSE_BROWSER_DOCUMENTS"):
+    import json
+    seeded = json.loads(Path(os.environ["PRESENSE_BROWSER_DOCUMENTS"]).read_text())
+    if any(doc["snapshot"].get("dataOrigin") != "synthetic" for doc in seeded):
+        raise RuntimeError("Browser review fixtures must be synthetic")
+    DOCS.clear()
+    RECORDS.clear()
+    for doc in seeded:
+        identity = doc["state"]["sessionId"]
+        DOCS[identity] = doc
+        report = doc["snapshot"]["report"]
+        RECORDS.append({"id": identity, "title": "합성 코칭 흐름 예시", "session_date": "2026-11-03T04:00:00Z",
+            "duration_seconds": doc["snapshot"]["request"]["durationMs"] // 1000,
+            "result": "Synthetic coaching test", "stress_average": report["analysis"]["averageStress"],
+            "diagnosis": report["summaryText"], "next_action": "Review saved practice actions",
+            "scene_label": "Live Camera", "timeline": [], "video_path": "synthetic/placeholder.webm", "agent_report": report})
 
 
 class Store:
@@ -115,9 +137,16 @@ class Store:
 
 module._coach_store = lambda *_: Store()
 from agent.coaching import respond as offline_respond
-module.respond_with_ai = lambda doc, request, **kwargs: offline_respond(
-    doc, request, attempt=kwargs.get("attempt"), previous=kwargs.get("previous")
-)
+def browser_respond(doc, request, **kwargs):
+    updated, response = offline_respond(doc, request, attempt=kwargs.get("attempt"), previous=kwargs.get("previous"))
+    origin = doc["snapshot"].get("dataOrigin", "synthetic")
+    for value in [response, updated["messages"][-1]["response"], *[
+        row["response"] for row in updated["messages"][-1].get("translations", {}).values() if "response" in row
+    ]]:
+        value["generation"]["dataOrigin"] = origin
+    return updated, response
+
+module.respond_with_ai = browser_respond
 
 
 @app.post("/auth/v1/token")

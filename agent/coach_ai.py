@@ -30,6 +30,7 @@ from .coaching_methods import (
     selected_finding,
 )
 from .finding_evidence import attach_observation_videos, complete_document_evidence
+from .practice_rubric import checks_for, review_outcome
 from .presentation_guidance import guidance
 from .report_schema import Contract, ReviewRequest
 from .session_analyzer import metric
@@ -49,8 +50,8 @@ ASK_ACTIONS = {
     "explain_score",
     "ask",
 }
-# Recording controls must work even during an LLM outage. They do not author advice.
-SYSTEM_ACTIONS = {"start_recording", "finish_coaching"}
+# Recording controls and explicit review calculations use the saved task during an LLM outage.
+SYSTEM_ACTIONS = {"start_recording", "retry_practice", "finish_coaching", "submit_practice_review"}
 TOKEN = re.compile(r"\{\{evidence:([A-Za-z0-9_.-]+)\}\}")
 UNOBSERVED_OUTCOME = re.compile(
     r"(?:전달|발음|설득력|명확성).{0,20}(?:어려웠|어려워졌|저하|향상|좋아졌|나빠졌|떨어졌|불분명했)|"
@@ -232,6 +233,20 @@ def build_context(doc, request, attempt=None, previous=None):
         ),
         None,
     )
+    if practice and practice.get("deliveryReview"):
+        review = practice["deliveryReview"]
+        names = {"achieved": ("달성", "achieved"), "partial": ("부분 달성", "partly achieved"),
+                 "retry_recommended": ("재시도 권장", "retry recommended"), "insufficient_data": ("자료 부족", "insufficient data")}
+        answers = {"yes": ("실행", "done"), "partly": ("일부 실행", "partly done"),
+                   "no": ("미실행", "not yet"), "unavailable": ("확인 보류", "unconfirmed")}
+        result = practice.get("comparison", {}).get("outcome", review_outcome(review))
+        texts = {}
+        for ko, lang in ((True, "ko"), (False, "en")):
+            details = "; ".join(check["label"] + " " + answers[review["answers"][check["id"]]][0 if ko else 1]
+                                for check in checks_for(practice, ko))
+            texts[lang] = (("사용자가 영상을 보고 직접 입력한 결과: " if ko else "The presenter's own recording review: ")
+                           + names[result][0 if ko else 1] + ". " + details)
+        add_fact("practice.delivery_review", texts["ko"], texts["en"])
     comparison = None
     if attempt and practice:
         comparison = compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)
@@ -297,6 +312,9 @@ def build_context(doc, request, attempt=None, previous=None):
                 "instruction",
                 "comparison",
                 "deliveryAssessment",
+                "deliveryReview",
+                "successChecks",
+                "strategyId",
             )
         }
         if practice
@@ -306,7 +324,15 @@ def build_context(doc, request, attempt=None, previous=None):
         if selected_finding(doc, request.findingId)
         else None,
         "practiceMethods": {
-            key: METHODS[key]
+            key: {
+                **{field: {"ko": values[0], "en": values[1]}
+                   for field, values in METHODS[key].items()},
+                "successChecks": [
+                    {"ko": korean["label"], "en": english["label"]}
+                    for korean, english in zip(checks_for({"strategyId": key}, True),
+                                               checks_for({"strategyId": key}, False))
+                ],
+            }
             for key in profile(selected_finding(doc, request.findingId))["strategies"]
         }
         if selected_finding(doc, request.findingId)
@@ -438,7 +464,7 @@ reports that themselves. Do not paraphrase the observation again after inserting
 If state.reviewFeedback is intentional or reviewOutcome is effective/intentional, the presenter
 ALREADY answered: acknowledge it, retain the expression, and offer the next practical method or
 another goal. Do not generate reviewGuide in this answered state. Start by acknowledging that the presenter already answered and keep their answer. Never ask about intended emphasis again. Intention does not prove delivery quality.
-For practice, use practiceMethods: choose strategyId and write a specific successCheck observable
+For practice, use practiceMethods and its successChecks: every listed action will be reviewed after recording, so your steps must rehearse those actions. Choose strategyId and write a specific successCheck observable
 in a recording. Honor a saved practiceStrategyId. Different methods must produce different tasks:
 contrast emphasizes one self-selected key sentence with a comfortable emphasis, never an exaggerated or stronger pitch change; phrasing changes a pause at a completed thought;
 two_versions compares two rehearsals without assuming an error; other methods concern their
@@ -468,7 +494,7 @@ to choose their review result below; the app supplies choices and next actions.
 If intentional/effective was already answered, acknowledge it, reviewGuide:null.
 create_practice: reviewGuide MUST be null. Provide one practice with a supported
 strategyId, bilingual label, two to four concrete bilingual steps, durationSeconds:30,
-and a bilingual successCheck. Use the user's saved strategy if present. Include
+and a bilingual successCheck. Every bilingual field, including practice.label, must be an object {"ko":"...","en":"..."}, never an array. Rehearse every action in practiceMethods.successChecks; those same checks will be used after recording. Use the user's saved strategy if present. Include
 finding.ID in evidenceIds. Start with the task; no redundant observation needed.
 
 Use only this finding and practiceMethods. face_reset: optional brief break,
@@ -768,6 +794,7 @@ def _apply_plan(doc, response, plan, context, language, attempt, previous):
                     else " Signal and measurement changes are descriptive; assess the delivery action by watching the recordings yourself."
                 ),
                 "durationSeconds": plan.practice.durationSeconds,
+                "successChecks": [check["label"] for check in checks_for({"strategyId": plan.practice.strategyId}, lang == "ko")],
             }
         practice.update(practice["translations"][language])
         practice["authoredBy"] = "ai"

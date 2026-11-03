@@ -1,5 +1,6 @@
 "use client";
 import { ArrowRight, Play, Target, Video } from "lucide-react";
+import { PracticeReviewForm } from "@/components/practice-review-form";
 import { signalScore } from "@/lib/report-locale";
 import { measurementLabel } from "@/lib/measurement-labels";
 import {
@@ -88,13 +89,15 @@ export function CoachComponents({
                 <Target size={16} /><span>{c.label}</span><ArrowRight size={15} />
               </button>
             );
+          case "practice_review":
+            return <PracticeReviewForm key={i} card={c} ko={ko} busy={busy} onSubmit={context => onAction("submit_practice_review", undefined, context)} />;
           case "practice":
             return (
               <article key={i} className="coach-card coach-exercise">
                 <div className="coach-component-heading"><span><Video size={14} />{ko ? "연습 과제" : "Practice exercise"}</span><small>{c.durationSeconds}{ko ? "초" : "s"}</small></div>
                 <strong>{c.label}</strong>
                 <div className="coach-practice-steps">{c.instruction.split("\n").map((step, index) => <p key={index}>{step}</p>)}</div>
-                <div className="coach-success-check"><strong>{ko ? "연습 후 확인할 것" : "What to check after practice"}</strong><p>{c.criterion}</p></div>
+                <div className="coach-success-check"><strong>{ko ? "연습 후 확인할 것" : "What to check after practice"}</strong><ol>{c.successChecks?.map(check => <li key={check}>{check}</li>)}</ol><p>{c.criterion}</p></div>
               </article>
             );
           case "insufficient_data":
@@ -118,8 +121,13 @@ export function CoachComponents({
                       ? "이전 발표 → 이번 발표"
                       : "Previous presentation → current presentation"}
                 </p>
+                {!!r.reviewChecks?.length && <div className="coach-success-check"><strong>{ko ? "이번 연습에서 확인한 행동" : "Actions reviewed in this practice"}</strong><ul>{r.reviewChecks.map(check => <li key={check.id}>{ko ? check.ko : check.en}{r.deliveryReview && <span className="coach-check-result">{({yes: ["실행", "Done"], partly: ["일부 실행", "Partly done"], no: ["미실행", "Not yet"], unavailable: ["확인 보류", "Unconfirmed"]} as const)[r.deliveryReview.answers[check.id]]?.[ko ? 0 : 1]}</span>}</li>)}</ul></div>}
+                {r.deliveryReview && !r.conditionsConfirmed && <p role="status">{ko ? "내용이나 촬영 환경을 같게 유지했는지 확인되지 않아 비교 평가를 보류했습니다." : "Comparison assessment is withheld because matching content and recording conditions were not confirmed."}</p>}
+                {r.scope === "practice" && !r.deliveryReview && r.reviewChecks?.length ? <p>{ko ? "먼저 두 영상을 보고 아래 항목에 답해 주세요. 점수 차이만으로 달성을 판단하지 않습니다." : "Watch both takes and answer the checks below. Score changes alone do not determine achievement."}</p> : null}
+                <details className="review-details"><summary>{ko ? "스트레스 신호 변화 참고하기" : "View stress signal changes"}</summary>
                 <div className="coach-score-comparison">{[r.before, r.after].map((take, index) => <div key={index}><span>{index === 0 ? (ko ? "이전 시도" : "Before") : ko ? "이번 시도" : "Current"}</span><strong>{signalScore(take.value)}</strong><small>{ko ? "스트레스 신호" : "Stress signal"}</small></div>)}</div>
                 {r.modelScoreChange !== null && <p className="coach-score-change">{ko ? "스트레스 신호 변화" : "Stress signal change"} <strong>{r.modelScoreChange > 0 ? "+" : ""}{Math.round(r.modelScoreChange * 100)}{ko ? "점" : " points"}</strong></p>}
+                </details>
                 <details className="review-details"><summary>{ko ? "분석 자료와 수치 변화 자세히 보기" : "Inspect data quality and measurement changes"}</summary>
                 <dl className="coach-quality-list">
                   <div><dt>{ko ? "분석 구간" : "Analysis windows"}</dt><dd>{r.before.windowCount} → {r.after.windowCount}</dd></div>

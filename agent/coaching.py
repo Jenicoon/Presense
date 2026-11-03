@@ -22,6 +22,7 @@ from .coaching_methods import (
     prepare_review_request,
     profile,
 )
+from .practice_rubric import DeliveryReview, VERSION as RUBRIC_VERSION, checks_for, check_catalog, review_outcome, next_instruction
 from .presentation_guidance import guidance, session_summary
 from .report_schema import Contract, ReviewRequest
 from .session_analyzer import _independent_count, intervals, metric
@@ -44,6 +45,7 @@ Action = Literal[
     "submit_review",
     "guide_review",
     "explain_score",
+    "submit_practice_review",
     "assess_delivery_achieved",
     "assess_delivery_partial",
     "assess_delivery_retry",
@@ -73,6 +75,7 @@ class CoachRequest(Contract):
     previousAction: Action | None = None
     reviewOutcome: ReviewOutcome | None = None
     practiceStrategyId: PracticeStrategy | None = None
+    deliveryReview: DeliveryReview | None = None
 
 
 class ConversationState(Contract):
@@ -124,6 +127,14 @@ class PracticeCard(Contract):
     instruction: str
     criterion: str
     durationSeconds: int
+    successChecks: list[str] = Field(default_factory=list, max_length=3)
+
+
+class PracticeReviewCard(Contract):
+    type: Literal["practice_review"]
+    practiceId: str
+    attemptSessionId: str
+    checks: list[dict[str, str]] = Field(min_length=2, max_length=3)
 
 
 class ComparisonCard(Contract):
@@ -155,6 +166,7 @@ Component = Annotated[
     | SegmentCard
     | FindingCard
     | PracticeCard
+    | PracticeReviewCard
     | ComparisonCard
     | Notice
     | ReviewGuideCard
@@ -196,6 +208,13 @@ def new_document(request: ReviewRequest, report: dict, version: str) -> dict:
         "messages": [],
         "revision": 0,
     }
+
+
+def practice_card(practice, ko):
+    content = practice.get("translations", {}).get("ko" if ko else "en", practice)
+    return {"type": "practice", "practiceId": practice["id"],
+            **{key: content.get(key, []) if key == "successChecks" else content[key]
+               for key in ("label", "instruction", "criterion", "durationSeconds", "successChecks")}}
 
 
 def measurement_name(key, ko):
@@ -346,6 +365,8 @@ def compare_snapshots(before, after, practice=None):
                         "afterCount": second["independentObservations"],
                         "beforeQuality": first["quality"],
                         "afterQuality": second["quality"],
+                        "beforeCoverage": first["coverage"],
+                        "afterCoverage": second["coverage"],
                     }
                 )
     outcome, improvement = "insufficient_data", None
@@ -369,9 +390,11 @@ def compare_snapshots(before, after, practice=None):
             and focus
             and min(focus["beforeCount"], focus["afterCount"]) >= 2
             and min(focus["beforeQuality"], focus["afterQuality"]) >= 0.8
+            and min(focus["beforeCoverage"], focus["afterCoverage"]) >= 0.5
         )
         if eligible:
-            outcome = practice.get("deliveryAssessment") or "review_required"
+            outcome = (review_outcome(practice["deliveryReview"]) if practice.get("deliveryReview")
+                       else practice.get("deliveryAssessment") or "review_required")
     elif (
         sufficient
         and focus
@@ -392,7 +415,12 @@ def compare_snapshots(before, after, practice=None):
         )
     elif sufficient and not practice:
         outcome = "comparable"
+    review = practice.get("deliveryReview") if practice else None
+    conditions_match = not review or (review["sameContent"] == "same" and review["sameEnvironment"] == "same")
     return {
+        "deliveryReview": review,
+        "reviewChecks": check_catalog(practice) if practice and practice.get("rubricVersion") else [],
+        "conditionsConfirmed": bool(review and conditions_match),
         "previousSessionId": before["request"]["sessionId"],
         "currentSessionId": after["request"]["sessionId"],
         "outcome": outcome,
@@ -400,16 +428,15 @@ def compare_snapshots(before, after, practice=None):
         "scope": "practice" if practice else "previous_session",
         "before": a,
         "after": b,
-        "modelScoreChange": round(b["value"] - a["value"], 6) if sufficient else None,
-        "measurements": changes if compatible else [],
+        "modelScoreChange": round(b["value"] - a["value"], 6) if sufficient and conditions_match else None,
+        "measurements": changes if compatible and conditions_match else [],
         "referenceValue": reference,
         "evaluationMode": "delivery_review"
         if delivery_review
         else "measurement_comparison",
         "assessmentSource": "presenter"
         if delivery_review
-        and practice.get("deliveryAssessment")
-        and outcome != "insufficient_data"
+        and (practice.get("deliveryAssessment") or review)
         else "none",
         "criterion": "presenter_delivery_review"
         if delivery_review
@@ -480,18 +507,25 @@ def validate_response(raw, doc, attempt=None, previous=None):
             p = practices.get(component.practiceId)
             content = {
                 k: getattr(component, k)
-                for k in ("label", "instruction", "criterion", "durationSeconds")
+                for k in ("label", "instruction", "criterion", "durationSeconds", "successChecks")
             }
             allowed = (
                 (
-                    [{k: p[k] for k in content}]
-                    + list(p.get("translations", {}).values())
+                    [{k: p.get(k, []) if k == "successChecks" else p[k] for k in content}]
+                    + [{**value, "successChecks": value.get("successChecks", [])} for value in p.get("translations", {}).values()]
                 )
                 if p
                 else []
             )
             if content not in allowed:
                 raise ValueError("Unknown or altered exercise")
+        elif isinstance(component, PracticeReviewCard):
+            p = practices.get(component.practiceId)
+            if (not p or component.practiceId != state.activePracticeId or state.stage != "comparison_ready"
+                    or component.attemptSessionId != state.attemptSessionId
+                    or component.attemptSessionId != p.get("attemptSessionId")
+                    or component.checks not in [checks_for(p, True), checks_for(p, False)]):
+                raise ValueError("Unsupported practice review")
         elif isinstance(component, ComparisonCard):
             is_attempt = (
                 component.comparison.get("previousSessionId") == state.sessionId
@@ -992,7 +1026,11 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             view = guidance(finding, ko)
             if state.reviewOutcome not in {"effective", "intentional"}:
                 state.reviewFeedback = "needs_practice"
-            practice["strategyId"] = state.practiceStrategyId
+            practice["strategyId"] = state.practiceStrategyId or profile(finding)["strategies"][0]
+            state.practiceStrategyId = practice["strategyId"]
+            practice["rubricVersion"] = RUBRIC_VERSION
+            practice["reviewChecks"] = check_catalog(practice)
+            practice["successChecks"] = [check["label"] for check in checks_for(practice, ko)]
             practice["reviewOutcome"] = state.reviewOutcome
             practice["evaluationMode"] = "delivery_review"
             practice["label"] = view["goal"]
@@ -1059,6 +1097,7 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                             "instruction",
                             "criterion",
                             "durationSeconds",
+                            "successChecks",
                         )
                     },
                 }
@@ -1084,11 +1123,15 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 "Create a practice or finish the active attempt before recording"
             )
         if action == "retry_practice":
+            retry_instruction = {"ko": next_instruction(practice, True), "en": next_instruction(practice, False)} if practice.get("rubricVersion") else None
             practice = deepcopy(practice)
+            if retry_instruction:
+                practice["retryInstruction"] = retry_instruction
             practice["id"] = str(uuid4())
             practice.pop("comparison", None)
             practice.pop("attemptSessionId", None)
             practice.pop("deliveryAssessment", None)
+            practice.pop("deliveryReview", None)
             doc["practices"].append(practice)
             state.activePracticeId = practice["id"]
         state.stage = "recording"
@@ -1098,6 +1141,9 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             if ko
             else "Check the camera and microphone, then start on the preparation screen. Use the same scene and content for at least 30 seconds, then finish."
         )
+        if practice.get("retryInstruction"):
+            message = practice["retryInstruction"]["ko" if ko else "en"] + " " + message
+        components.append(practice_card(practice, ko))
         choices(choice("finish_recording", "녹화 종료 및 분석", "Finish and analyze"))
     elif action in {"finish_recording", "compare_attempts"}:
         if not practice:
@@ -1135,10 +1181,11 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             practice["attemptSessionId"] = attempt["snapshot"]["request"]["sessionId"]
             state.attemptSessionId = practice["attemptSessionId"]
             state.stage = "comparison_ready"
+            practice_label = practice.get("translations", {}).get("ko" if ko else "en", {}).get("label", practice["label"])
             message = (
-                "재촬영 분석이 끝났어요. 아래 수치는 원본과 이번 시도의 차이입니다. 두 영상을 보고 연습에서 정한 전달 행동을 실행했는지 확인해 주세요."
+                f"‘{practice_label}’ 재촬영 분석이 끝났어요. 원본과 이번 영상을 보고 연습 전에 정한 행동을 아래에서 하나씩 확인해 주세요."
                 if ko
-                else "The retry analysis is ready. The figures describe differences between both takes. Watch them to check whether you carried out the chosen action, such as emphasizing only your key sentence."
+                else f"Your retry for '{practice_label}' is ready. Watch the original and retry, then check each action you chose before recording."
             )
             focus_change = next(
                 (
@@ -1153,11 +1200,13 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 direction = focus_change["difference"]
                 item = measurement_name(practice["metric"], ko)
                 message += (
-                    f" {item}는 원본보다 {'높게' if direction > 0 else '낮게' if direction < 0 else '비슷하게'} 관측됐습니다. 자세한 수치는 아래에서 확인할 수 있어요."
+                    f" 관련 측정값({item})은 원본보다 {'높게' if direction > 0 else '낮게' if direction < 0 else '비슷하게'} 관측됐습니다. 자세한 수치는 아래에서 확인할 수 있어요."
                     if ko
                     else f" {item} was {'higher' if direction > 0 else 'lower' if direction < 0 else 'similar'} in the retry. Exact measurements are available below."
                 )
-            if result["outcome"] == "insufficient_data":
+            if result["outcome"] == "insufficient_data" and practice.get("deliveryReview"):
+                message = next_instruction(practice, ko)
+            elif result["outcome"] == "insufficient_data":
                 message = (
                     "촬영은 끝났지만 두 시도의 분석 조건이나 자료가 충분히 맞지 않아 수치 비교를 보류했어요. 카메라·마이크와 같은 촬영 환경을 확인하고, 같은 내용을 30초 이상 다시 발표해 주세요."
                     if ko
@@ -1190,7 +1239,10 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 )
                 if row:
                     segment(snap, row, card_label)
-            if result["outcome"] == "review_required":
+            if result["outcome"] == "review_required" and practice.get("rubricVersion"):
+                components.append({"type": "practice_review", "practiceId": practice["id"],
+                                   "attemptSessionId": state.attemptSessionId, "checks": checks_for(practice, ko)})
+            elif result["outcome"] == "review_required":
                 choices(
                     choice(
                         "assess_delivery_achieved",
@@ -1212,7 +1264,31 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                         "finish_coaching", "목표 저장하고 마치기", "Save and finish"
                     ),
                 )
+    elif action == "submit_practice_review":
+        review = request.deliveryReview
+        if (not practice or not attempt or not review or not practice.get("rubricVersion")
+                or state.stage != "comparison_ready" or review.practiceId != state.activePracticeId
+                or review.attemptSessionId != state.attemptSessionId
+                or review.attemptSessionId != practice.get("attemptSessionId")
+                or attempt["snapshot"]["request"]["sessionId"] != review.attemptSessionId):
+            raise ValueError("Review must match the active saved practice attempt")
+        if set(review.answers) != {check["id"] for check in checks_for(practice, ko)}:
+            raise ValueError("Answer every saved delivery check exactly once")
+        if practice.get("deliveryReview"):
+            raise ValueError("This attempt already has a saved review")
+        if compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)["outcome"] != "review_required":
+            raise ValueError("Insufficient observations for delivery review")
+        practice["deliveryReview"] = review.model_dump()
+        result = compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)
+        practice["comparison"] = result
+        message = ("영상에서 직접 확인한 항목별 결과를 저장했어요. " if ko else "Saved your check-by-check review of the recording. ") + next_instruction(practice, ko)
+        components.append({"type": "comparison", "comparison": result})
+        choices(choice("retry_practice", "같은 기준으로 다시 연습", "Retry with the same checks"),
+                choice("choose_next_goal", "다음 목표 선택", "Choose next goal"),
+                choice("finish_coaching", "목표 저장하고 마치기", "Save and finish"))
     elif action.startswith("assess_delivery_"):
+        if practice and practice.get("rubricVersion"):
+            raise ValueError("Use the saved action checklist to assess this practice")
         if (
             not practice
             or not attempt
@@ -1440,6 +1516,7 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
     # Previous comparison uses chronological ordering in its validation too.
     response = validate_response(raw, doc, attempt=attempt, previous=previous)
     action_labels = {
+        "submit_practice_review": ("연습 항목별 확인", "Review practice checks"),
         "confirm_intent": ("의도한 표현이었어요", "That was intentional"),
         "guide_review": ("영상 확인 방법", "Help reviewing the video"),
         "explain_score": ("스트레스 신호 점수 설명", "Explain stress signal score"),
@@ -1517,11 +1594,11 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
         if component["type"] == "practice":
             component["practiceId"] = committed["practiceId"]
     for component in translated["components"]:
-        if component["type"] == "practice":
+        if component["type"] == "practice" and request.action == "create_practice":
             practice = next(
                 p for p in updated["practices"] if p["id"] == component["practiceId"]
             )
-            keys = ("label", "instruction", "criterion", "durationSeconds")
+            keys = ("label", "instruction", "criterion", "durationSeconds", "successChecks")
             practice["translations"] = {
                 request.language: {k: practice[k] for k in keys},
                 other_language: {k: component[k] for k in keys},

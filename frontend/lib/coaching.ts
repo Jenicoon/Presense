@@ -18,12 +18,20 @@ export type CoachAction =
   | "submit_review"
   | "guide_review"
   | "explain_score"
+  | "submit_practice_review"
   | "assess_delivery_achieved"
   | "assess_delivery_partial"
   | "assess_delivery_retry";
 export type ReviewOutcome = "intentional" | "effective" | "needs_contrast" | "needs_phrasing" | "unclear_speech" | "expression_mismatch" | "gaze_distracting" | "needs_face_reset" | "unsure";
 export type PracticeStrategy = "contrast" | "phrasing" | "two_versions" | "clear_phrases" | "expression" | "gaze_anchor" | "face_reset";
-export type CoachActionContext = {reviewOutcome?: ReviewOutcome | null; practiceStrategyId?: PracticeStrategy | null};
+export type DeliveryReview = {
+  practiceId: string;
+  attemptSessionId: string;
+  sameContent: "same" | "changed" | "unknown";
+  sameEnvironment: "same" | "changed" | "unknown";
+  answers: Record<string, "yes" | "partly" | "no" | "unavailable">;
+};
+export type CoachActionContext = {reviewOutcome?: ReviewOutcome | null; practiceStrategyId?: PracticeStrategy | null; deliveryReview?: DeliveryReview};
 export type CoachState = {
   sessionId: string;
   selectedFindingId: string | null;
@@ -68,6 +76,9 @@ export type Comparison = {
   after: Comparison["before"];
   modelScoreChange: number | null;
   referenceValue: number | null;
+  deliveryReview?: DeliveryReview | null;
+  reviewChecks?: {id: string; ko: string; en: string}[];
+  conditionsConfirmed?: boolean;
   measurements: {
     modality: string;
     metric: string;
@@ -78,6 +89,8 @@ export type Comparison = {
     afterCount: number;
     beforeQuality: number;
     afterQuality: number;
+    beforeCoverage?: number;
+    afterCoverage?: number;
   }[];
   formula: string;
   evaluationMode?: "delivery_review" | "measurement_comparison";
@@ -103,7 +116,9 @@ export type CoachComponent =
       instruction: string;
       criterion: string;
       durationSeconds: number;
+      successChecks?: string[];
     }
+  | { type: "practice_review"; practiceId: string; attemptSessionId: string; checks: {id: string; label: string}[] }
   | { type: "comparison"; comparison: Comparison }
   | { type: "insufficient_data"; label: string };
 export type CoachResponse = {
@@ -170,6 +185,7 @@ export async function actCoach(input: {
   previousAction?: CoachAction;
   reviewOutcome?: ReviewOutcome | null;
   practiceStrategyId?: PracticeStrategy | null;
+  deliveryReview?: DeliveryReview;
 }): Promise<CoachResponse> {
   const response = await api("/agent/coach", input, input.language);
   window.dispatchEvent(new CustomEvent("presense:coach-changed", {detail: {sessionId: input.sessionId}}));

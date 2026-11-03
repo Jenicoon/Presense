@@ -46,6 +46,14 @@ def document(identity="baseline", changed=True, context=None):
     return new_document(request, report, "test-model")
 
 
+def delivery_review(doc, attempt, values=None, **conditions):
+    from agent.practice_rubric import checks_for
+    practice = doc["practices"][-1]
+    return {"practiceId": practice["id"], "attemptSessionId": attempt["snapshot"]["request"]["sessionId"],
+            "sameContent": "same", "sameEnvironment": "same",
+            "answers": {check["id"]: (values or ["yes", "yes"])[i] for i, check in enumerate(checks_for(practice, True))}, **conditions}
+
+
 class CoachingTests(unittest.TestCase):
     def step(self, doc, action, **kwargs):
         return respond(
@@ -131,7 +139,7 @@ class CoachingTests(unittest.TestCase):
         self.assertEqual(result["formula"], "")
         self.assertEqual(result["assessmentSource"], "none")
         with self.assertRaises(ValueError):
-            respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_achieved"), attempt=attempt)
+            respond(doc, CoachRequest(sessionId="baseline", action="submit_practice_review", deliveryReview=delivery_review(doc, attempt)), attempt=attempt)
 
     def test_partial_delivery_review_offers_a_specific_adjustment_and_rejects_another_attempt(self):
         doc = self.ready()
@@ -141,10 +149,10 @@ class CoachingTests(unittest.TestCase):
         other = deepcopy(attempt)
         other["snapshot"]["request"]["sessionId"] = "unrelated"
         with self.assertRaisesRegex(ValueError, "saved practice attempt"):
-            respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_partial"), attempt=other)
-        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_partial"), attempt=attempt)
+            respond(doc, CoachRequest(sessionId="baseline", action="submit_practice_review", deliveryReview=delivery_review(doc, attempt, ["yes", "partly"])), attempt=other)
+        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="submit_practice_review", deliveryReview=delivery_review(doc, attempt, ["yes", "partly"])), attempt=attempt)
         self.assertIn("핵심 문장", response["message"])
-        self.assertIn("멈추고", response["message"])
+        self.assertIn("멈춰", response["message"])
         self.assertNotIn("Hz", response["message"])
         result = response["components"][0]["comparison"]
         self.assertEqual(result["outcome"], "partial")
@@ -197,7 +205,7 @@ class CoachingTests(unittest.TestCase):
         )
         self.assertEqual(doc["state"]["stage"], "comparison_ready")
         self.assertEqual(response["components"][0]["comparison"]["outcome"], "review_required")
-        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="assess_delivery_achieved"), attempt=attempt)
+        doc, response = respond(doc, CoachRequest(sessionId="baseline", action="submit_practice_review", deliveryReview=delivery_review(doc, attempt)), attempt=attempt)
         self.assertEqual(response["components"][0]["comparison"]["outcome"], "achieved")
         self.assertEqual(response["components"][0]["comparison"]["assessmentSource"], "presenter")
         doc, _ = self.step(doc, "choose_next_goal", findingId=finding)

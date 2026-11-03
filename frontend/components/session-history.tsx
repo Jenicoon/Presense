@@ -37,6 +37,13 @@ function Timeline({ values, onSelect }: { values: number[]; onSelect?: (index: n
 
 function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: SessionHistoryRecord; ko: boolean; t: (key: string, fallback?: string) => string; onClose: () => void; onReportUpdate: (report: AgentReport) => Promise<void> }) {
   const { toggle } = useLang();
+  const [coachOpen, setCoachOpen] = useState(false);
+  useEffect(() => {
+    setCoachOpen(window.sessionStorage.getItem("presense-agent-open") === "1");
+    function visibility(event: Event) { setCoachOpen(!!(event as CustomEvent<{open: boolean}>).detail.open); }
+    window.addEventListener("presense:agent-visibility", visibility);
+    return () => window.removeEventListener("presense:agent-visibility", visibility);
+  }, []);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [answerError, setAnswerError] = useState("");
   const [answerBusy, setAnswerBusy] = useState(false);
@@ -105,7 +112,7 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
     catch (error) { setAnswerError(error instanceof Error ? error.message : "응답을 저장하지 못했습니다."); }
     finally { setAnswerBusy(false); }
   }
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section className="card history-review-modal" role="dialog" aria-modal="true" aria-labelledby="history-review-title" onClick={(event) => event.stopPropagation()}>
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section className="card history-review-modal" role="dialog" aria-modal={coachOpen ? undefined : true} aria-labelledby="history-review-title" onClick={(event) => event.stopPropagation()}>
     <div className="review-modal-controls"><button type="button" onClick={toggle} aria-label={ko ? "영어로 보기" : "View in Korean"}><Languages size={15} /><span>{ko ? "EN" : "한국어"}</span></button><button type="button" onClick={onClose} aria-label={ko ? "세션 리뷰 닫기" : "Close session review"}><X size={18} /></button></div>
     <div className="diagnosis-modal-eyebrow">{ko ? "세션 리뷰" : "Session review"}</div>
     <h2 id="history-review-title" className="diagnosis-modal-title">{record.title}</h2>

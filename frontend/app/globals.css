@@ -2199,3 +2199,14 @@ h1, h2, h3 { margin: 0; }
 .stress-line-baseline-label { fill: #047857; font-size: 10px; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .review-timeline-key i.baseline { background: transparent; border-top: 2px dashed #059669; border-radius: 0; }
 @media (max-width: 560px) { .review-baseline-values { grid-template-columns: 1fr; } }
+
+/* Practice review reuses the coach's cards and form controls. */
+.coach-success-check ol, .coach-success-check ul { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.8; }
+.coach-success-check li + li { margin-top: 7px; }
+.coach-review-form fieldset { border: 0; padding: 0; margin: 16px 0; min-width: 0; }
+.coach-review-form legend { font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+.coach-review-form label { display: grid; gap: 7px; font-size: 12px; line-height: 1.7; margin-bottom: 12px; }
+.coach-review-form select { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-primary); background: var(--bg-card, #fff); font: inherit; }
+.coach-review-form select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.coach-components .coach-review-note { font-size: 11px; color: var(--text-secondary); }
+.coach-check-result { display: block; color: var(--accent); font-weight: 600; }
