@@ -19,7 +19,7 @@ export function PracticeReviewForm({card, ko, busy, onSubmit}: {
     setLoadedKey("");
     try {
       const saved = JSON.parse(window.localStorage.getItem(key) ?? "null");
-      setDraft(saved && typeof saved.answers === "object" && saved.answers ? saved : blank());
+      setDraft(saved && typeof saved.answers === "object" && saved.answers ? saved : card.review ? {sameContent: card.review.sameContent, sameEnvironment: card.review.sameEnvironment, answers: card.review.answers} : blank());
     } catch { setDraft(blank()); }
     setLoadedKey(key);
   }, [key]);

@@ -182,12 +182,17 @@ def _coach_store(user, credentials):
 
 def _generate_coaching(context):
     from agent.report_agent import _luxia_json
+    from agent.coaching_next_step import TASK, PROMPT as NEXT_PROMPT
+    if context.get("task") == TASK:
+        return _luxia_json(NEXT_PROMPT, context, 700, read_timeout=15)
     return _luxia_json(coaching_prompt(context), context, 2600, read_timeout=35)
 
 
 def _verify_coaching(context):
     from agent.report_agent import _luxia_json
-    return _luxia_json(VERIFY_PROMPT, context, 160, read_timeout=15)
+    from agent.coaching_next_step import TASK, VERIFY_PROMPT as NEXT_VERIFY_PROMPT
+    prompt = NEXT_VERIFY_PROMPT if context.get("task") == TASK else VERIFY_PROMPT
+    return _luxia_json(prompt, context, 160, read_timeout=10 if context.get("task") == TASK else 15)
 
 
 @app.get("/agent/coach/{session_id}")

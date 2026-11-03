@@ -109,7 +109,7 @@ if os.getenv("PRESENSE_BROWSER_DOCUMENTS"):
         identity = doc["state"]["sessionId"]
         DOCS[identity] = doc
         report = doc["snapshot"]["report"]
-        RECORDS.append({"id": identity, "title": "합성 코칭 흐름 예시", "session_date": "2026-11-03T04:00:00Z",
+        RECORDS.append({"id": identity, "title": "합성 코칭 흐름 예시", "session_date": doc["snapshot"].get("recordedAt", "2026-11-03T04:00:00Z"),
             "duration_seconds": doc["snapshot"]["request"]["durationMs"] // 1000,
             "result": "Synthetic coaching test", "stress_average": report["analysis"]["averageStress"],
             "diagnosis": report["summaryText"], "next_action": "Review saved practice actions",
@@ -144,6 +144,9 @@ def browser_respond(doc, request, **kwargs):
         row["response"] for row in updated["messages"][-1].get("translations", {}).values() if "response" in row
     ]]:
         value["generation"]["dataOrigin"] = origin
+    if request.action == "submit_practice_review":
+        from agent.coaching_next_step import recommend_next
+        return recommend_next(updated, response, request.language, attempt=kwargs.get("attempt"), previous=kwargs.get("previous"))
     return updated, response
 
 module.respond_with_ai = browser_respond

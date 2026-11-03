@@ -98,6 +98,7 @@ class Choice(Contract):
     findingId: str | None = None
     reviewOutcome: ReviewOutcome | None = None
     practiceStrategyId: PracticeStrategy | None = None
+    recommended: bool = False
 
 
 class Choices(Contract):
@@ -135,6 +136,7 @@ class PracticeReviewCard(Contract):
     practiceId: str
     attemptSessionId: str
     checks: list[dict[str, str]] = Field(min_length=2, max_length=3)
+    review: DeliveryReview | None = None
 
 
 class ComparisonCard(Contract):
@@ -524,7 +526,8 @@ def validate_response(raw, doc, attempt=None, previous=None):
             if (not p or component.practiceId != state.activePracticeId or state.stage != "comparison_ready"
                     or component.attemptSessionId != state.attemptSessionId
                     or component.attemptSessionId != p.get("attemptSessionId")
-                    or component.checks not in [checks_for(p, True), checks_for(p, False)]):
+                    or component.checks not in [checks_for(p, True), checks_for(p, False)]
+                    or (component.review is not None and component.review.model_dump() != p.get("deliveryReview"))):
                 raise ValueError("Unsupported practice review")
         elif isinstance(component, ComparisonCard):
             is_attempt = (
@@ -557,6 +560,17 @@ def validate_response(raw, doc, attempt=None, previous=None):
                     or choice.practiceStrategyId not in profile(finding)["strategies"]
                 ):
                     raise ValueError("Unsupported practice method choice")
+    recommended = [choice for c in response.components if isinstance(c, Choices) for choice in c.choices if choice.recommended]
+    if recommended:
+        p = practices.get(state.activePracticeId, {})
+        saved = p.get("nextStep", {})
+        option = saved.get("option", {})
+        if len(recommended) != 1 or saved.get("status") != "ready" or any(
+            getattr(recommended[0], key) != option.get(key) for key in ("action", "findingId", "practiceStrategyId")
+        ):
+            raise ValueError("Recommended action is not a saved supported decision")
+        if recommended[0].id != "recommended_" + option["id"] or recommended[0].label not in option["label"].values():
+            raise ValueError("Recommended action label is not supported")
     for finding_id in {
         c.findingId
         for c in response.components
@@ -1132,6 +1146,8 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             practice.pop("attemptSessionId", None)
             practice.pop("deliveryAssessment", None)
             practice.pop("deliveryReview", None)
+            practice.pop("nextStep", None)
+            practice.pop("reviewHistory", None)
             doc["practices"].append(practice)
             state.activePracticeId = practice["id"]
         state.stage = "recording"
@@ -1239,7 +1255,11 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
                 )
                 if row:
                     segment(snap, row, card_label)
-            if result["outcome"] == "review_required" and practice.get("rubricVersion"):
+            if action == "compare_attempts" and practice.get("rubricVersion") and practice.get("deliveryReview"):
+                message = ("기존 두 영상을 다시 보고 남은 항목을 확인하세요. 답을 바꾸어 저장하면 이전 답도 기록에 남깁니다." if ko else "Review the existing takes and the remaining checks. If you revise your answers, the earlier review stays in history.")
+                components.append({"type": "practice_review", "practiceId": practice["id"], "attemptSessionId": state.attemptSessionId,
+                                   "checks": checks_for(practice, ko), "review": practice["deliveryReview"]})
+            elif result["outcome"] == "review_required" and practice.get("rubricVersion"):
                 components.append({"type": "practice_review", "practiceId": practice["id"],
                                    "attemptSessionId": state.attemptSessionId, "checks": checks_for(practice, ko)})
             elif result["outcome"] == "review_required":
@@ -1274,10 +1294,15 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             raise ValueError("Review must match the active saved practice attempt")
         if set(review.answers) != {check["id"] for check in checks_for(practice, ko)}:
             raise ValueError("Answer every saved delivery check exactly once")
-        if practice.get("deliveryReview"):
-            raise ValueError("This attempt already has a saved review")
-        if compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)["outcome"] != "review_required":
+        existing_review = practice.get("deliveryReview")
+        if existing_review and (state.lastAction != "compare_attempts" or existing_review == review.model_dump()):
+            raise ValueError("This attempt already has a saved review; reopen its comparison to revise it")
+        pending = {k: v for k, v in practice.items() if k not in {"deliveryReview", "deliveryAssessment"}}
+        if compare_snapshots(doc["snapshot"], attempt["snapshot"], pending)["outcome"] != "review_required":
             raise ValueError("Insufficient observations for delivery review")
+        if existing_review:
+            practice.setdefault("reviewHistory", []).append({"review": deepcopy(existing_review), "comparison": deepcopy(practice.get("comparison")), "nextStep": deepcopy(practice.get("nextStep"))})
+            practice.pop("nextStep", None)
         practice["deliveryReview"] = review.model_dump()
         result = compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)
         practice["comparison"] = result

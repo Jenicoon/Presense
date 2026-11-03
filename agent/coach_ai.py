@@ -247,6 +247,16 @@ def build_context(doc, request, attempt=None, previous=None):
             texts[lang] = (("사용자가 영상을 보고 직접 입력한 결과: " if ko else "The presenter's own recording review: ")
                            + names[result][0 if ko else 1] + ". " + details)
         add_fact("practice.delivery_review", texts["ko"], texts["en"])
+    if practice:
+        current_step = practice.get("nextStep") or {}
+        if current_step.get("status") == "ready":
+            add_fact("practice.next_step", "현재 추천 행동: " + current_step["option"]["label"]["ko"],
+                     "Current suggested action: " + current_step["option"]["label"]["en"])
+        previous_step = next((row.get("nextStep") for row in reversed(practice.get("reviewHistory", []))
+                              if (row.get("nextStep") or {}).get("reason")), None)
+        if previous_step:
+            add_fact("practice.previous_next_step", "답을 수정하기 전의 추천: " + previous_step["reason"]["ko"],
+                     "Recommendation before the revised review: " + previous_step["reason"]["en"])
     comparison = None
     if attempt and practice:
         comparison = compare_snapshots(doc["snapshot"], attempt["snapshot"], practice)
@@ -315,6 +325,7 @@ def build_context(doc, request, attempt=None, previous=None):
                 "deliveryReview",
                 "successChecks",
                 "strategyId",
+                "nextStep",
             )
         }
         if practice
@@ -836,9 +847,12 @@ def respond_with_ai(
     baseline, system_response = respond(
         doc, request, attempt=attempt, previous=previous
     )
+    if request.action == "submit_practice_review":
+        from .coaching_next_step import recommend_next
+        return recommend_next(baseline, system_response, request.language, generate=generate, verify=verify, attempt=attempt, previous=previous)
     if request.action in SYSTEM_ACTIONS or (
-        request.action == "finish_recording" and not attempt
-    ):
+        request.action == "compare_attempts" and any(p.get("deliveryReview") for p in baseline["practices"] if p["id"] == baseline["state"].get("activePracticeId"))
+    ) or (request.action == "finish_recording" and not attempt):
         origin = doc["snapshot"].get("dataOrigin", "recorded")
         system_response["generation"]["dataOrigin"] = origin
         baseline["messages"][-1]["response"]["generation"]["dataOrigin"] = origin

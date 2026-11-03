@@ -38,3 +38,21 @@ test('selected answers and attempt identity reach the coaching API without being
     assert.equal(sent.body.revision,4);assert.equal(sent.body.outcome,undefined);
   } finally {global.fetch=originalFetch;global.window=originalWindow;}
 });
+
+test('a saved recommendation uses an existing primary action in both languages',()=>{
+  const {CoachComponents}=compile('components/coach-components.tsx',id=>{
+    if(id==='@/components/practice-review-form')return {PracticeReviewForm};
+    if(id==='@/lib/report-locale')return {signalScore:()=>''};
+    if(id==='@/lib/measurement-labels')return {measurementLabel:x=>x};
+    if(id==='@/lib/coaching')return {clock:()=>'',jumpToVideo(){}};
+    return require(id);
+  });
+  const components=[{type:'insufficient_data',label:'Saved review details'},{type:'action_choices',choices:[{id:'recommended_try_phrasing',action:'create_practice',practiceStrategyId:'phrasing',label:'문장 경계 연습',recommended:true},{id:'finish',action:'finish_coaching',label:'마치기'}]}];
+  const html=renderToStaticMarkup(React.createElement(CoachComponents,{components,ko:true,busy:false,onAction(){}}));
+  assert.match(html,/btn btn-primary/);assert.match(html,/추천 · 문장 경계 연습/);
+  assert.equal((html.match(/<button/g)||[]).length,2);
+  assert.ok(html.indexOf('추천 · 문장 경계 연습') < html.indexOf('Saved review details'));
+  const english=[{type:'action_choices',choices:[{...components[1].choices[0],label:'Sentence boundary practice'}]}];
+  const en=renderToStaticMarkup(React.createElement(CoachComponents,{components:english,ko:false,busy:false,onAction(){}}));
+  assert.match(en,/Suggested · Sentence boundary practice/);assert.doesNotMatch(en,/[가-힣]/);
+});

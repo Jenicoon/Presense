@@ -53,6 +53,7 @@ export type CoachState = {
   practiceStrategyId?: PracticeStrategy | null;
 };
 export type CoachChoice = {
+  recommended?: boolean;
   id: string;
   label: string;
   action: CoachAction;
@@ -118,7 +119,7 @@ export type CoachComponent =
       durationSeconds: number;
       successChecks?: string[];
     }
-  | { type: "practice_review"; practiceId: string; attemptSessionId: string; checks: {id: string; label: string}[] }
+  | { type: "practice_review"; practiceId: string; attemptSessionId: string; checks: {id: string; label: string}[]; review?: DeliveryReview | null }
   | { type: "comparison"; comparison: Comparison }
   | { type: "insufficient_data"; label: string };
 export type CoachResponse = {

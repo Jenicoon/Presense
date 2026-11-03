@@ -29,9 +29,11 @@ export function CoachComponents({
   busy: boolean;
   onAction: (action: CoachAction, findingId?: string, context?: CoachActionContext) => void;
 }) {
+  const recommended = components.filter(c => c.type === "action_choices" && c.choices.some(choice => choice.recommended));
+  const ordered = recommended.length ? [...recommended, ...components.filter(c => !recommended.includes(c))] : components;
   return (
     <div className="coach-components">
-      {components.map((c, i) => {
+      {ordered.map((c, i) => {
         switch (c.type) {
           case "coaching_path":
             return <article key={i} className="coach-card coach-next-action"><span className="coach-component-heading">{ko ? "다음 행동" : "Next action"}</span><strong>{c.title}</strong><p>{c.instruction}</p></article>;
@@ -43,22 +45,22 @@ export function CoachComponents({
                 {c.choices.map((choice) => (
                   <button
                     type="button"
-                    className="btn btn-outline"
+                    className={`btn ${choice.recommended ? "btn-primary" : "btn-outline"}`}
                     key={choice.id}
                     disabled={busy}
                     onClick={() =>
                       onAction(choice.action, choice.findingId ?? undefined, {reviewOutcome: choice.reviewOutcome, practiceStrategyId: choice.practiceStrategyId})
                     }
                   >
-                    {choice.label}
+                    {choice.recommended && (ko ? "추천 · " : "Suggested · ")}{choice.label}
                   </button>
                 ))}
               </div>
             );
           case "video_segment":
             if (c.findingId) {
-              const group = components.filter((item): item is Extract<CoachComponent, {type: "video_segment"}> => item.type === "video_segment" && item.findingId === c.findingId);
-              if (components.findIndex(item => item.type === "video_segment" && item.findingId === c.findingId) !== i) return null;
+              const group = ordered.filter((item): item is Extract<CoachComponent, {type: "video_segment"}> => item.type === "video_segment" && item.findingId === c.findingId);
+              if (ordered.findIndex(item => item.type === "video_segment" && item.findingId === c.findingId) !== i) return null;
               return <section key={i} className="coach-observation-group" aria-label={ko ? `확인할 영상 ${group.length}곳` : `${group.length} intervals to review`}>
                 <strong>{ko ? `확인할 영상 ${group.length}곳` : `${group.length} intervals to review`}</strong>
                 <p>{ko ? "아래 시간을 눌러 해당 장면을 다시 보세요." : "Select a time to replay that part of the recording."}</p>
