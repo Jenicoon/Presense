@@ -127,6 +127,19 @@ class ReportEndpointTests(unittest.TestCase):
                 self.assertEqual(report["previousCoaching"]["lastOutcome"],"partial")
         finally:self.module.app.dependency_overrides.clear()
 
+    def test_dataset_initial_measurement_never_uses_external_ai(self):
+        self.module.app.dependency_overrides[self.module.require_authenticated_user] = lambda: {"sub": "test"}
+        payload = {**self.payload, "personalBaseline": .3, "baselineSampleCount": 3,
+                   "baselineModelVersion": "test-model", "baselineSource": "dataset_example"}
+        try:
+            with patch.object(self.module, "luxia_api_key", "configured"), patch.object(self.module, "generate_report", wraps=self.module.generate_report) as generate:
+                response = self.client.post("/agent/report", json=payload)
+            self.assertEqual(response.status_code, 200)
+            self.assertIsNone(generate.call_args.kwargs["synthesize"])
+            self.assertIsNone(generate.call_args.kwargs["decide"])
+        finally:
+            self.module.app.dependency_overrides.clear()
+
     def test_authenticated_report_accepts_personal_baseline_fields(self):
         self.module.app.dependency_overrides[self.module.require_authenticated_user] = lambda: {"sub": "test"}
         payload = {**self.payload, "personalBaseline": .3, "baselineSampleCount": 3,

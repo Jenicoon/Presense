@@ -96,7 +96,7 @@ export function findingGuidance(finding: Finding, ko: boolean) {
       gaze: ["핵심 문장을 말할 때 카메라 부근에 시선이 머무는지 보세요. 시선 이동이 방해되는지는 영상과 전달 의도를 함께 보고 직접 판단하세요.", "Watch where the gaze rests during the key sentence. Judge distracting shifts yourself against the recording and intended delivery."],
     } as Record<string, [string,string]>)[finding.id]?.[ko ? 0 : 1] ?? (ko ? "실제 영상에서 바꿔 보고 싶은 행동 하나를 고르세요." : "Choose one delivery action from the actual recording.") };
 }
-export function presentationSummary(report: AgentReport, ko: boolean) {
+function presentationSummaryWithoutBaseline(report: AgentReport, ko: boolean) {
   if (report.priorities.length) {
     const view = findingGuidance(report.priorities[0], ko);
     return `${view.observation} ${view.question}`;
@@ -108,4 +108,20 @@ export function presentationSummary(report: AgentReport, ko: boolean) {
 export function signalScore(value: unknown) {
   const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
   return Number.isFinite(number) ? `${Math.round(number * 100)} / 100` : "—";
+}
+
+
+export function baselineSummary(report: AgentReport, ko: boolean) {
+  const baseline = report.observationReport?.personalBaseline;
+  if (!baseline) return "";
+  const seconds = (baseline.observedMs ?? baseline.sampleCount * 10000) / 1000;
+  const initial = ko ? `초기 측정 ${seconds}초(10초 × ${baseline.sampleCount})의 중앙값은 ${(baseline.score * 100).toFixed(2)}/100입니다.` : `The initial ${seconds}s reference (${baseline.sampleCount} × 10s) has a median of ${(baseline.score * 100).toFixed(2)}/100.`;
+  const difference = baseline.averageDifference;
+  if (difference === null || !Number.isFinite(difference)) return initial;
+  if (Math.abs(difference) < .005) return initial + (ko ? " 이번 발표의 평균 스트레스 신호는 초기값과 비슷했습니다." : " This presentation's mean stress signal was similar to the initial reference.");
+  return initial + (ko ? ` 이번 발표의 평균 스트레스 신호는 초기값보다 ${Math.round(Math.abs(difference) * 100)}점 ${difference > 0 ? "높았습니다" : "낮았습니다"}.` : ` This presentation's mean stress signal was ${Math.round(Math.abs(difference) * 100)} points ${difference > 0 ? "higher" : "lower"} than the initial reference.`);
+}
+
+export function presentationSummary(report: AgentReport, ko: boolean) {
+  return [baselineSummary(report, ko), presentationSummaryWithoutBaseline(report, ko)].filter(Boolean).join(" ");
 }

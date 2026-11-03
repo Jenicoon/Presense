@@ -582,6 +582,8 @@ _DECISION_PROMPT = dedent("""
     likely to change the report, using candidates, sessionWindows, toolResults,
     and any prior goal. Candidates are measured features, not predefined problems.
     A high stress score or concept value alone is not poor delivery or a cause.
+    personalBaseline is an initial speaking reference, not resting stress. A
+    difference from it alone is not a problem or a reason for forced correction.
 
     To review a candidate, analyze its measured segment before relying on
     concept results. For analyze_segment, choose 1-12 later changed segmentIds;
@@ -732,16 +734,11 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
     # 1. Whole-session measurements. 2. Inventory of valid model outputs.
     summary, candidates = analyze_session(request)
     observation_report = describe_observations(request, summary)
-    if (request.personalBaseline is not None and request.baselineSampleCount is not None
-            and request.baselineModelVersion == model_version and model_version != "unknown"):
-        baseline = request.personalBaseline
-        average = observation_report["averageStressScore"]
-        peak = observation_report["peakSegment"]
-        observation_report["personalBaseline"] = {
-            "score": baseline, "sampleCount": request.baselineSampleCount,
-            "averageDifference": round(average - baseline, 4) if average is not None else None,
-            "peakDifference": round(peak["stressScore"] - baseline, 4) if peak else None,
-        }
+    from .baseline import compare_baseline, baseline_sentence
+    baseline_comparison = compare_baseline(request, observation_report, model_version)
+    if baseline_comparison["status"] == "available":
+        observation_report["personalBaseline"] = baseline_comparison
+        summary["personalBaseline"] = baseline_comparison
     observation_report["practiceFocus"] = _practice_focus(observation_report, request.language == "ko")
     observation_report["previousComparison"] = _previous_observation(
         request, observation_report, prior_memory, model_version)
@@ -1050,8 +1047,15 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
                        and action["result"].get("comparable")]
         report["sessionComparison"] = comparisons[0] if comparisons else None
         report["agentMemory"] = build_memory(report, agent_state)
+    report["baselineComparison"] = baseline_comparison
     from .presentation_guidance import session_summary
     report["presenterSummary"] = {"ko": session_summary(report, True), "en": session_summary(report, False)}
+    if baseline_text := baseline_sentence(baseline_comparison, ko):
+        report["summaryText"] = baseline_text + " " + report["summaryText"]
+        report["claimVerification"]["claims"].append({
+            "kind": "personal_baseline", "claim": baseline_text,
+            "measurement": baseline_comparison, "status": "server_calculation",
+        })
     report["rawSegments"] = [s.model_dump() for s in request.segments]
     report["modelVersion"] = model_version
     report["metricDefinitionVersion"] = request.metricDefinitionVersion

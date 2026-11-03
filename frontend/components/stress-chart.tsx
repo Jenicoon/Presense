@@ -27,11 +27,12 @@ function time(ms: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function StressChart({ series = [], cells, durationMs = 0, language, onSelect }: {
+export function StressChart({ series = [], cells, durationMs = 0, language, baseline, onSelect }: {
   series?: number[];
   cells?: TimedScore[];
   durationMs?: number;
   language?: "ko" | "en";
+  baseline?: number;
   onSelect?: (ms: number) => void;
 }) {
   const { lang } = useLang();
@@ -69,6 +70,10 @@ export function StressChart({ series = [], cells, durationMs = 0, language, onSe
         {cells && <text className="stress-line-time" x={left + width * (index + .5) / 4} y={246} textAnchor="middle">{time(durationMs * index / 4)}–{time(durationMs * (index + 1) / 4)}</text>}
       </g>)}
       {cells && !runs.length && <text className="stress-line-label" x={left + width / 2} y={top + height / 2} textAnchor="middle">{ko ? "분석 자료 없음" : "No analysis data"}</text>}
+      {typeof baseline === "number" && Number.isFinite(baseline) && baseline >= 0 && baseline <= 1 && <g>
+        <line className="stress-line-baseline" x1={left} x2={left + width} y1={y(baseline)} y2={y(baseline)} />
+        <text className="stress-line-baseline-label" x={left + width - 3} y={Math.max(top + 11, y(baseline) - 7)} textAnchor="end">{ko ? "초기값" : "Initial reference"} {(baseline * 100).toFixed(1)}</text>
+      </g>}
       {runs.map((run, index) => <polyline key={index} className="stress-line-path" points={run.map(cell => `${pointX(cell)},${y(cell.stressScore!)}`).join(" ")} />)}
       {runs.flat().map(cell => <g key={cell.startMs} role={onSelect ? "button" : undefined} tabIndex={onSelect ? 0 : undefined} aria-label={onSelect ? label(cell) : undefined} className={`stress-line-control${selected?.startMs === cell.startMs ? " selected" : ""}`} onClick={onSelect ? () => select(cell) : undefined} onKeyDown={onSelect ? event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(cell); } } : undefined}>
         <title>{label(cell)}</title>

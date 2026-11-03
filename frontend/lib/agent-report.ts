@@ -42,7 +42,7 @@ export type AgentReport = {
     previousComparison?: { metricId: string; previousSessionId: string; previousSessionCount?: number; previousValue: number; currentValue: number; difference: number; unit: string; label: string } | null;
     phaseSummaries?: Array<{ startMs: number; endMs: number; observedMs: number; averageStressScore: number | null }>;
     peakConcepts?: Array<{ name: string; value: number; comparisonValue: number; difference: number }>;
-    personalBaseline?: { score: number; sampleCount: number; averageDifference: number | null; peakDifference: number | null };
+    personalBaseline?: { status?: "available"; score: number; sampleCount: number; windowMs?: number; observedMs?: number; source?: "preparation" | "dataset_example" | "synthetic"; averageDifference: number | null; peakDifference: number | null };
   };
   reflection?: {
     kind?: "peak" | "overall";
@@ -52,6 +52,7 @@ export type AgentReport = {
     question: string;
     answer: "intentional" | "unintentional" | "unsure" | null;
   };
+  baselineComparison?: { status: "available" | "missing" | "model_mismatch" };
   observationEvidenceIds?: string[];
   rawSegments?: ReportSegment[];
   coachingAvailable?: boolean;
@@ -245,6 +246,7 @@ export async function generateAgentReport(input: {
   personalBaseline?: number;
   baselineSampleCount?: number;
   baselineModelVersion?: string;
+  baselineSource?: "preparation" | "dataset_example" | "synthetic";
 }): Promise<AgentReport> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) throw new Error("보고서를 생성하려면 로그인해 주세요.");

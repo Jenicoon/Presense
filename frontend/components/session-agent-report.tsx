@@ -59,7 +59,7 @@ export function ReportStressChart({ report, language, onSeek }: {
 }) {
   const duration = Number(report.analysis.durationMs ?? 0);
   const cells = withGaps(mergeTimeline((report.analysis.timeline ?? []) as TimelineCell[], duration), duration);
-  return <StressChart cells={cells} durationMs={duration} language={language} onSelect={onSeek} />;
+  return <StressChart cells={cells} durationMs={duration} language={language} baseline={report.observationReport?.personalBaseline?.score} onSelect={onSeek} />;
 }
 
 export function SessionAgentReport({ report, language, onSeek, showTimeline = true }: {
@@ -88,6 +88,9 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
   const peak = report.observationReport?.peakSegment;
   const raw = report.rawSegments ?? [];
   const first = report.priorities[0];
+  const baseline = report.observationReport?.personalBaseline;
+  const baselineScore = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(2)} / 100` : "—";
+  const difference = (value: number | null) => value === null ? "—" : `${value > 0 ? "+" : ""}${(value * 100).toFixed(2)}${ko ? "점" : " points"}`;
   const open = (findingId?: string) => window.dispatchEvent(new CustomEvent("presense:open-agent", {
     detail: { sessionId: report.sessionId, findingId },
   }));
@@ -100,6 +103,13 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
   return <section className="session-agent-report" aria-label={ko ? "세션 분석과 코칭" : "Session analysis and coaching"}>
     {report.dataOrigin === "stressid" && <p className="review-context" role="status">{ko ? "StressID 예시 영상을 기기 내 모델로 분석한 결과입니다. 이 자료는 외부 AI 코칭에 전송하지 않습니다." : "This StressID example was analyzed by the local model. Its data is not sent to external AI coaching."}</p>}
     {report.dataOrigin === "synthetic" && <p className="review-context" role="status">{ko ? "합성 예시 분석 자료입니다." : "This analysis uses synthetic sample data."}</p>}
+    {baseline && <section className="review-section review-baseline" aria-label={ko ? "초기 측정값과 비교" : "Comparison with the initial reference"}>
+      <div className="review-section-heading"><div><h3>{ko ? "초기 측정값과 이번 발표 비교" : "Initial reference and this presentation"}</h3><p>{ko ? `10초씩 ${baseline.sampleCount}회 · 측정값 중 가운데 값을 초기값으로 사용합니다.` : `${baseline.sampleCount} separate ten-second measurements · their median is the initial reference.`}</p></div><Gauge size={18} color="var(--accent)" /></div>
+      <div className="review-baseline-values"><div><span>{ko ? "저장된 초기값" : "Saved initial reference"}</span><strong>{baselineScore(baseline.score)}</strong><small>{(baseline.observedMs ?? baseline.sampleCount * 10000) / 1000}{ko ? "초 측정" : "s measured"}</small></div><div><span>{ko ? "이번 발표 평균" : "This presentation's mean"}</span><strong>{baselineScore(a.averageStress)}</strong><small>{ko ? "초기값 대비 " : "From initial: "}{difference(baseline.averageDifference)}</small></div><div><span>{ko ? "가장 높았던 구간" : "Peak interval"}</span><strong>{baselineScore(a.peakStress)}</strong><small>{ko ? "초기값 대비 " : "From initial: "}{difference(baseline.peakDifference)}</small></div></div>
+      <p className="review-baseline-note">{baseline.source === "dataset_example" ? (ko ? "이 예시는 영상의 앞 30초를 초기 측정에, 다음 30초를 발표 분석에 사용했습니다. 사용자 본인의 초기값이 아닙니다. " : "This example uses the first thirty seconds for the initial reference and the next thirty for the presentation. This is not your own reference. ") : ""}{ko ? "차이는 분석 점수의 차이입니다. 실제 스트레스나 발표 실력의 변화로 단정하지 않습니다." : "Differences concern analysis scores; they do not establish changes in actual stress or presentation skill."}</p>
+    </section>}
+    {!baseline && report.baselineComparison?.status === "missing" && <p className="review-context" role="status">{ko ? "이 세션에 저장된 초기 측정값이 없어 개인 초기값 비교는 생략했습니다." : "No initial measurement was saved for this session, so a personal-reference comparison is unavailable."}</p>}
+    {!baseline && report.baselineComparison?.status === "model_mismatch" && <p className="review-context" role="status">{ko ? "초기 측정과 발표의 분석 모델이 달라 비교하지 않았습니다. 초기값을 다시 측정해 주세요." : "The initial measurement and presentation used different models. Remeasure the initial reference to compare them."}</p>}
     <div className="review-stats">
       {stats.map(({ icon: Icon, label, value, note }) => <div className="review-stat" key={label}>
         <div className="review-stat-label"><Icon size={14} />{label}</div>
@@ -120,7 +130,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
     {showTimeline && <div className="review-timeline-layout">
     <section className="review-section review-timeline">
       <div className="panel-head"><div className="panel-head-left"><h3 className="panel-title">{ko ? "세션 스트레스 신호 타임라인" : "Session Stress Signal Timeline"}</h3><span className="panel-subtitle">{ko ? "발표 후 전체 흐름" : "Post-session overview"}</span></div><Layers3 size={16} color="var(--text-secondary)" /></div>
-      <StressChart cells={cells} durationMs={duration} language={language} onSelect={onSeek} />
+      <StressChart cells={cells} durationMs={duration} language={language} baseline={report.observationReport?.personalBaseline?.score} onSelect={onSeek} />
       <details className="review-details review-timeline-intervals"><summary>{ko ? "구간별 점수 모두 보기" : "View all interval scores"}</summary>
       <div className="video-timeline actual-timeline">
         {cells.map((c, i) => (
@@ -146,7 +156,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
       </div>
 
       </details>
-      <div className="review-timeline-key"><span><i />{ko ? "관측된 스트레스 신호" : "Observed stress signal"}</span><span><i className="gap" />{ko ? "분석 자료 없음" : "No analysis data"}</span></div>
+      <div className="review-timeline-key"><span><i />{ko ? "관측된 스트레스 신호" : "Observed stress signal"}</span><span><i className="gap" />{ko ? "분석 자료 없음" : "No analysis data"}</span>{baseline && <span><i className="baseline" />{ko ? `${(baseline.observedMs ?? baseline.sampleCount * 10000) / 1000}초 초기 측정값` : "Initial measurement reference"}</span>}</div>
       <details className="review-details review-method"><summary>{ko ? "타임라인 읽는 법" : "How to read the timeline"}</summary><p>{ko ? "회색은 분석 자료가 없는 시간입니다. 겹친 시간은 한 번만 반영하고, 같은 시점의 점수는 평균합니다. 낮은 점수도 모두 표시합니다. 도입·전개·핵심·마무리는 시간 표시 구간입니다." : "Gray marks time without analysis data. Overlap counts once; concurrent scores are averaged. Low scores remain visible. Open / Build / Core / Close are time divisions for display."}</p>{original.length > 120 && <p>{ko ? "많은 관측은 묶어 표시하며 원본은 아래에서 확인할 수 있습니다." : "Dense observations are grouped for display. Original results are available below."}</p>}</details>
     </section>
     <aside className="review-section review-timeline-aside" aria-label={ko ? "발표 분석 요약" : "Presentation analysis summary"}>

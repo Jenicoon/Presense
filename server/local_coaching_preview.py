@@ -138,6 +138,9 @@ class Store:
 
 module._coach_store = lambda *_: Store()
 
+from server.local_calibration_store import LocalCalibrationStore
+calibration_store = LocalCalibrationStore(storage / "user-calibration.json", USER["id"])
+
 
 def records():
     result = []
@@ -189,6 +192,21 @@ def user():
 
 @app.api_route("/rest/v1/{table}", methods=["GET", "POST", "PATCH"])
 async def rest(table: str, request: Request):
+    if table == "user_calibrations":
+        if request.query_params.get("user_id", "eq." + USER["id"]) != "eq." + USER["id"]:
+            raise HTTPException(403, "Calibration belongs to another user")
+        with lock:
+            if request.method == "GET":
+                return calibration_store.read()
+            body = await request.json()
+            try:
+                if request.method == "POST":
+                    calibration_store.write(body)
+                else:
+                    calibration_store.prompted(body["last_prompted_at"])
+            except (ValueError, KeyError, TypeError) as error:
+                raise HTTPException(422, str(error)) from error
+        return Response(status_code=204)
     if request.method != "GET":
         if table == "presentation_records":
             body = await request.json()

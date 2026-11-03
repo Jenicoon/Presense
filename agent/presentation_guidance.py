@@ -178,7 +178,7 @@ def guidance(finding, ko):
     }
 
 
-def session_summary(report, ko):
+def _session_summary_without_baseline(report, ko):
     findings = report.get("priorities") or []
     if findings:
         view = guidance(findings[0], ko)
@@ -194,3 +194,11 @@ def session_summary(report, ko):
         if ko
         else "No repeatedly observed major issue was found in this session. Keep your current approach and review the recording for what came across well."
     )
+
+
+def session_summary(report, ko):
+    from .baseline import baseline_sentence
+    comparison = report.get("baselineComparison") or report.get("observationReport", {}).get("personalBaseline") or {}
+    if comparison and "status" not in comparison:
+        comparison = {**comparison, "status": "available", "observedMs": comparison["sampleCount"] * 10000}
+    return " ".join(part for part in (baseline_sentence(comparison, ko), _session_summary_without_baseline(report, ko)) if part)

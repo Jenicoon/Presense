@@ -63,7 +63,7 @@ function formatDuration(durationSeconds: number) {
 }
 
 function formatSessionDate(timestamp: string) {
-  return new Date(timestamp).toISOString().slice(0, 10);
+  return new Date(timestamp).toLocaleDateString("sv-SE");
 }
 
 function buildDefaultSettings(): PersistedSettings {

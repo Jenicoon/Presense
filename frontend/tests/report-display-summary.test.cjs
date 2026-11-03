@@ -160,3 +160,13 @@ test('reflection preserves the selected language for advice from another saved f
   assert.doesNotMatch(agentNextPractice(report, false), /[가-힣]/);
   assert.match(agentNextPractice(report, true), /한국어 연습 제안/);
 });
+
+test('report summary includes the stored thirty-second reference without changing session scores', () => {
+  const report={analysis:{coverage:1,averageStress:.6},priorities:[],observationReport:{personalBaseline:{score:.4,sampleCount:3,observedMs:30000,averageDifference:.2,peakDifference:.3}}};
+  const ko=reportDisplaySummary(report,true),en=reportDisplaySummary(report,false);
+  assert.match(ko,/30초.*40.00\/100.*20점/);
+  assert.match(en,/30s.*40.00\/100.*20 points/);
+  assert.doesNotMatch(en,/[가-힣]/);
+  assert.equal(report.analysis.averageStress,.6);
+  assert.match(ko,/주요 문제를 찾지 못/);
+});

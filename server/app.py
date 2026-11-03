@@ -215,10 +215,11 @@ def coach_action(body: CoachRequest, _user: dict = Depends(require_authenticated
         previous = next((row for row in store.previous(body.sessionId)
                          if not row["snapshot"]["request"].get("practiceContext")
                          and row["snapshot"].get("recordedAt", "") < current_date), None)
+    ai_allowed = bool(luxia_api_key) and doc["snapshot"].get("dataOrigin") != "stressid"
     try:
         updated, response = respond_with_ai(doc, body, attempt=attempt, previous=previous,
-                                           generate=_generate_coaching if luxia_api_key else None,
-                                           verify=_verify_coaching if luxia_api_key else None)
+                                           generate=_generate_coaching if ai_allowed else None,
+                                           verify=_verify_coaching if ai_allowed else None)
     except AIUnavailable as error:
         raise HTTPException(503, {"code": "coach_ai_unavailable"}) from error
     except ValueError as error:
@@ -264,22 +265,26 @@ def create_agent_report(
                                      "lastOutcome": next((p["comparison"]["outcome"] for p in reversed(previous_doc["practices"]) if p.get("comparison")), None)}
     except HTTPException:
         pass
+    ai_allowed = bool(luxia_api_key) and body.baselineSource != "dataset_example"
     report = generate_report(body, rag=rag,
-                           synthesize=luxia_synthesize if luxia_api_key else None,
-                           decide=luxia_decide_action if luxia_api_key else None,
+                           synthesize=luxia_synthesize if ai_allowed else None,
+                           decide=luxia_decide_action if ai_allowed else None,
                            prior_memory=prior, model_version=observed_version, agent_mode=True)
+    if body.baselineSource == "dataset_example": report["dataOrigin"] = "stressid"
     if previous_coaching: report["previousCoaching"] = previous_coaching
     try:
         store = _coach_store(_user, credentials)
         doc = new_document(body, report, observed_version)
         doc["snapshot"]["recordedAt"] = datetime.now(timezone.utc).isoformat()
+        if body.baselineSource == "dataset_example": doc["snapshot"]["dataOrigin"] = "stressid"
         if body.practiceContext:
             parent = store.get(body.practiceContext.sessionId)
             if not parent or parent["state"].get("activePracticeId") != body.practiceContext.practiceId or parent["state"]["stage"] not in {"recording","evaluating"}:
                 raise HTTPException(422, "No active practice matches this recording.")
         stored = store.create(body.sessionId, doc)
         report = stored["snapshot"]["report"]
-        report["coachingAvailable"] = True
+        report["coachingAvailable"] = body.baselineSource != "dataset_example"
+        if body.baselineSource == "dataset_example": report["coachingDisabledReason"] = "dataset_privacy"
     except HTTPException as error:
         if error.status_code != 503: raise
         report["coachingAvailable"] = False

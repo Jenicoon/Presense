@@ -225,3 +225,13 @@ test('microphone analysis can run with a silent output sink and still retain cap
   start({});processor.onaudioprocess({inputBuffer:{getChannelData:()=>new Float32Array(48000).fill(.1)}});
   assert.deepEqual(sinks,[{type:'none'}]);assert.equal(chunks[0].length,48000);assert.equal(seconds,1);
 });
+
+test('completed initial measurement does not submit more windows or change its reference', async () => {
+  let requests=0;
+  const state=setup(async()=>{requests++;return {stressScore:.9};});
+  state.refs.samples.current=[{stressScore:.2},{stressScore:.8},{stressScore:.4}];
+  await state.request(true);
+  assert.equal(requests,0);
+  assert.equal(state.refs.samples.current.length,3);
+  assert.deepEqual(state.results,[]);
+});

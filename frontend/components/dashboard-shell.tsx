@@ -21,7 +21,7 @@ import {
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { initialTimeline, postSessionHighlights, practiceScenes, samplePresentation } from "@/lib/dashboard-data";
 import { createSimulatedSignal, inferMultimodalFrame, INFERENCE_URL, SIGNAL_SOURCE, type LiveInferenceFrame, type LiveSignalController } from "@/lib/live-signal";
-import { addCalibrationSample, calibrationMedian, suggestRecalibration, type CalibrationSample, type PersonalCalibration } from "@/lib/calibration";
+import { addCalibrationSample, calibrationMedian, reusableCalibration, suggestRecalibration, type CalibrationSample, type PersonalCalibration } from "@/lib/calibration";
 import { useLang } from "@/lib/i18n";
 import { loadRecentDriftObservations, loadUserCalibration, markCalibrationPrompted, savePracticeSession, saveSessionReflection, saveUserCalibration } from "@/lib/supabase/data";
 import { agentNextPractice, generateAgentReport, reportDisplaySummary, toReportSegment, type AgentReport, type ReportSegment } from "@/lib/agent-report";
@@ -303,7 +303,7 @@ export function DashboardShell() {
     ]).then(([version, saved]) => {
       if (cancelled) return;
       setCalibrationModelVersion(version);
-      if (saved?.modelVersion === version) {
+      if (reusableCalibration(saved, version)) {
         setCalibration(saved);
         setPreparationComplete(true);
         setPreparationPhase("ready");
@@ -316,7 +316,7 @@ export function DashboardShell() {
   }, [user?.id, authLoading]);
 
   useEffect(() => {
-    if (sessionState === "live" || sessionState === "starting" || preparationPhase === "error") return;
+    if (sessionState === "live" || sessionState === "starting" || preparationPhase === "error" || preparationPhase === "ready") return;
     if (SIGNAL_SOURCE === "live" && (calibrationLoading || (calibration && !recalibrating))) return;
     if (collectedFrames < 16 || audioSeconds < 10 || !voiceDetected) return;
     void requestLiveFrame(true);
@@ -631,6 +631,7 @@ export function DashboardShell() {
   // Send the latest 16 webcam frames and 10-second audio buffer to the model.
   async function requestLiveFrame(preparation = false) {
     if (preparation && recordingActiveRef.current) return;
+    if (preparation && SIGNAL_SOURCE === "live" && calibrationMedian(calibrationSamplesRef.current) !== null) return;
     if (inferInFlightRef.current) return;
     const generation = analysisGenerationRef.current;
     inferInFlightRef.current = true;
@@ -730,8 +731,13 @@ export function DashboardShell() {
   }
 
   function beginRecalibration() {
-    if (sessionState === "live" || sessionState === "starting") return;
+    if (sessionState === "live" || sessionState === "starting" || recordingFinalizing || agentReportLoading || (sessionState === "ended" && !report)) return;
+    analysisGenerationRef.current += 1;
+    inferenceAbortRef.current?.abort();
+    inferenceAbortRef.current = null;
+    inferInFlightRef.current = false;
     calibrationSamplesRef.current = [];
+    preparationFrameRef.current = null;
     setCalibrationCount(0);
     setRecalibrating(true);
     setPreparationComplete(false);
@@ -1514,13 +1520,13 @@ export function DashboardShell() {
           <li>{lang === "ko" ? "영상 수집" : "Video collection"}: {collectedFrames}/16</li>
           <li>{lang === "ko" ? "음성 수집" : "Audio collection"}: {audioSeconds}/10{lang === "ko" ? "초" : "s"}</li>
           <li>{voiceDetected ? (lang === "ko" ? "마이크 소리 감지됨" : "Microphone sound detected") : (lang === "ko" ? "마이크에 문장을 읽어주세요" : "Read the sentence into your microphone")}</li>
-          {SIGNAL_SOURCE === "live" && <li>{lang === "ko" ? `유효한 독립 분석 창: ${calibrationCount}/3개 이상` : `Separate valid windows: ${calibrationCount}/3 or more`}</li>}
+          {SIGNAL_SOURCE === "live" && <li>{lang === "ko" ? `초기 측정: 10초 × ${calibrationCount}/3회 · 유효한 30초를 모읍니다` : `Initial measurement: ${calibrationCount}/3 × 10s · collecting 30s of valid data`}</li>}
         </ul>
         {!audioRunning && <button autoFocus type="button" className="btn btn-outline" onClick={() => void startPreview()}>{t("note.prepareButton")}</button>}
         {errorMessage && <p role="alert" className="error-msg">{errorMessage}</p>}
         {calibrationError && <p role="alert" className="error-msg">{calibrationError}</p>}
         <p role="status" className="preparation-status">{preparationPhase === "ready"
-          ? (lang === "ko" ? (SIGNAL_SOURCE === "live" ? "개인 기준선 계산 준비 완료. 저장 후 다음 연습에도 사용합니다." : "기기 준비 완료! 현재는 데모 분석 모드입니다.") : (SIGNAL_SOURCE === "live" ? "Baseline ready. Save it for future sessions." : "Devices are ready. Demo analysis mode is active."))
+          ? (lang === "ko" ? (SIGNAL_SOURCE === "live" ? "10초씩 3회 측정 완료. 중앙값을 저장해 다음 연습에도 사용합니다." : "기기 준비 완료! 현재는 데모 분석 모드입니다.") : (SIGNAL_SOURCE === "live" ? "Three ten-second measurements complete. Save their median for future sessions." : "Devices are ready. Demo analysis mode is active."))
           : preparationPhase === "analyzing" ? (lang === "ko" ? "모델 응답을 확인하고 있어요. 잠시 기다려주세요…" : "Checking the model response. Please wait…")
           : preparationPhase === "error" ? (lang === "ko" ? "모델 확인에 실패했습니다. 서버 상태를 확인하고 다시 시도해 주세요." : "Model check failed. Check the server and retry.")
           : (lang === "ko" ? "유효한 분석 창을 모으고 있어요. 카메라를 보며 계속 말해 주세요." : "Collecting valid windows. Keep speaking while facing the camera.")}</p>
@@ -1541,7 +1547,7 @@ export function DashboardShell() {
         {saveStatus && <p role="status">{saveStatus}</p>}
         {recalibrationSuggested && <div className="coach-card coach-data">
           <strong>{lang === "ko" ? "개인 기준선을 다시 측정해 볼까요?" : "Would you like to remeasure your baseline?"}</strong>
-          <p>{lang === "ko" ? "비슷한 환경의 최근 연습 3건에서 모델 점수가 기준선과 반복적으로 달랐습니다. 발표 방식의 변화일 수도 있어 현재 기준선은 자동으로 바꾸지 않습니다." : "Three recent sessions in a similar setting differed from your baseline. This could reflect delivery changes, so your baseline stays unchanged unless you choose to remeasure."}</p>
+          <p>{lang === "ko" ? "비슷한 환경의 최근 연습 3건에서 평균 모델 점수가 초기값보다 같은 방향으로 15점 이상 달랐습니다. 발표 방식의 변화일 수도 있어 현재 기준선은 자동으로 바꾸지 않습니다." : "Three recent sessions in a similar setting had mean model scores at least 15 points away from the initial reference in the same direction. This could reflect delivery changes, so your baseline stays unchanged unless you choose to remeasure."}</p>
           <div className="agent-reflection-options"><button type="button" className="btn btn-primary" onClick={beginRecalibration}>{lang === "ko" ? "다시 측정" : "Remeasure"}</button><button type="button" className="btn btn-outline" onClick={() => setRecalibrationSuggested(false)}>{lang === "ko" ? "나중에" : "Later"}</button></div>
         </div>}
         <div className="save-modal-actions">
