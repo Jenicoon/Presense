@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Gauge, Layers3, ScanLine, Sparkles } from "lucide-react";
 import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
 import { StressChart } from "@/components/stress-chart";
-import { AgentEvidence } from "@/components/agent-observation-report";
+import { AgentEvidence, AgentModelOutputs } from "@/components/agent-observation-report";
 import { agentNextPractice, agentReflectionInterpretation, showPriorityAdvice, type AgentReport } from "@/lib/agent-report";
 import { completeReportEvidence } from "@/lib/finding-evidence";
 import { measurementLabel } from "@/lib/measurement-labels";
@@ -154,6 +154,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
       </div>
     </aside>
     </div>}
+    <AgentModelOutputs report={report} ko={ko} />
     <section className="review-findings"><div className="review-section-heading"><div><h3>{ko ? "함께 확인할 부분" : "What to review together"}</h3><p>{ko ? "반복된 관측과 실제 측정값을 함께 살펴보세요." : "Review repeated observations alongside the measurements."}</p></div><span className="review-count">{report.priorities.length}</span></div>
     {report.priorities.length === 0 ? <div className="review-empty"><ScanLine size={21} /><p>{Number(a.coverage ?? 0) < 0.5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient analysis data to judge major issues.") : ko ? "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found in this session."}</p></div> : report.priorities.slice(0, 3).map((f, index) => {
       const text = findingText(f, ko);

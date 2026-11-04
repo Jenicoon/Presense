@@ -1432,7 +1432,7 @@ export function DashboardShell() {
                 {agentReport && <>
                   <h3 className="report-panel-title">{lang === "ko" ? "발표 분석 보고서" : "Presentation analysis report"}</h3>
                   <SessionAgentReport report={agentReport} language={lang} showTimeline={false} onSeek={recordedVideoUrl ? (ms)=>{const video=sessionVideoRef.current;if(video) {video.currentTime=ms/1000;void video.play().catch(()=>undefined);}} : undefined} />
-                  <AgentObservationReport report={agentReport} ko={lang === "ko"} onAnswer={reflectionSaving || saving ? undefined : answer => void answerReportReflection(answer)} />
+                  <AgentObservationReport showModelOutputs={false} report={agentReport} ko={lang === "ko"} onAnswer={reflectionSaving || saving ? undefined : answer => void answerReportReflection(answer)} />
                   {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && !saved && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}
               </div>}

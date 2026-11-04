@@ -2003,6 +2003,10 @@ h1, h2, h3 { margin: 0; }
 .review-timeline-key > span { display: inline-flex; align-items: center; gap: 6px; }
 .review-timeline-key i { width: 12px; height: 3px; background: var(--accent); border-radius: 2px; }
 .review-timeline-key i.gap { height: 10px; background: var(--border); }
+.review-model-outputs h3 { color: var(--accent); font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.review-model-outputs p { color: var(--text-secondary); font-size: 13px; line-height: 1.75; }
+.review-model-outputs .observation-bar-row { grid-template-columns: minmax(110px, 210px) minmax(50px, 1fr) 38px; font-size: 13px; }
+.review-model-outputs .observation-scale { margin-left: min(210px, 40%); }
 .review-findings { display: grid; gap: 14px; min-width: 0; }
 .review-count { display: grid; place-items: center; background: var(--accent-light); color: var(--accent); font-size: 12px; width: 25px; height: 25px; border-radius: 8px; }
 .review-finding { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
