@@ -1029,21 +1029,23 @@ def generate_report(request: ReviewRequest, rag=None, synthesize: Callable | Non
         "researchActions": research_actions,
         "claimVerification": verification,
     }
-    peak = observation_report["peakSegment"]
-    average = observation_report["averageStressScore"]
-    if peak and average is not None:
-        distinct_peak = peak["stressScore"] >= .65 and peak["stressScore"] - average >= .05
-        start, end = peak["startMs"] // 1000, peak["endMs"] // 1000
-        interval = f"{start // 60:02d}:{start % 60:02d}–{end // 60:02d}:{end % 60:02d}"
+    intent_finding = next((
+        item for item in priorities
+        if item.get("groupingStatus") == "verified"
+        and item.get("modality") == "audio"
+        and item.get("metric") in {"f0_mean", "f0_std", "egemap_f0_semitone"}
+        and item.get("observations")
+    ), None)
+    if intent_finding:
+        observation = intent_finding["observations"][0]
+        interval = f"{_clock(observation['startMs'])}–{_clock(observation['endMs'])}"
         report["reflection"] = {
-            "kind": "peak" if distinct_peak else "overall",
-            "segmentId": peak["segmentId"] if distinct_peak else "overall",
-            "startMs": peak["startMs"] if distinct_peak else 0,
-            "endMs": peak["endMs"] if distinct_peak else request.durationMs,
-            "question": ((f"{interval} 구간은 의도적으로 강조한 부분인가요?" if ko else
-                          f"Was {interval} an intentional emphasis?") if distinct_peak else
-                         ("이번 발표의 전달 방식이 의도한 대로였나요?" if ko else
-                          "Did this presentation come across as you intended?")),
+            "kind": "finding",
+            "segmentId": observation["segmentId"],
+            "startMs": observation["startMs"],
+            "endMs": observation["endMs"],
+            "question": (f"{interval} 구간의 음높이 변화는 의도한 강조였나요?" if ko else
+                         f"Was the pitch change at {interval} an intentional emphasis?"),
             "answer": None,
         }
     if agent_state is not None:

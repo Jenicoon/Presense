@@ -4,7 +4,7 @@ import { ArrowRight, Gauge, Layers3, Sparkles } from "lucide-react";
 import { bilingualLabel, findingText, findingGuidance, matchesLanguage, signalScore } from "@/lib/report-locale";
 import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence, AgentModelOutputs, AgentPatternReview } from "@/components/agent-observation-report";
-import { agentNextPractice, agentReflectionInterpretation, showPriorityAdvice, type AgentReport } from "@/lib/agent-report";
+import { agentNextPractice, agentReflectionInterpretation, reportIntentReflection, showPriorityAdvice, type AgentReport } from "@/lib/agent-report";
 import { completeReportEvidence } from "@/lib/finding-evidence";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { clock, restoreCoach } from "@/lib/coaching";
@@ -70,6 +70,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
   children?: ReactNode;
 }) {
   report = completeReportEvidence(report);
+  report = { ...report, reflection: onSeek ? reportIntentReflection(report) : undefined };
   const ko = language === "ko";
   const [page, setPage] = useState(0);
   const [hasSavedCoaching, setHasSavedCoaching] = useState(false);
@@ -101,8 +102,11 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
     {report.dataOrigin === "synthetic" && <p className="review-context" role="status">{ko ? "합성 예시 분석 자료입니다." : "This analysis uses synthetic sample data."}</p>}
     {baseline && <section className="review-section review-baseline" aria-label={ko ? "초기 측정값과 비교" : "Comparison with the initial reference"}>
       <div className="review-section-heading"><div><h3>{ko ? "초기 측정값과 이번 발표 비교" : "Initial reference and this presentation"}</h3><p>{ko ? `10초씩 ${baseline.sampleCount}회 · 측정값 중 가운데 값을 초기값으로 사용합니다.` : `${baseline.sampleCount} separate ten-second measurements · their median is the initial reference.`}</p></div><Gauge size={18} color="var(--accent)" /></div>
-      <div className="review-baseline-values"><div><span>{ko ? "저장된 초기값" : "Saved initial reference"}</span><strong>{baselineScore(baseline.score)}</strong><small>{(baseline.observedMs ?? baseline.sampleCount * 10000) / 1000}{ko ? "초 측정" : "s measured"}</small></div><div><span>{ko ? "이번 발표 평균" : "This presentation's mean"}</span><strong>{baselineScore(a.averageStress)}</strong><small>{ko ? "초기값 대비 " : "From initial: "}{difference(baseline.averageDifference)}</small></div><div><span>{ko ? "가장 높았던 구간" : "Peak interval"}</span><strong>{baselineScore(a.peakStress)}</strong><small>{ko ? "초기값 대비 " : "From initial: "}{difference(baseline.peakDifference)}</small></div></div>
-      <p className="review-baseline-note">{baseline.source === "dataset_example" ? (ko ? "이 예시는 영상의 앞 30초를 초기 측정에, 다음 30초를 발표 분석에 사용했습니다. 사용자 본인의 초기값이 아닙니다. " : "This example uses the first thirty seconds for the initial reference and the next thirty for the presentation. This is not your own reference. ") : ""}{ko ? "준비할 때의 초기값과 이번 발표의 점수 차이입니다." : "These values compare your preparation reference with this presentation."}</p>
+      <div className="review-baseline-values"><div><span>{baseline.source === "dataset_example" ? (ko ? "예시 초기값" : "Example reference") : (ko ? "저장된 초기값" : "Saved initial reference")}</span><strong>{baselineScore(baseline.score)}</strong><small>{(baseline.observedMs ?? baseline.sampleCount * 10000) / 1000}{ko ? "초 측정" : "s measured"}</small></div><div><span>{ko ? "이번 발표 평균" : "This presentation's mean"}</span><strong>{baselineScore(a.averageStress)}</strong><small>{ko ? "초기값 대비 " : "From initial: "}{difference(baseline.averageDifference)}</small></div><div><span>{ko ? "가장 높았던 구간" : "Peak interval"}</span><strong>{baselineScore(a.peakStress)}</strong><small>{ko ? "초기값 대비 " : "From initial: "}{difference(baseline.peakDifference)}</small></div></div>
+      {baseline.source === "dataset_example" && <details className="review-details">
+        <summary>{ko ? "예시 초기값 안내" : "About the example reference"}</summary>
+        <p>{ko ? "이 예시 영상의 앞부분에서 측정한 초기값입니다." : "The reference comes from the opening of this example video."}</p>
+      </details>}
     </section>}
     {!baseline && report.baselineComparison?.status === "missing" && <p className="review-context" role="status">{ko ? "이 세션에 저장된 초기 측정값이 없어 개인 초기값 비교는 생략했습니다." : "No initial measurement was saved for this session, so a personal-reference comparison is unavailable."}</p>}
     {!baseline && report.baselineComparison?.status === "model_mismatch" && <p className="review-context" role="status">{ko ? "초기 측정과 발표의 분석 조건이 달라 비교하지 않았습니다. 초기값을 다시 측정해 주세요." : "The initial measurement and presentation used different analysis conditions. Remeasure the initial reference to compare them."}</p>}

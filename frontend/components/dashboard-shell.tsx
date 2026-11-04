@@ -883,7 +883,7 @@ export function DashboardShell() {
       try { await saveSessionReflection(sessionIdRef.current, next); }
       catch (error) {
         setAgentReport(agentReport);
-        setReflectionError(error instanceof Error ? error.message : "응답을 저장하지 못했습니다.");
+        setReflectionError(error instanceof Error ? error.message : (lang === "ko" ? "응답을 저장하지 못했습니다." : "Could not save your response."));
       } finally { setReflectionSaving(false); }
     }
   }
@@ -1023,11 +1023,19 @@ export function DashboardShell() {
     window.dispatchEvent(new CustomEvent("presense:open-agent", { detail: { sessionId: sessionIdRef.current } }));
   }
 
+  function seekReportVideo(ms: number) {
+    const video = sessionVideoRef.current;
+    if (!video || !Number.isFinite(ms) || ms < 0) return false;
+    video.currentTime = Number.isFinite(video.duration) ? Math.min(ms / 1000, video.duration) : ms / 1000;
+    video.scrollIntoView({ behavior: "smooth", block: "center" });
+    void video.play().catch(() => undefined);
+    return true;
+  }
+
   function seekToTimelineBin(bin: number) {
     const video = sessionVideoRef.current;
     if (!video || !Number.isFinite(video.duration)) return;
-    video.currentTime = ((bin + 0.5) / 12) * video.duration;
-    void video.play().catch(() => undefined);
+    seekReportVideo(((bin + 0.5) / 12) * video.duration * 1000);
   }
 
   useEffect(() => {
@@ -1035,8 +1043,7 @@ export function DashboardShell() {
       const detail=(event as CustomEvent<{sessionId:string;startMs:number;handled?:boolean}>).detail;
       const {sessionId,startMs}=detail;
       if(sessionId!==sessionIdRef.current) return;
-      const video=sessionVideoRef.current;
-      if(video) { detail.handled=true; video.currentTime=startMs/1000; video.scrollIntoView({behavior:"smooth",block:"center"}); void video.play().catch(()=>undefined); }
+      if (seekReportVideo(startMs)) detail.handled = true;
     }
     function start() { if(preparationComplete && preparationPhase === "ready") void handleStartSession(); else { document.getElementById("practice-start-area")?.scrollIntoView({behavior:"smooth"}); if(!preparationComplete) preparationDialogRef.current?.showModal(); } }
     function stop() { void handleStopSession(); }
@@ -1331,7 +1338,7 @@ export function DashboardShell() {
                 <Waves size={16} color="var(--text-secondary)" />
               </div>
               {SIGNAL_SOURCE !== "live" && <StressChart series={timeline} />}
-              {SIGNAL_SOURCE === "live" && agentReport && <ReportStressChart report={agentReport} language={lang} onSeek={recordedVideoUrl ? ms => { const video = sessionVideoRef.current; if (video) { video.currentTime = ms / 1000; void video.play().catch(() => undefined); } } : undefined} />}
+              {SIGNAL_SOURCE === "live" && agentReport && <ReportStressChart report={agentReport} language={lang} onSeek={recordedVideoUrl ? seekReportVideo : undefined} />}
               {SIGNAL_SOURCE !== "live" && <p className="signal-note">{lang === "ko" ? `첫 지점은 이번 세션의 시작 전 준비 기준값(${Math.round(report.startBaseline * 100)}%)이며, 요약 통계에도 포함됩니다.` : `The first point is this session's pre-start baseline (${Math.round(report.startBaseline * 100)}%), included in summary statistics.`}</p>}
               {recordedVideoUrl && (
                 <div className="session-video-review">
@@ -1431,8 +1438,8 @@ export function DashboardShell() {
                 {reflectionError && <p role="alert" className="error-msg">{reflectionError}</p>}
                 {agentReport && <>
                   <h3 className="report-panel-title">{lang === "ko" ? "발표 분석 보고서" : "Presentation analysis report"}</h3>
-                  <SessionAgentReport report={agentReport} language={lang} showTimeline={false} onSeek={recordedVideoUrl ? (ms)=>{const video=sessionVideoRef.current;if(video) {video.currentTime=ms/1000;void video.play().catch(()=>undefined);}} : undefined}>
-                  <AgentObservationReport showModelOutputs={false} report={agentReport} ko={lang === "ko"} onAnswer={reflectionSaving || saving ? undefined : answer => void answerReportReflection(answer)} />
+                  <SessionAgentReport report={agentReport} language={lang} showTimeline={false} onSeek={recordedVideoUrl ? seekReportVideo : undefined}>
+                  <AgentObservationReport showModelOutputs={false} canReviewVideo={Boolean(recordedVideoUrl)} report={agentReport} ko={lang === "ko"} onAnswer={reflectionSaving || saving ? undefined : answer => void answerReportReflection(answer)} />
                   </SessionAgentReport>
                   {agentReport.agentRun?.stopReason === "decision_unavailable" && reportRequestRef.current && !saved && <button type="button" className="btn btn-outline" disabled={agentReportLoading} onClick={() => void requestAgentReport()}>{lang === "ko" ? "보고서 다시 생성" : "Retry report"}</button>}
                 </>}

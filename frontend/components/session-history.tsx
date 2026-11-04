@@ -2,7 +2,7 @@
 
 import { SessionAgentReport } from "@/components/session-agent-report";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrainCircuit, CalendarDays, Film, FolderClock, Gauge, Languages, LoaderCircle, Play, Sparkles, Trash2, X } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { StressChart } from "@/components/stress-chart";
@@ -49,15 +49,34 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
   const [answerBusy, setAnswerBusy] = useState(false);
   const durationProbeRef = useRef(false);
   const requestedSeekRef=useRef<number | null>(null);
-  useEffect(()=>{const at=Number(new URLSearchParams(window.location.search).get("at"));requestedSeekRef.current=Number.isFinite(at)&&at>=0?at/1000:null;},[]);
+  useEffect(()=>{const at=new URLSearchParams(window.location.search).get("at");requestedSeekRef.current=at!==null&&Number.isFinite(Number(at))&&Number(at)>=0?Number(at)/1000:null;},[]);
   const probeTimeoutRef = useRef<number | null>(null);
   useEffect(() => () => {
     if (probeTimeoutRef.current !== null) window.clearTimeout(probeTimeoutRef.current);
   }, []);
-  useEffect(()=>{
-    function seek(event: Event) { const d=(event as CustomEvent<{sessionId:string;startMs:number;handled?:boolean}>).detail; if(d.sessionId===record.id && videoRef.current) {d.handled=true;videoRef.current.currentTime=d.startMs/1000;void videoRef.current.play().catch(()=>undefined);} }
-    window.addEventListener("presense:seek-video",seek);return ()=>window.removeEventListener("presense:seek-video",seek);
-  },[record.id]);
+  const seekToTime = useCallback((ms: number) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(ms) || ms < 0) return false;
+    const seconds = ms / 1000;
+    if (durationProbeRef.current || video.readyState === 0) {
+      requestedSeekRef.current = seconds;
+    } else {
+      requestedSeekRef.current = null;
+      video.currentTime = Number.isFinite(video.duration) ? Math.min(seconds, video.duration) : seconds;
+    }
+    video.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!durationProbeRef.current) void video.play().catch(() => undefined);
+    return true;
+  }, []);
+
+  useEffect(() => {
+    function seek(event: Event) {
+      const detail = (event as CustomEvent<{sessionId: string; startMs: number; handled?: boolean}>).detail;
+      if (detail.sessionId === record.id && seekToTime(detail.startMs)) detail.handled = true;
+    }
+    window.addEventListener("presense:seek-video", seek);
+    return () => window.removeEventListener("presense:seek-video", seek);
+  }, [record.id, seekToTime]);
   const peak = record.agentReport?.observationReport?.peakSegment
     ? Math.round(record.agentReport.observationReport.peakSegment.stressScore * 100)
     : record.timeline.length ? Math.max(...record.timeline) : 0;
@@ -76,10 +95,17 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
     durationProbeRef.current = false;
     if (probeTimeoutRef.current !== null) window.clearTimeout(probeTimeoutRef.current);
     probeTimeoutRef.current = null;
-    video.currentTime = requestedSeekRef.current ?? 0;
+    const seconds = requestedSeekRef.current;
+    requestedSeekRef.current = null;
+    video.currentTime = seconds === null ? 0 : Math.min(seconds, video.duration);
+    if (seconds !== null) void video.play().catch(() => undefined);
   }
   function checkVideoDuration(video: HTMLVideoElement) {
-    if(requestedSeekRef.current!==null && Number.isFinite(video.duration)) {video.currentTime=Math.min(requestedSeekRef.current,video.duration);void video.play().catch(()=>undefined);}
+    if (requestedSeekRef.current !== null && Number.isFinite(video.duration)) {
+      const seconds = requestedSeekRef.current;
+      requestedSeekRef.current = null;
+      seekToTime(seconds * 1000);
+    }
     if (!record.videoPath?.toLowerCase().endsWith(".webm")) return;
     const expected = record.durationSeconds;
     if (Number.isFinite(video.duration) && (!expected || Math.abs(video.duration - expected) <= Math.max(2, expected * 0.1))) return;
@@ -88,7 +114,10 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
     video.currentTime = 1e10;
     probeTimeoutRef.current = window.setTimeout(() => {
       durationProbeRef.current = false;
-      video.currentTime = 0;
+      const seconds = requestedSeekRef.current;
+      requestedSeekRef.current = null;
+      if (seconds === null) video.currentTime = 0;
+      else seekToTime(seconds * 1000);
       probeTimeoutRef.current = null;
     }, 4000);
   }
@@ -100,8 +129,7 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
       || Math.abs(video.duration - expected) > Math.max(2, expected * 0.1))
       ? expected : video.duration;
     if (!duration || !Number.isFinite(duration)) return;
-    video.currentTime = ((bin + 0.5) / Math.max(record.timeline.length, 1)) * duration;
-    void video.play().catch(() => undefined);
+    seekToTime(((bin + 0.5) / Math.max(record.timeline.length, 1)) * duration * 1000);
   }
   async function answerReflection(answer: "intentional" | "unintentional" | "unsure") {
     if (!record.agentReport?.reflection || answerBusy) return;
@@ -109,7 +137,7 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
     setAnswerBusy(true);
     const next = { ...record.agentReport, reflection: { ...record.agentReport.reflection, answer } };
     try { await onReportUpdate(next); }
-    catch (error) { setAnswerError(error instanceof Error ? error.message : "응답을 저장하지 못했습니다."); }
+    catch (error) { setAnswerError(error instanceof Error ? error.message : (ko ? "응답을 저장하지 못했습니다." : "Could not save your response.")); }
     finally { setAnswerBusy(false); }
   }
   return <div className="modal-backdrop" onClick={onClose} role="presentation"><section className="card history-review-modal" role="dialog" aria-modal={coachOpen ? undefined : true} aria-labelledby="history-review-title" onClick={(event) => event.stopPropagation()}>
@@ -124,8 +152,8 @@ function ReviewModal({ record, ko, t, onClose, onReportUpdate }: { record: Sessi
     {record.agentReport && <section className="review-overview-summary"><h3>{ko ? "발표 분석 요약" : "Presentation summary"}</h3><p>{reportDisplaySummary(record.agentReport, ko)}</p></section>}
     </div>
     {record.agentReport && <>
-      <SessionAgentReport report={record.agentReport} language={ko ? "ko" : "en"} onSeek={record.videoUrl ? ms=>{if(videoRef.current){videoRef.current.currentTime=ms/1000;void videoRef.current.play().catch(()=>undefined);}} : undefined}>
-      <details className="review-details review-supplement"><summary>{ko ? "발표 흐름과 추가 피드백" : "Session patterns and additional feedback"}</summary><AgentObservationReport showModelOutputs={false} report={record.agentReport} ko={ko} onAnswer={answerBusy ? undefined : answer => void answerReflection(answer)} />{answerError && <p role="alert" className="error-msg">{answerError}</p>}</details>
+      <SessionAgentReport report={record.agentReport} language={ko ? "ko" : "en"} onSeek={record.videoUrl && !playbackError ? seekToTime : undefined}>
+      <details className="review-details review-supplement"><summary>{ko ? "발표 흐름과 추가 피드백" : "Session patterns and additional feedback"}</summary><AgentObservationReport showModelOutputs={false} canReviewVideo={Boolean(record.videoUrl) && !playbackError} report={record.agentReport} ko={ko} onAnswer={answerBusy ? undefined : answer => void answerReflection(answer)} />{answerError && <p role="alert" className="error-msg">{answerError}</p>}</details>
       </SessionAgentReport>
     </>}
     {!record.agentReport && <div className="history-review-section"><div className="history-review-section-head"><div><strong>{ko ? "스트레스 신호 타임라인" : "Stress signal timeline"}</strong><span>{record.videoUrl ? (ko ? "구간을 누르면 영상의 해당 시점으로 이동합니다" : "Select a segment to jump to that moment in the video") : (ko ? "영상 없이도 저장된 스트레스 신호 점수를 확인할 수 있습니다" : "Saved stress signal scores are available without video")}</span></div><strong className="history-peak">{peak ? `${peak}% ${ko ? "최고" : "peak"}` : "–"}</strong></div><Timeline values={record.timeline} onSelect={record.videoUrl ? seekToBin : undefined} /><div className="video-timeline-legend"><span><i className="low" />{ko ? "낮은 스트레스 신호 점수" : "Lower stress signal score"}</span><span><i className="mid" />{ko ? "중간 스트레스 신호 점수" : "Middle stress signal score"}</span><span><i className="high" />{ko ? "높은 스트레스 신호 점수" : "Higher stress signal score"}</span></div></div>}

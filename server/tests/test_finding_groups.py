@@ -112,6 +112,9 @@ class DistinctFindingTests(unittest.TestCase):
         request=self.request()
         report=generate_report(request,agent_mode=True,model_version="synthetic-model")
         self.assertEqual(report["priorities"][0]["findingKind"],"distinct")
+        self.assertEqual(report["reflection"]["kind"], "finding")
+        self.assertEqual(report["reflection"]["segmentId"], "s3")
+        self.assertEqual((report["reflection"]["startMs"], report["reflection"]["endMs"]), (30000, 40000))
         doc=complete_document_evidence(new_document(request,report,"synthetic-model"))
         finding=doc["snapshot"]["report"]["priorities"][0]
         self.assertEqual(finding["findingKind"],"distinct")

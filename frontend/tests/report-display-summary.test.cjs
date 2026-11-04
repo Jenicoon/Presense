@@ -18,7 +18,7 @@ function loadTs(file) {
   });
   return exports;
 }
-const { reportDisplaySummary, agentNextPractice } = loadTs('../lib/agent-report.ts');
+const { reportDisplaySummary, agentNextPractice, reportIntentReflection } = loadTs('../lib/agent-report.ts');
 const { findingText, sceneText } = loadTs('../lib/report-locale.ts');
 
 test('older generic report uses its saved measurements in the displayed summary', () => {
@@ -189,4 +189,20 @@ test('saved comparison gives a concrete summary without assigning an unsupported
   assert.match(reportDisplaySummary(report, true), /00:10–00:20.*33\.4 Hz.*47\.2 Hz.*낮았습니다/);
   assert.match(reportDisplaySummary(report, false), /33\.4 Hz.*00:10–00:20.*below.*47\.2 Hz/);
   assert.equal(agentNextPractice(report, true), '');
+});
+
+
+test('a saved intent question is shown only for a verified pitch observation at the same interval', () => {
+  const rawSegments = [100, 100, 150, 151].map((value, index) => ({
+    segmentId: "s" + index, startMs: index * 10000, endMs: (index + 1) * 10000,
+    stressScore: .6, quality: { audioValid: true, faceDetected: true },
+    audioFeatures: { f0_mean: value }, videoFeatures: {}, concepts: {},
+  }));
+  const reflection = { kind: 'finding', segmentId: 's2', startMs: 20000, endMs: 30000, answer: null };
+  const priorities = [{ id: 'pitch_change', metric: 'f0_mean', modality: 'audio', selectedSegmentIds: ['s2', 's3'] }];
+  const report = { rawSegments, priorities, reflection };
+  assert.equal(reportIntentReflection(report), reflection);
+  assert.equal(reportIntentReflection({ ...report, priorities: [] }), undefined);
+  assert.equal(reportIntentReflection({ ...report, reflection: { ...reflection, kind: 'overall' } }), undefined);
+  assert.equal(reportIntentReflection({ ...report, reflection: { ...reflection, segmentId: 's0', startMs: 0, endMs: 10000 } }), undefined);
 });

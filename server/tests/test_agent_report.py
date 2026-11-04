@@ -103,18 +103,16 @@ class AgentReportTests(unittest.TestCase):
         self.assertAlmostEqual(baseline["averageDifference"], .25)
         self.assertAlmostEqual(baseline["peakDifference"], .55)
         self.assertEqual(report["observationReport"]["peakSegment"]["stressScore"], .8)
-        self.assertEqual(report["reflection"]["segmentId"], "peak")
-        self.assertIsNone(report["reflection"]["answer"])
+        self.assertNotIn("reflection", report)
 
-    def test_changed_model_does_not_apply_old_baseline_and_flat_scores_get_general_question(self):
+    def test_changed_model_does_not_apply_old_baseline_or_ask_about_flat_scores(self):
         request = ReviewRequest(sessionId="s", durationMs=20000,
                                 segments=[segment("one", 0, 10000, .8), segment("two", 10000, 20000, .8)],
                                 personalBaseline=.2, baselineSampleCount=3,
                                 baselineModelVersion="old-model")
         report = self.report(request, selected=(), model_version="new-model")
         self.assertNotIn("personalBaseline", report["observationReport"])
-        self.assertEqual(report["reflection"]["kind"], "overall")
-        self.assertNotIn("강조한 부분", report["reflection"]["question"])
+        self.assertNotIn("reflection", report)
 
     def test_summary_connects_peak_phase_feature_and_concept(self):
         windows = [segment("opening", 0, 10000, .2),

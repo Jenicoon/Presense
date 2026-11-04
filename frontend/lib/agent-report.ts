@@ -46,7 +46,7 @@ export type AgentReport = {
     personalBaseline?: { status?: "available"; score: number; sampleCount: number; windowMs?: number; observedMs?: number; source?: "preparation" | "dataset_example" | "synthetic"; averageDifference: number | null; peakDifference: number | null };
   };
   reflection?: {
-    kind?: "peak" | "overall";
+    kind?: "peak" | "overall" | "finding";
     segmentId: string;
     startMs: number;
     endMs: number;
@@ -145,6 +145,22 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
     (ko ? `${interval} 구간의 실제 발화와 표정을 영상에서 확인해 보세요.` :
       `Review the actual speech and expression in ${interval} on the recording.`));
   return sentences.join(" ");
+}
+
+export function reportIntentReflection(report: AgentReport) {
+  const reflection = report.reflection;
+  if (!reflection || reflection.kind === "overall") return undefined;
+
+  const { priorities } = completeReportEvidence(report);
+  return priorities.some(finding =>
+    finding.modality === "audio"
+    && ["f0_mean", "f0_std", "egemap_f0_semitone"].includes(finding.metric ?? "")
+    && finding.observations?.some(observation =>
+      observation.segmentId === reflection.segmentId
+      && observation.startMs === reflection.startMs
+      && observation.endMs === reflection.endMs
+    )
+  ) ? reflection : undefined;
 }
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {

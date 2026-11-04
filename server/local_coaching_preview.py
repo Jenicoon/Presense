@@ -207,6 +207,31 @@ async def rest(table: str, request: Request):
             except (ValueError, KeyError, TypeError) as error:
                 raise HTTPException(422, str(error)) from error
         return Response(status_code=204)
+    if table == "presentation_records" and request.method == "PATCH":
+        identity = request.query_params.get("id", "").removeprefix("eq.")
+        if request.query_params.get("user_id") != f"eq.{USER['id']}":
+            raise HTTPException(403, "Record belongs to another user")
+        body = await request.json()
+        incoming = (body.get("agent_report") or {}).get("reflection") or {}
+        answer = incoming.get("answer")
+        with lock:
+            document = documents.get(identity)
+            if not document:
+                raise HTTPException(404, "Saved session not found")
+            report = document["snapshot"]["report"]
+            reflection = report.get("reflection")
+            if (not reflection or answer not in ("intentional", "unintentional", "unsure")
+                    or any(incoming.get(field) != reflection.get(field)
+                           for field in ("segmentId", "startMs", "endMs"))):
+                raise HTTPException(422, "Invalid response for this report")
+            previous_answer = reflection.get("answer")
+            reflection["answer"] = answer
+            try:
+                Store()._persist()
+            except OSError:
+                reflection["answer"] = previous_answer
+                raise
+        return Response(status_code=204)
     if request.method != "GET":
         if table == "presentation_records":
             body = await request.json()

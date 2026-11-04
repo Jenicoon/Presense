@@ -1,6 +1,6 @@
 import { measurementLabel } from "@/lib/measurement-labels";
 import { bilingualLabel, savedComparison } from "@/lib/report-locale";
-import { agentNextPractice, agentReflectionInterpretation, type AgentReport } from "@/lib/agent-report";
+import { agentNextPractice, agentReflectionInterpretation, reportIntentReflection, type AgentReport } from "@/lib/agent-report";
 
 function time(ms: number): string {
   const seconds = Math.floor(ms / 1000);
@@ -30,9 +30,10 @@ export function conceptBarPercent(value: number): number {
   return Math.max(0, Math.min(1, value)) * 100;
 }
 
-export function AgentObservationReport({ report, ko, onAnswer, showModelOutputs = true }: {
+export function AgentObservationReport({ report, ko, onAnswer, canReviewVideo = false, showModelOutputs = true }: {
   report: AgentReport; ko: boolean;
   showModelOutputs?: boolean;
+  canReviewVideo?: boolean;
   onAnswer?: (answer: "intentional" | "unintentional" | "unsure") => void;
 }) {
   const observed = report.observationReport;
@@ -45,7 +46,7 @@ export function AgentObservationReport({ report, ko, onAnswer, showModelOutputs 
   const comparablePhases = phases.length === 3 && phases[0].observedMs >= (phases[0].endMs - phases[0].startMs) / 2
     && phases[2].observedMs >= (phases[2].endMs - phases[2].startMs) / 2;
   const baseline = observed.personalBaseline;
-  const reflection = report.reflection;
+  const reflection = canReviewVideo ? reportIntentReflection(report) : undefined;
   const practice = reflection?.answer ? agentNextPractice(report, ko) : "";
   const answerLabels = ko
     ? { intentional: "네, 의도했어요", unintentional: "아니요", unsure: "잘 모르겠어요" }
@@ -62,9 +63,9 @@ export function AgentObservationReport({ report, ko, onAnswer, showModelOutputs 
     </div>}
     {reflection && <div className="coach-card coach-data">
       <h3>{ko ? "전달 의도 확인" : "Delivery intent review"}</h3>
-      <p>{reflection.kind === "overall" ? (ko ? "이번 발표의 전달 방식이 의도한 대로였나요?" : "Did this presentation come across as you intended?") :
-        ko ? `${time(reflection.startMs)}–${time(reflection.endMs)} 구간은 의도적으로 강조한 부분인가요?` :
-        `Was ${time(reflection.startMs)}–${time(reflection.endMs)} an intentional emphasis?`}</p>
+      <p>{ko
+        ? `${time(reflection.startMs)}–${time(reflection.endMs)} 구간의 음높이 변화는 의도한 강조였나요?`
+        : `Was the pitch change at ${time(reflection.startMs)}–${time(reflection.endMs)} an intentional emphasis?`}</p>
       <div className="agent-reflection-options">{(["intentional", "unintentional", "unsure"] as const).map((answer) =>
         <button key={answer} type="button" className={reflection.answer === answer ? "btn btn-primary" : "btn btn-outline"}
           aria-pressed={reflection.answer === answer} disabled={!onAnswer} onClick={() => onAnswer?.(answer)}>{answerLabels[answer]}</button>)}</div>
