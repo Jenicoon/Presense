@@ -61,6 +61,7 @@ export type AgentReport = {
   previousCoaching?: { previousSessionId:string;goalLabel:string;comparable:boolean;lastOutcome:string|null };
   referenceFindings?: AgentReport["priorities"];
   priorities: Array<{
+    findingKind?: "repeated" | "distinct" | null;
     groupingStatus?: "verified" | "reference_only";
     groupingReason?: string | null;
     metric?: string;

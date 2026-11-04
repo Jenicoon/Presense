@@ -306,6 +306,7 @@ def build_context(doc, request, attempt=None, previous=None):
                     "metric",
                     "modality",
                     "independentObservations",
+                    "findingKind",
                     "measurementQuality",
                     "referenceValue",
                     "observations",

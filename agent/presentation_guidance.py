@@ -184,8 +184,8 @@ def _session_summary_without_baseline(report, ko):
         view = guidance(findings[0], ko)
         return view["observation"] + " " + view["question"]
     if report.get("referenceFindings"):
-        return ("같은 변화가 반복됐다고 판단할 근거가 부족합니다. 개별 측정 구간을 참고해 주세요."
-                if ko else "There is not enough evidence of a repeated change. Review the individual measurement intervals.")
+        return ("이번 발표의 측정값과 참고 시점을 정리했습니다. 해당 구간부터 살펴보세요."
+                if ko else "Your measurements and reference intervals are available. Start by reviewing those moments.")
     if report.get("analysis", {}).get("coverage", 0) < 0.5:
         return (
             "분석된 시간이 부족해 이번 발표의 개선점을 고르기 어렵습니다. 카메라와 마이크를 확인하고 조금 더 길게 발표해 주세요."
@@ -193,9 +193,9 @@ def _session_summary_without_baseline(report, ko):
             else "Too little of this presentation was analyzed to select a practice focus. Check the camera and microphone and present for a little longer."
         )
     return (
-        "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다. 지금의 발표 흐름을 유지하며 영상을 통해 잘 전달된 부분을 확인해 보세요."
+        "이번 발표에서는 우선적으로 살펴볼 변화를 찾지 못했습니다. 영상을 보며 잘 전달된 부분을 확인해 보세요."
         if ko
-        else "No repeatedly observed major issue was found in this session. Keep your current approach and review the recording for what came across well."
+        else "No change was selected for priority review. Watch the recording to see what came across well."
     )
 
 

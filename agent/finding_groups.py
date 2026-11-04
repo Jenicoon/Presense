@@ -32,3 +32,28 @@ def repeated_group_reason(rows, reference, metric):
     if max(values) - min(values) >= min(abs(change) for change in changes):
         return "dissimilar_changes"
     return None
+
+
+def finding_kind(rows, reference, metric, earlier_values):
+    """A repeated shift OR a single prominent measured interval can merit review.
+
+    A single interval needs at least three independent earlier measurements.
+    Its deviation must exceed both the existing review floor and twice the
+    earlier observed range. This conservative product heuristic accounts for
+    ordinary variation; it is not a clinical or statistical significance test.
+    Model stress scores do not participate in this decision.
+    """
+    if repeated_group_reason(rows, reference, metric) is None:
+        return "repeated"
+    if len(rows) != 1 or len(earlier_values) < 3:
+        return None
+    if not isinstance(reference, (int, float)) or not isfinite(reference):
+        return None
+    value = rows[0].get("value")
+    if (not isinstance(value, (int, float)) or not isfinite(value)
+            or any(not isinstance(v, (int, float)) or not isfinite(v) for v in earlier_values)):
+        return None
+    deviation = abs(value - reference)
+    required = max(max(abs(reference), METRIC_FLOORS.get(metric, .15)) * .1,
+                   2 * (max(earlier_values) - min(earlier_values)))
+    return "distinct" if deviation > required else None

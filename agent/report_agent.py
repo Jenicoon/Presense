@@ -591,8 +591,10 @@ _DECISION_PROMPT = dedent("""
     valid earlier comparison windows. For example, if windows 1-3 are baseline
     and 4-5 changed, select 4-5 only. Never select all windows or a baseline
     window just to inspect it. No absolute stress cutoff is given.
-    Group only independent windows with the same direction and similar size of
-    measured change relative to an earlier reference. If groupingStatus is
+    Group repeated changes only when independent windows show the same direction
+    and similar size of measured change. A single conspicuous measurement can
+    also merit review when the server reports findingKind=distinct; never call
+    it repetition or poor delivery. Stress score alone cannot establish this. If groupingStatus is
     reference_only, do not finish with that candidate or claim repetition.
     You may re-analyze that candidate with corrected segmentIds, or omit it.
 
@@ -605,15 +607,17 @@ _DECISION_PROMPT = dedent("""
     reason to call it. Concepts are co-observations, not causes or a repair for
     weak measurements. Never repeat a tool for the same candidate.
     An initially empty finishEligibleCandidateIds means nothing is checked yet.
-    If repeated relative feature changes are present, inspect a suitable later
+    If repeated or distinct relative feature changes are present, inspect a suitable later
     interval before concluding no finding. Stable values do not need a forced
     finding. For finish, select only finishEligibleCandidateIds. If paper search is
     unavailable, finish with checked measurements when useful; the server
     will show measured facts without research-backed coaching. Never request
     an action absent from its eligible list, when provided, or already in toolResults.
 
-    Read each tool result before deciding again. If coherentShiftCount is below
-    two, that pitch change is not repeated. If the last segment result has
+    Read each tool result before deciding again. A verified findingKind=distinct
+    can be selected without repetition; optional concept analysis is unnecessary.
+    Otherwise, if coherentShiftCount is below two, that pitch change is not
+    repeated. If the last segment result has
     measurementQuality below 0.8, independentObservations below 2, or a
     pitch coherentShiftCount below 2, inspect weakMeasurementContext. When
     sameIntervalAlternatives is [], finish with any earlier useful

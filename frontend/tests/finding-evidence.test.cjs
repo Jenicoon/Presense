@@ -66,3 +66,26 @@ test('grouping requires similar change direction and magnitude for every member'
   assert.equal(repeatedGroupReason(rows([.12,.10]),.24,'energy_variability'),null);
   assert.equal(repeatedGroupReason(rows([.52,.50]),null,'energy_variability'),'missing_reference');
 });
+
+test('one conspicuous measurement can be a distinct finding without being called repeated',()=>{
+  const report=legacy();
+  report.rawSegments[2].audioFeatures.f0_std=20;
+  report.rawSegments[3].audioFeatures.f0_std=55;
+  report.agentRun.actions[0].segmentIds=['s3'];
+  report.priorities[0].independentObservations=1;
+  const result=completeReportEvidence(report);
+  assert.equal(result.priorities.length,1);
+  assert.equal(result.priorities[0].findingKind,'distinct');
+  assert.deepEqual(result.priorities[0].observations.map(o=>o.segmentId),['s3']);
+  assert.equal(result.referenceFindings.length,0);
+});
+test('a single finding needs stable comparison measurements, not just a high stress score',()=>{
+  const {findingKind}=exportsForTest;
+  const row=value=>[{startMs:30000,endMs:40000,value,stressScore:.99}];
+  assert.equal(findingKind(row(170),120,'f0_mean',[120,121,119]),'distinct');
+  assert.equal(findingKind(row(80),120,'f0_mean',[120,121,119]),'distinct');
+  assert.equal(findingKind(row(120),120,'f0_mean',[120,121,119]),null);
+  assert.equal(findingKind(row(125),120,'f0_mean',[120,121,119]),null);
+  assert.equal(findingKind(row(170),120,'f0_mean',[100,120,160]),null);
+  assert.equal(findingKind(row(170),120,'f0_mean',[120,120]),null);
+});

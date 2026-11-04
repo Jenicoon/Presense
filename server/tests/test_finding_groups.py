@@ -76,5 +76,69 @@ class FindingGroupTests(unittest.TestCase):
         self.assertEqual(context["findings"],[])
         self.assertTrue(normalized["snapshot"]["report"]["referenceFindings"])
 
+class DistinctFindingTests(unittest.TestCase):
+    def request(self, pitch=170, baseline=(120,121,119), quality=True):
+        windows=[segment(f"s{n}",n*10000,(n+1)*10000,.3,pitch=value)
+                 for n,value in enumerate([*baseline,pitch])]
+        windows[-1]["stressScore"]=.99
+        windows[-1]["quality"]["audioValid"]=quality
+        return ReviewRequest(sessionId="single-synthetic",durationMs=40000,segments=windows)
+
+    def test_distinctness_uses_measurement_and_reference_range_not_stress_score(self):
+        from agent.finding_groups import finding_kind
+        for value in (170,80):
+            self.assertEqual(finding_kind(rows([value]),120,"f0_mean",[120,121,119]),"distinct")
+        for value, earlier in ((120,[120,121,119]),(125,[120,121,119]),(170,[100,120,160]),(170,[120,120])):
+            self.assertIsNone(finding_kind(rows([value]),120,"f0_mean",earlier))
+
+    def test_agent_can_choose_one_distinct_interval(self):
+        request=self.request()
+        summary,candidates=analyze_session(request)
+        def decide(view):
+            if not view["toolResults"]:
+                return {"action":"analyze_segment","candidateId":"pitch_change","segmentIds":["s3"]}
+            self.assertIn("pitch_change",view["finishEligibleCandidateIds"])
+            self.assertIsNone(view["weakMeasurementContext"])
+            return {"action":"finish","priorityCandidateIds":["pitch_change"]}
+        state=run_agent(request,summary,candidates,decide=decide,decision_provider="luxia")
+        self.assertEqual(state.selected_ids,["pitch_change"])
+        self.assertEqual(state.candidate("pitch_change")["findingKind"],"distinct")
+        self.assertEqual(state.actions[0]["result"]["independentObservations"],1)
+
+    def test_report_restore_and_coaching_preserve_a_single_distinct_finding(self):
+        from agent.report_agent import generate_report
+        from agent.coaching import new_document, CoachRequest, respond
+        from agent.coach_ai import build_context
+        request=self.request()
+        report=generate_report(request,agent_mode=True,model_version="synthetic-model")
+        self.assertEqual(report["priorities"][0]["findingKind"],"distinct")
+        doc=complete_document_evidence(new_document(request,report,"synthetic-model"))
+        finding=doc["snapshot"]["report"]["priorities"][0]
+        self.assertEqual(finding["findingKind"],"distinct")
+        self.assertEqual(len(finding["observations"]),1)
+        context=build_context(doc,CoachRequest(sessionId=request.sessionId,action="review"))
+        self.assertEqual(context["findings"][0]["findingKind"],"distinct")
+        _,response=respond(doc,CoachRequest(sessionId=request.sessionId,action="review"))
+        self.assertTrue(any(component["type"]=="finding" for component in response["components"]))
+
+    def test_noisy_reference_flat_measurement_and_bad_audio_do_not_create_single_findings(self):
+        from agent.report_agent import generate_report
+        for request in (self.request(120),self.request(170,baseline=(100,120,160)),self.request(170,quality=False)):
+            report=generate_report(request,agent_mode=True,model_version="synthetic-model")
+            self.assertFalse(any(f.get("findingKind")=="distinct" for f in report["priorities"]))
+
+    def test_a_single_concept_prediction_without_a_measurement_cannot_be_distinct(self):
+        request=self.request(120)
+        for index,row in enumerate(request.segments):
+            row.concepts["음성 피치"] = .9 if index==3 else .4
+        summary,candidates=analyze_session(request)
+        def decide(view):
+            if not view["toolResults"]:
+                return {"action":"analyze_segment","candidateId":"concept:음성 피치","segmentIds":["s3"]}
+            return {"action":"finish","priorityCandidateIds":[]}
+        state=run_agent(request,summary,candidates,decide=decide,decision_provider="luxia")
+        self.assertIsNone(state.candidate("concept:음성 피치")["findingKind"])
+        self.assertEqual(state.selected_ids,[])
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,7 @@ from copy import deepcopy
 from statistics import median
 
 from .report_schema import SegmentAnalysis
-from .finding_groups import repeated_group_reason
+from .finding_groups import finding_kind, repeated_group_reason
 from .session_analyzer import metric
 
 
@@ -76,6 +76,11 @@ def complete_report_evidence(report, segments):
                 earlier.append(row)
         reference = median(metric(row, finding["modality"], finding["metric"]) for row in earlier) if len(earlier) >= 2 else None
         reason = repeated_group_reason(finding["observations"], reference, finding["metric"])
+        kind = (finding_kind(finding["observations"], reference, finding["metric"], [metric(row, finding["modality"], finding["metric"]) for row in earlier])
+                if finding["modality"] in {"audio", "video"} else "repeated" if reason is None else None)
+        if kind:
+            reason = None
+        finding["findingKind"] = kind
         finding.update(groupingStatus="verified" if reason is None else "reference_only", groupingReason=reason)
         if reason is None:
             finding["referenceValue"] = reference

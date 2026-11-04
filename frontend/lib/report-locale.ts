@@ -102,11 +102,11 @@ function presentationSummaryWithoutBaseline(report: AgentReport, ko: boolean) {
     return `${view.observation} ${view.question}`;
   }
   if (report.referenceFindings?.length) return ko
-    ? "같은 변화가 반복됐다고 판단할 근거가 부족합니다. 아래의 개별 측정 구간을 참고해 주세요."
-    : "There is not enough evidence of a repeated change. Review the individual measurement intervals below.";
+    ? "이번 발표의 측정값과 참고 시점을 정리했습니다. 아래 구간부터 살펴보세요."
+    : "Your measurements and reference intervals are shown below. Start by reviewing those moments.";
   return Number(report.analysis?.coverage ?? 0) < .5
     ? ko ? "분석된 시간이 부족해 이번 발표의 개선점을 고르기 어렵습니다. 카메라와 마이크를 확인하고 조금 더 길게 발표해 주세요." : "Too little of this presentation was analyzed to select a practice focus. Check the camera and microphone and present for a little longer."
-    : ko ? "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다. 지금의 발표 흐름을 유지하며 영상을 통해 잘 전달된 부분을 확인해 보세요." : "No repeatedly observed major issue was found in this session. Keep your current approach and review the recording for what came across well.";
+    : ko ? "이번 발표에서는 우선적으로 살펴볼 변화를 찾지 못했습니다. 영상을 보며 잘 전달된 부분을 확인해 보세요." : "No change was selected for priority review. Watch the recording to see what came across well.";
 }
 export function signalScore(value: unknown) {
   const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;

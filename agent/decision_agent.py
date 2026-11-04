@@ -6,7 +6,7 @@ from statistics import median
 from typing import Callable
 
 from .report_schema import Evidence, ReviewRequest
-from .finding_groups import repeated_group_reason
+from .finding_groups import METRIC_FLOORS, finding_kind, repeated_group_reason
 from .session_analyzer import RESEARCHABLE_IDS, _independent_count, _ranges, metric
 
 
@@ -213,7 +213,12 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
                                  "conceptValues": row.concepts if row.quality.audioValid and row.quality.faceDetected else {}}
                                 for row in independent_valid]
         item["groupingReason"] = repeated_group_reason(item["observations"], item["referenceValue"], item["metric"])
-        item["groupingStatus"] = "verified" if item["groupingReason"] is None else "reference_only"
+        item["findingKind"] = (finding_kind(item["observations"], item["referenceValue"], item["metric"], earlier)
+                               if item["modality"] in {"audio", "video"} else
+                               "repeated" if item["groupingReason"] is None else None)
+        if item["findingKind"]:
+            item["groupingReason"] = None
+        item["groupingStatus"] = "verified" if item["findingKind"] else "reference_only"
     ranges = item["ranges"]
     observations = [row for row in item["observations"]
                     if any(row["startMs"] < span["endMs"] and row["endMs"] > span["startMs"]
@@ -222,7 +227,7 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
             "observedValue": _observation_value(item), "referenceValue": item.get("referenceValue"),
             "supportingSegmentIds": [row["segmentId"] for row in observations],
             "independentObservations": item["independentObservations"],
-            "groupingStatus": item.get("groupingStatus"), "groupingReason": item.get("groupingReason"),
+            "groupingStatus": item.get("groupingStatus"), "groupingReason": item.get("groupingReason"), "findingKind": item.get("findingKind"),
             "measurementQuality": item["measurementQuality"],
             **({"coherentShiftCount": item["coherentShiftCount"]}
                if "coherentShiftCount" in item else {})}
@@ -303,9 +308,9 @@ def _paper_eligible(state: AgentState, item: dict, rag) -> tuple[bool, str]:
         return False, "candidate_measurement_not_checked"
     if item["measurementQuality"] < .8:
         return False, "candidate_quality_below_0_8"
-    if item["independentObservations"] < 2:
+    if item["independentObservations"] < 2 and item.get("findingKind") != "distinct":
         return False, "candidate_not_repeated"
-    if item["id"] in {"pitch_change", "pitch_variability"} and item.get("coherentShiftCount", 2) < 2:
+    if item["id"] in {"pitch_change", "pitch_variability"} and item.get("findingKind") != "distinct" and item.get("coherentShiftCount", 2) < 2:
         return False, "candidate_change_not_repeated"
     observed_values = [row["value"] for row in item["observations"]
                        if isinstance(row.get("value"), (int, float))]
@@ -320,7 +325,7 @@ def _paper_eligible(state: AgentState, item: dict, rag) -> tuple[bool, str]:
 def _concept_eligible(item: dict) -> tuple[bool, str]:
     if item["measurementQuality"] < .8:
         return False, "candidate_quality_below_0_8"
-    if item["independentObservations"] < 2:
+    if item["independentObservations"] < 2 and item.get("findingKind") != "distinct":
         return False, "candidate_not_repeated"
     valid_concepts = [row for row in item["observations"] if row["conceptValues"]]
     if len(valid_concepts) < 2:
@@ -334,6 +339,8 @@ def _weak_measurement_context(state: AgentState) -> dict | None:
         return None
     last = state.actions[-1]
     result = last["result"]
+    if result.get("findingKind") == "distinct" and result["measurementQuality"] >= .8:
+        return None
     if (result["measurementQuality"] >= .8 and result["independentObservations"] >= 2
             and result.get("coherentShiftCount", 2) >= 2):
         return None
@@ -364,7 +371,7 @@ def _supported_change(item: dict) -> bool:
     reference = item.get("referenceValue")
     series = [row["value"] for row in item.get("measurementSeries", []) if row.get("value") is not None]
     if not values or not series: return False
-    floor = {"f0_mean": 100, "f0_std": 20}.get(item["metric"], .15)
+    floor = METRIC_FLOORS.get(item["metric"], .15)
     base = reference if reference is not None else median(series)
     change = max(abs(v-base) for v in values) if reference is not None else max(series)-min(series)
     return change >= max(abs(base), floor) * .1
@@ -379,10 +386,10 @@ def _finish_eligible_ids(state: AgentState) -> list[str]:
         identity = action["candidateId"]
         item = state.candidate(identity)
         if (identity not in selected and _supported_change(item) and item["measurementQuality"] >= .8
-                and item["independentObservations"] >= 2
+                and (item["independentObservations"] >= 2 or item.get("findingKind") == "distinct")
                 and item.get("groupingStatus") != "reference_only"
                 and (identity not in {"pitch_change", "pitch_variability"}
-                     or item.get("coherentShiftCount", 2) >= 2)):
+                     or item.get("findingKind") == "distinct" or item.get("coherentShiftCount", 2) >= 2)):
             selected.append(identity)
     return selected
 
@@ -412,10 +419,10 @@ def _validate_action(raw: dict, state: AgentState, rag) -> dict:
                 raise ValueError("candidate_has_no_observed_change")
             if item["measurementQuality"] < .8:
                 raise ValueError("candidate_quality_below_0_8")
-            if item["independentObservations"] < 2:
+            if item["independentObservations"] < 2 and item.get("findingKind") != "distinct":
                 raise ValueError("candidate_not_repeated")
             if (identity in {"pitch_change", "pitch_variability"}
-                    and item.get("coherentShiftCount", 2) < 2):
+                    and item.get("findingKind") != "distinct" and item.get("coherentShiftCount", 2) < 2):
                 raise ValueError("candidate_change_not_repeated")
             if item.get("groupingStatus") == "reference_only":
                 raise ValueError("candidate_group_not_consistent:" + item["groupingReason"])
@@ -495,7 +502,7 @@ def _observed_result(state: AgentState) -> dict | None:
     return {"step": previous["step"], "tool": previous["action"],
             "candidateId": previous["candidateId"],
             **{key: result[key] for key in ("observedValue", "referenceValue",
-                                            "measurementQuality", "independentObservations", "groupingStatus", "groupingReason",
+                                            "measurementQuality", "independentObservations", "groupingStatus", "groupingReason", "findingKind",
                                             "relationship", "conceptObservationCount",
                                             "support", "comparable", "difference")
                if key in result}}
@@ -652,8 +659,9 @@ def build_memory(report: dict, state: AgentState) -> dict:
 def measurement_decider(request, candidates):
     """Conservative review heuristic when a language model is not configured.
 
-    Two disjoint earlier references and two later changed observations are
-    required. The 10% relative deviation is a review threshold, not a clinical
+    Repeated changes need two earlier references and two later observations.
+    A single distinct interval needs three earlier references and a deviation
+    beyond their ordinary range. The 10% relative deviation is a review threshold, not a clinical
     or presentation quality cutoff. Every selected range is checked again.
     """
     plans=[]
@@ -667,7 +675,16 @@ def measurement_decider(request, candidates):
         reference=median(metric(r,item["modality"],item["metric"]) for r in independent[:2])
         floor={"f0_mean":100,"f0_std":20,"egemap_f0_semitone":10,"egemap_jitter":.01,"egemap_shimmer_db":.2,"egemap_hnr_db":1}.get(item["metric"],.15)
         changed=[r for r in independent[2:] if abs(metric(r,item["modality"],item["metric"])-reference)>=max(abs(reference),floor)*.1]
-        if len(changed)<2: continue
+        if len(changed)<2:
+            single_plans=[]
+            for index,row in enumerate(independent[3:],start=3):
+                earlier=[metric(peer,item["modality"],item["metric"]) for peer in independent[:index]]
+                value=metric(row,item["modality"],item["metric"])
+                base=median(earlier)
+                if finding_kind([{"value":value,"startMs":row.startMs,"endMs":row.endMs}],base,item["metric"],earlier)=="distinct":
+                    single_plans.append((abs(value-base)/max(abs(base),floor),item["id"],[row.segmentId]))
+            if single_plans: plans.append(max(single_plans))
+            continue
         direction=1 if metric(changed[0],item["modality"],item["metric"])>reference else -1
         changed=[r for r in changed if (metric(r,item["modality"],item["metric"])-reference)*direction>0]
         if len(changed)<2: continue

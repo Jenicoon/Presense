@@ -170,12 +170,12 @@ test('report summary includes the stored thirty-second reference without changin
   assert.match(en,/30s.*40.00\/100.*20 points/);
   assert.doesNotMatch(en,/[가-힣]/);
   assert.equal(report.analysis.averageStress,.6);
-  assert.match(ko,/주요 문제를 찾지 못/);
+  assert.match(ko,/우선적으로 살펴볼 변화를 찾지 못/);
 });
 
 test('unverified saved groups cannot reappear as repeated change in either summary language',()=>{
   const report={analysis:{coverage:1},priorities:[{id:'audio:energy_variability',referenceValue:.24,observations:[{segmentId:'a',startMs:57000,endMs:67000,value:.52},{segmentId:'b',startMs:68000,endMs:78000,value:.2}]}]};
-  assert.match(reportDisplaySummary(report,true),/판단할 근거가 부족/);
+  assert.match(reportDisplaySummary(report,true),/측정값과 참고 시점/);
   assert.doesNotMatch(reportDisplaySummary(report,true),/변화가 있었|영상은 2곳/);
-  assert.match(reportDisplaySummary(report,false),/not enough evidence/);
+  assert.match(reportDisplaySummary(report,false),/reference intervals/);
 });
