@@ -82,7 +82,7 @@ test('the main report explains an observable change and the next review action w
   ] };
   const ko = reportDisplaySummary(report, true);
   assert.match(ko, /00:25–00:35/);
-  assert.match(ko, /목소리가 더 높아/);
+  assert.match(ko, /음높이가 상승/);
   assert.match(ko, /문장/);
   assert.doesNotMatch(ko, /Hz|200|잘못|나쁨/);
   const en = reportDisplaySummary(report, false);
@@ -105,15 +105,15 @@ test('mouth findings explain the measured opening, without inventing pronunciati
     {startMs:20000, endMs:30000, value:.203}, {startMs:30000, endMs:40000, value:.155}
   ]};
   const ko = findingGuidance(finding, true);
-  assert.match(ko.observation, /00:20–00:30.*입이 벌어진 정도가 앞부분보다 컸어요/);
-  assert.match(ko.observation, /영상은 2곳/);
+  assert.match(ko.observation, /00:20–00:30.*입이 벌어진 정도가 앞부분보다 컸습니다/);
+  assert.match(ko.observation, /검토 구간은 2곳/);
   assert.doesNotMatch(ko.observation, /구간 차이|겹치지|긴장|불명확|8곳/);
-  assert.match(ko.question, /입 모양만으로.*소리와 함께.*지금 방식을 유지.*짧게 나눠 연습/);
+  assert.match(ko.question, /소리와 함께.*명료도.*유지.*짧게 나눠 연습/);
   const en = findingGuidance(finding, false);
   assert.match(en.observation, /more open/);
   assert.doesNotMatch(Object.values(en).join(' '), /[가-힣]/);
-  assert.match(findingGuidance({...finding, observations:[{startMs:20000,endMs:30000,value:.1}]},true).observation, /작았어요/);
-  assert.match(findingGuidance({...finding, observations:[{startMs:20000,endMs:30000,value:.137}]},true).observation, /비슷했어요/);
+  assert.match(findingGuidance({...finding, observations:[{startMs:20000,endMs:30000,value:.1}]},true).observation, /작았습니다/);
+  assert.match(findingGuidance({...finding, observations:[{startMs:20000,endMs:30000,value:.137}]},true).observation, /유사했습니다/);
 });
 
 test('missing reference does not fabricate a mouth comparison or direction', () => {
@@ -121,7 +121,7 @@ test('missing reference does not fabricate a mouth comparison or direction', () 
   for (const referenceValue of [null, undefined, NaN, Infinity]) {
     const view = findingGuidance({id:'lip_tension',referenceValue,observations:[{startMs:20000,endMs:30000,value:.203}]}, true);
     assert.match(view.observation, /비교할 자료가 부족/);
-    assert.doesNotMatch(view.observation, /컸어요|작았어요|비슷했어요/);
+    assert.doesNotMatch(view.observation, /컸습니다|작았습니다|유사했습니다/);
   }
   const missing = findingGuidance({id:'lip_tension',independentObservations:8}, true);
   assert.match(missing.observation, /상세 관측 자료가 없습니다/);
@@ -170,12 +170,23 @@ test('report summary includes the stored thirty-second reference without changin
   assert.match(en,/30s.*40.00\/100.*20 points/);
   assert.doesNotMatch(en,/[가-힣]/);
   assert.equal(report.analysis.averageStress,.6);
-  assert.match(ko,/우선적으로 살펴볼 변화를 찾지 못/);
+  assert.match(ko,/우선적으로 검토할 변화가 확인되지 않았/);
 });
 
 test('unverified saved groups cannot reappear as repeated change in either summary language',()=>{
   const report={analysis:{coverage:1},priorities:[{id:'audio:energy_variability',referenceValue:.24,observations:[{segmentId:'a',startMs:57000,endMs:67000,value:.52},{segmentId:'b',startMs:68000,endMs:78000,value:.2}]}]};
-  assert.match(reportDisplaySummary(report,true),/측정값과 참고 시점/);
+  assert.match(reportDisplaySummary(report,true),/00:57–01:07.*음성 에너지 변화.*0\.52/);
   assert.doesNotMatch(reportDisplaySummary(report,true),/변화가 있었|영상은 2곳/);
-  assert.match(reportDisplaySummary(report,false),/reference intervals/);
+  assert.match(reportDisplaySummary(report,false),/Voice energy variation.*0\.52.*00:57–01:07/);
+});
+
+test('saved comparison gives a concrete summary without assigning an unsupported exercise', () => {
+  const report = {
+    analysis: { coverage: 1 },
+    priorities: [],
+    observationReport: { patterns: [{ id: 'pitch_variability', startMs: 10000, endMs: 20000, value: 33.4, comparisonValue: 47.2, unit: 'Hz' }] },
+  };
+  assert.match(reportDisplaySummary(report, true), /00:10–00:20.*33\.4 Hz.*47\.2 Hz.*낮았습니다/);
+  assert.match(reportDisplaySummary(report, false), /33\.4 Hz.*00:10–00:20.*below.*47\.2 Hz/);
+  assert.equal(agentNextPractice(report, true), '');
 });

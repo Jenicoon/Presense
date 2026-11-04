@@ -72,41 +72,74 @@ export function findingGuidance(finding: Finding, ko: boolean) {
   const comparable = typeof first?.value === "number" && Number.isFinite(first.value) && typeof reference === "number" && Number.isFinite(reference);
   const direction = comparable ? Math.sign(first!.value - reference!) : null;
   const choices: Record<string, [string, string, string, string, string, string]> = {
-    pitch_change: [direction !== null && direction > 0 ? "목소리가 더 높아졌어요" : direction !== null && direction < 0 ? "목소리가 더 낮아졌어요" : "목소리 높이에 변화가 있었어요", direction !== null && direction > 0 ? "your voice moved higher" : direction !== null && direction < 0 ? "your voice moved lower" : "your voice pitch changed", "강조가 의도대로 전달됐는지 확인하기", "Check whether the emphasis was intentional", "핵심 문장 하나에만 강조 주기", "Emphasize one key sentence"],
-    pitch_variability: [direction === null ? "앞부분과 목소리 높낮이의 변화 폭을 비교할 자료가 부족해요" : direction > 0 ? "목소리 높낮이의 변화 폭이 앞부분보다 컸어요" : direction < 0 ? "목소리 높낮이의 변화 폭이 앞부분보다 작았어요" : "목소리 높낮이의 변화 폭은 앞부분과 비슷했어요", direction === null ? "there is not enough data to compare pitch variation with earlier in the presentation" : direction > 0 ? "your pitch varied more than earlier in the presentation" : direction < 0 ? "your pitch varied less than earlier in the presentation" : "your pitch varied about as much as earlier in the presentation", "강조할 문장이 잘 구분되는지 듣기", "Listen for a clear emphasis", "같은 문장을 두 가지 강조로 말하기", "Try two ways of emphasizing a sentence"],
-    brow_tension: [direction === null ? "앞부분과 눈썹 모양을 비교할 자료가 부족해요" : direction > 0 ? "눈썹이 앞부분보다 더 내려간 모습으로 측정됐어요" : direction < 0 ? "눈썹이 앞부분보다 덜 내려간 모습으로 측정됐어요" : "눈썹이 내려간 정도는 앞부분과 비슷했어요", direction === null ? "there is not enough data to compare eyebrow lowering with earlier in the presentation" : direction > 0 ? "your eyebrows were estimated to be more lowered than earlier in the presentation" : direction < 0 ? "your eyebrows were estimated to be less lowered than earlier in the presentation" : "the estimated eyebrow lowering was similar to earlier in the presentation", "표정이 말의 의도와 맞는지 보기", "Check expression against your intention", "핵심 메시지에 맞는 표정으로 다시 말하기", "Match expression to your key message"],
-    lip_tension: [direction === null ? "앞부분과 입이 벌어진 정도를 비교할 자료가 부족해요" : direction > 0 ? "입이 벌어진 정도가 앞부분보다 컸어요" : direction < 0 ? "입이 벌어진 정도가 앞부분보다 작았어요" : "입이 벌어진 정도는 앞부분과 비슷했어요", direction === null ? "there is not enough data to compare mouth opening with earlier in the presentation" : direction > 0 ? "your mouth was more open than earlier in the presentation" : direction < 0 ? "your mouth was less open than earlier in the presentation" : "your mouth opening was similar to earlier in the presentation", "말소리가 또렷하게 들리는지 듣기", "Listen for clear speech", "전달할 문장을 나눠 다시 말하기", "Break a sentence into clear phrases"],
-    gaze: ["카메라 기준 시선 움직임에 차이가 있었어요", "the camera's gaze estimate changed", "시선이 전달 의도와 맞는지 보기", "Review whether gaze matches your intention", "핵심 문장을 말할 때 카메라 바라보기", "Look toward the camera for the key sentence"],
+    pitch_change: [direction !== null && direction > 0 ? "음높이가 상승했습니다" : direction !== null && direction < 0 ? "음높이가 하락했습니다" : "음높이에 변화가 나타났습니다", direction !== null && direction > 0 ? "your voice moved higher" : direction !== null && direction < 0 ? "your voice moved lower" : "your voice pitch changed", "강조가 의도대로 전달됐는지 확인하기", "Check whether the emphasis was intentional", "핵심 문장 하나에만 강조 주기", "Emphasize one key sentence"],
+    pitch_variability: [direction === null ? "앞부분과 목소리 높낮이의 변화 폭을 비교할 자료가 부족합니다" : direction > 0 ? "목소리 높낮이의 변화 폭이 앞부분보다 컸습니다" : direction < 0 ? "목소리 높낮이의 변화 폭이 앞부분보다 작았습니다" : "목소리 높낮이의 변화 폭은 앞부분과 유사했습니다", direction === null ? "there is not enough data to compare pitch variation with earlier in the presentation" : direction > 0 ? "your pitch varied more than earlier in the presentation" : direction < 0 ? "your pitch varied less than earlier in the presentation" : "your pitch varied about as much as earlier in the presentation", "강조할 문장이 잘 구분되는지 듣기", "Listen for a clear emphasis", "같은 문장을 두 가지 강조로 말하기", "Try two ways of emphasizing a sentence"],
+    brow_tension: [direction === null ? "앞부분과 눈썹 모양을 비교할 자료가 부족합니다" : direction > 0 ? "눈썹이 앞부분보다 더 내려간 모습으로 측정되었습니다" : direction < 0 ? "눈썹이 앞부분보다 덜 내려간 모습으로 측정되었습니다" : "눈썹이 내려간 정도는 앞부분과 유사했습니다", direction === null ? "there is not enough data to compare eyebrow lowering with earlier in the presentation" : direction > 0 ? "your eyebrows were estimated to be more lowered than earlier in the presentation" : direction < 0 ? "your eyebrows were estimated to be less lowered than earlier in the presentation" : "the estimated eyebrow lowering was similar to earlier in the presentation", "표정이 말의 의도와 맞는지 보기", "Check expression against your intention", "핵심 메시지에 맞는 표정으로 다시 말하기", "Match expression to your key message"],
+    lip_tension: [direction === null ? "앞부분과 입이 벌어진 정도를 비교할 자료가 부족합니다" : direction > 0 ? "입이 벌어진 정도가 앞부분보다 컸습니다" : direction < 0 ? "입이 벌어진 정도가 앞부분보다 작았습니다" : "입이 벌어진 정도는 앞부분과 유사했습니다", direction === null ? "there is not enough data to compare mouth opening with earlier in the presentation" : direction > 0 ? "your mouth was more open than earlier in the presentation" : direction < 0 ? "your mouth was less open than earlier in the presentation" : "your mouth opening was similar to earlier in the presentation", "말소리가 또렷하게 들리는지 듣기", "Listen for clear speech", "전달할 문장을 나눠 다시 말하기", "Break a sentence into clear phrases"],
+    gaze: ["카메라 기준 시선 움직임에 차이가 나타났습니다", "the camera's gaze estimate changed", "시선이 전달 의도와 맞는지 보기", "Review whether gaze matches your intention", "핵심 문장을 말할 때 카메라 바라보기", "Look toward the camera for the key sentence"],
   };
   const v2 = (v2Guidance as Record<string,{higher:string[];lower:string[];same:string[];missing:string[];title:string[];goal:string[];check:string[]}>)[finding.id];
   const v2Observation = v2?.[direction === null ? "missing" : direction > 0 ? "higher" : direction < 0 ? "lower" : "same"];
-  const row = v2 ? [...v2Observation!,...v2.title,...v2.goal] : choices[finding.id] ?? ["발표 중 관측값에 변화가 있었어요", "an observed measurement changed", "선택 구간의 전달을 확인하기", "Review delivery in the selected interval", "한 가지 전달 목표로 다시 발표하기", "Repeat with one delivery goal"];
+  const row = v2 ? [...v2Observation!,...v2.title,...v2.goal] : choices[finding.id] ?? ["발표 중 측정값에 변화가 나타났습니다", "an observed measurement changed", "선택 구간의 전달을 확인하기", "Review delivery in the selected interval", "한 가지 전달 목표로 다시 발표하기", "Repeat with one delivery goal"];
   let observation = row[ko ? 0 : 1];
   if (first) observation = ko ? `${time(first.startMs)}–${time(first.endMs)}, ${finding.id === "pitch_change" && direction ? "앞부분과 비교해 " : ""}${observation}` : `In ${time(first.startMs)}–${time(first.endMs)}, ${observation}${finding.id === "pitch_change" && direction ? " compared with earlier intervals" : ""}.`;
   if (ko) observation += ".";
   if (!first) observation = ko ? "이 항목의 상세 관측 자료가 없습니다." : "No detailed observations are saved for this finding.";
   const count = finding.observations?.length ?? 0;
-  if (count > 1) observation += ko ? ` 함께 확인할 영상은 ${count}곳이에요.` : ` There are ${count} recorded intervals to review together.`;
+  if (count > 1) observation += ko ? ` 검토 구간은 ${count}곳입니다.` : ` There are ${count} recorded intervals to review together.`;
   return { title: row[ko ? 2 : 3], goal: row[ko ? 4 : 5], observation,
     question: v2 ? v2.check[ko ? 0 : 1] : ({
       pitch_change: ["높낮이가 바뀌는 순간에 중요한 문장이 구분되는지 들어보세요. 문장 끝의 쉼과 다음 문장 시작도 따로 들어보세요.", "Listen for whether a pitch change marks a key sentence. Separately check sentence-end pauses and the next sentence start."],
       pitch_variability: ["고른 구간을 듣고 가장 중요한 문장 하나를 직접 골라보세요. 그 문장이 나머지와 구분되는지, 의미가 끝나기 전에 끊겨 들리는지 확인하세요.", "Choose the key sentence yourself. Listen for whether it stands out and whether the thought sounds interrupted before it is complete."],
-      lip_tension: ["입 모양만으로 발음이 좋거나 나쁜지는 알 수 없어요. 이 장면을 소리와 함께 재생해 보세요. 잘 들리면 지금 방식을 유지하고, 다시 듣게 된 문장이 있다면 그 문장만 짧게 나눠 연습해요.", "Mouth opening alone cannot tell us whether pronunciation is clear. Play this interval with sound. Keep your delivery if it is clear; if you need to replay a sentence, rehearse that sentence in short phrases."],
+      lip_tension: ["해당 구간을 소리와 함께 재생해 발음의 명료도를 확인하세요. 명확하게 들린 부분은 유지하고, 다시 듣게 된 문장만 짧게 나눠 연습하세요.", "Play the interval with sound and listen for clarity. Keep the delivery that comes through clearly. Rehearse any sentence you had to replay in short phrases."],
       brow_tension: ["같은 구간을 소리 없이 한 번, 소리와 함께 한 번 보세요. 전달하려던 느낌을 직접 고른 뒤 표정이 그 느낌과 맞는지 판단하세요.", "Watch once without sound, then with sound. Choose the intended feeling and compare the expression with it."],
       gaze: ["핵심 문장을 말할 때 카메라 부근에 시선이 머무는지 보세요. 시선 이동이 방해되는지는 영상과 전달 의도를 함께 보고 직접 판단하세요.", "Watch where the gaze rests during the key sentence. Judge distracting shifts yourself against the recording and intended delivery."],
     } as Record<string, [string,string]>)[finding.id]?.[ko ? 0 : 1] ?? (ko ? "실제 영상에서 바꿔 보고 싶은 행동 하나를 고르세요." : "Choose one delivery action from the actual recording.") };
 }
+export function savedComparison(report: AgentReport) {
+  return report.observationReport?.patterns?.find(item =>
+    [item.startMs, item.endMs, item.value, item.comparisonValue].every(Number.isFinite)
+      && item.endMs > item.startMs && item.value !== item.comparisonValue);
+}
+
 function presentationSummaryWithoutBaseline(report: AgentReport, ko: boolean) {
   if (report.priorities.length) {
     const view = findingGuidance(report.priorities[0], ko);
     return `${view.observation} ${view.question}`;
   }
-  if (report.referenceFindings?.length) return ko
-    ? "이번 발표의 측정값과 참고 시점을 정리했습니다. 아래 구간부터 살펴보세요."
-    : "Your measurements and reference intervals are shown below. Start by reviewing those moments.";
+  const observed = report.observationReport;
+  const pattern = savedComparison(report);
+  if (pattern) {
+    const interval = `${time(pattern.startMs)}–${time(pattern.endMs)}`;
+    const label = measurementLabel(pattern.id, ko);
+    const unit = pattern.unit ? ` ${pattern.unit}` : "";
+    const value = `${Number(pattern.value.toFixed(3))}${unit}`;
+    const reference = `${Number(pattern.comparisonValue.toFixed(3))}${unit}`;
+    return ko
+      ? `${interval} 구간의 ${label} 측정값은 ${value}로, 다른 구간의 기준값 ${reference}보다 ${pattern.value > pattern.comparisonValue ? "높았습니다" : "낮았습니다"}.`
+      : `${label} was ${value} at ${interval}, ${pattern.value > pattern.comparisonValue ? "above" : "below"} the ${reference} reference from other intervals.`;
+  }
+  const reference = report.referenceFindings?.find(item => item.observations?.length);
+  const sample = reference?.observations?.[0];
+  if (reference && sample) {
+    const interval = `${time(sample.startMs)}–${time(sample.endMs)}`;
+    const metric = reference.metric ?? reference.id.split(":").at(-1) ?? "";
+    const label = measurementLabel(metric, ko);
+    const value = Number(sample.value.toFixed(3));
+    return ko
+      ? `${interval} 구간의 ${label} 측정값은 ${value}였습니다.`
+      : `${label} was measured at ${value} during ${interval}.`;
+  }
+  const peak = observed?.peakSegment;
+  if (peak && [peak.startMs, peak.endMs, peak.stressScore].every(Number.isFinite) && peak.endMs > peak.startMs) {
+    const interval = `${time(peak.startMs)}–${time(peak.endMs)}`;
+    return ko
+      ? `스트레스 신호는 ${interval} 구간에서 ${signalScore(peak.stressScore)}로 가장 높았습니다.`
+      : `The stress signal peaked at ${signalScore(peak.stressScore)} during ${interval}.`;
+  }
   return Number(report.analysis?.coverage ?? 0) < .5
-    ? ko ? "분석된 시간이 부족해 이번 발표의 개선점을 고르기 어렵습니다. 카메라와 마이크를 확인하고 조금 더 길게 발표해 주세요." : "Too little of this presentation was analyzed to select a practice focus. Check the camera and microphone and present for a little longer."
-    : ko ? "이번 발표에서는 우선적으로 살펴볼 변화를 찾지 못했습니다. 영상을 보며 잘 전달된 부분을 확인해 보세요." : "No change was selected for priority review. Watch the recording to see what came across well.";
+    ? ko ? "발표를 요약할 분석 자료가 부족합니다." : "There is too little analysis data to summarize this presentation."
+    : ko ? "이번 발표에서는 우선적으로 검토할 변화가 확인되지 않았습니다." : "No change was selected for priority review.";
 }
 export function signalScore(value: unknown) {
   const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
@@ -126,5 +159,5 @@ export function baselineSummary(report: AgentReport, ko: boolean) {
 }
 
 export function presentationSummary(report: AgentReport, ko: boolean) {
-  return [baselineSummary(report, ko), presentationSummaryWithoutBaseline(report, ko)].filter(Boolean).join(" ");
+  return [presentationSummaryWithoutBaseline(report, ko), baselineSummary(report, ko)].filter(Boolean).join(" ");
 }

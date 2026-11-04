@@ -185,16 +185,22 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
           </div>
         </div>
 
-        {record.agentReport && <SessionAgentReport report={record.agentReport} language={lang} />}
+        {record.agentReport && <>
+          <section className="review-overview-summary">
+            <h3>{lang === "ko" ? "발표 분석 요약" : "Presentation summary"}</h3>
+            <p>{reportDisplaySummary(record.agentReport, lang === "ko")}</p>
+          </section>
+          <SessionAgentReport report={record.agentReport} language={lang} />
+        </>}
         {/* AI Diagnosis */}
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 14 }}>
+        {!record.agentReport && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
             <Sparkles size={13} color="var(--accent)" /> {t("modal.aiDiagnosis")}
           </div>
           <div className="coach-stack" style={{ gap: 8 }}>
             <div className="coach-card coach-alert">
               <h3>{t("modal.overallJudgment")}</h3>
-              <p>{record.agentReport ? reportDisplaySummary(record.agentReport, lang === "ko") : record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
+              <p>{record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
             </div>
             {record.nextAction && (
               <div className="coach-card coach-ok">
@@ -203,7 +209,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* Coaching tips based on stress level */}
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>

@@ -149,9 +149,6 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
   if (report.analysis && Array.isArray(report.priorities)) report = completeReportEvidence(report);
-  if (!report.priorities.length && report.referenceFindings?.length) return ko
-    ? "분석만으로 교정 목표를 정하기 어렵습니다. 참고 시점을 개별적으로 보고 바꿔 보고 싶은 행동이 있는지 확인하세요."
-    : "The analysis does not support a corrective goal. Review the individual reference intervals and decide whether you want to change a delivery action.";
   const reflection = report.reflection;
   if (reflection?.kind === "overall" && reflection.answer === "intentional") return ko
     ? "의도한 전달 방식으로 기록했습니다. 영상을 다시 보며 목소리와 표정이 전달하려던 내용과 맞는지 확인해 보세요."
@@ -178,9 +175,7 @@ export function agentNextPractice(report: AgentReport, ko: boolean): string {
     ? "해당 영상을 다시 보며 목소리 크기·속도·표정이 전달하려던 내용과 맞는지 확인하세요. 점수만으로 의도를 판단하지 않습니다."
     : "Replay that interval and check whether volume, pace, and expression fit your intent. The score alone cannot tell.";
   if (report.analysis && report.priorities.length) return findingGuidance(report.priorities[0], ko).goal;
-  if(report.priorities.length === 0) return Number(report.analysis?.coverage ?? 0)<.5
-    ? (ko ? "분석 자료가 부족합니다. 카메라와 마이크를 확인한 뒤 관측 자료를 더 모아 주세요." : "Analysis data is limited. Check the camera and microphone and collect more observations.")
-    : (ko ? "반복적으로 확인된 주요 문제가 없어 별도의 교정 과제를 만들지 않았습니다. 잘 유지한 부분은 영상과 함께 직접 확인하세요." : "No repeatedly observed major issue was found, so no corrective exercise was assigned. Review the recording to identify what you maintained well.");
+  if (!report.priorities.length) return "";
   const finding = report.priorities.find((item) => item.practiceSuggestion || item.reviewAction || item.recommendation);
   const recommendation = finding?.practiceSuggestion || finding?.reviewAction || finding?.recommendation;
   if (recommendation && matchesLanguage(recommendation, ko)) return recommendation;
