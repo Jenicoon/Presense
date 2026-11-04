@@ -6,6 +6,7 @@ from statistics import median
 from typing import Callable
 
 from .report_schema import Evidence, ReviewRequest
+from .finding_groups import repeated_group_reason
 from .session_analyzer import RESEARCHABLE_IDS, _independent_count, _ranges, metric
 
 
@@ -183,10 +184,13 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
     if segment_ids is not None:
         selected = [row for row in state.request.segments if row.segmentId in segment_ids]
         valid = [row for row in selected if metric(row, item["modality"], item["metric"]) is not None]
-        earlier = [metric(row, item["modality"], item["metric"])
-                   for row in state.request.segments
-                   if row.endMs <= min(part.startMs for part in selected)
-                   and metric(row, item["modality"], item["metric"]) is not None]
+        earlier_rows = []
+        for row in sorted(state.request.segments, key=lambda row: (row.endMs, row.startMs)):
+            if (row.endMs <= min(part.startMs for part in selected)
+                    and metric(row, item["modality"], item["metric"]) is not None
+                    and (not earlier_rows or row.startMs >= earlier_rows[-1].endMs)):
+                earlier_rows.append(row)
+        earlier = [metric(row, item["modality"], item["metric"]) for row in earlier_rows]
         item["selectedSegmentIds"] = [row.segmentId for row in selected]
         item["ranges"] = _ranges(selected)
         item["durationMs"] = sum(span["endMs"] - span["startMs"] for span in item["ranges"])
@@ -208,6 +212,8 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
                                  "stressScore": row.stressScore,
                                  "conceptValues": row.concepts if row.quality.audioValid and row.quality.faceDetected else {}}
                                 for row in independent_valid]
+        item["groupingReason"] = repeated_group_reason(item["observations"], item["referenceValue"], item["metric"])
+        item["groupingStatus"] = "verified" if item["groupingReason"] is None else "reference_only"
     ranges = item["ranges"]
     observations = [row for row in item["observations"]
                     if any(row["startMs"] < span["endMs"] and row["endMs"] > span["startMs"]
@@ -216,6 +222,7 @@ def _segment_result(state: AgentState, item: dict, segment_ids: list[str] | None
             "observedValue": _observation_value(item), "referenceValue": item.get("referenceValue"),
             "supportingSegmentIds": [row["segmentId"] for row in observations],
             "independentObservations": item["independentObservations"],
+            "groupingStatus": item.get("groupingStatus"), "groupingReason": item.get("groupingReason"),
             "measurementQuality": item["measurementQuality"],
             **({"coherentShiftCount": item["coherentShiftCount"]}
                if "coherentShiftCount" in item else {})}
@@ -305,6 +312,8 @@ def _paper_eligible(state: AgentState, item: dict, rag) -> tuple[bool, str]:
     if (observed_values and len(set(observed_values)) == 1
             and (item["referenceValue"] is None or item["referenceValue"] == observed_values[0])):
         return False, "candidate_has_no_observed_change"
+    if item.get("groupingStatus") == "reference_only":
+        return False, "candidate_group_not_consistent:" + item["groupingReason"]
     return True, "eligible"
 
 
@@ -371,6 +380,7 @@ def _finish_eligible_ids(state: AgentState) -> list[str]:
         item = state.candidate(identity)
         if (identity not in selected and _supported_change(item) and item["measurementQuality"] >= .8
                 and item["independentObservations"] >= 2
+                and item.get("groupingStatus") != "reference_only"
                 and (identity not in {"pitch_change", "pitch_variability"}
                      or item.get("coherentShiftCount", 2) >= 2)):
             selected.append(identity)
@@ -396,6 +406,8 @@ def _validate_action(raw: dict, state: AgentState, rag) -> dict:
             item = state.candidate(identity)
             if not ({("analyze_segment", identity), ("compare_previous_session", identity)} & state.seen):
                 raise ValueError("candidate_measurement_not_checked")
+            if ("analyze_segment", identity) not in state.seen:
+                raise ValueError("candidate_current_group_not_checked")
             if not _supported_change(item):
                 raise ValueError("candidate_has_no_observed_change")
             if item["measurementQuality"] < .8:
@@ -405,11 +417,19 @@ def _validate_action(raw: dict, state: AgentState, rag) -> dict:
             if (identity in {"pitch_change", "pitch_variability"}
                     and item.get("coherentShiftCount", 2) < 2):
                 raise ValueError("candidate_change_not_repeated")
+            if item.get("groupingStatus") == "reference_only":
+                raise ValueError("candidate_group_not_consistent:" + item["groupingReason"])
         return {"action": action, "priorityCandidateIds": selected}
     if action not in {"analyze_segment", "analyze_concept", "compare_previous_session", "retrieve_papers"}:
         raise ValueError("Unsupported tool")
     identity = raw.get("candidateId")
-    if identity not in ids or (action, identity) in state.seen:
+    retry_group = (identity in ids and action == "analyze_segment"
+                   and state.candidate(identity).get("groupingStatus") == "reference_only"
+                   and isinstance(raw.get("segmentIds"), list)
+                   and all(isinstance(value, str) for value in raw["segmentIds"])
+                   and raw["segmentIds"]
+                   and set(raw["segmentIds"]) != set(state.candidate(identity).get("selectedSegmentIds", [])))
+    if identity not in ids or ((action, identity) in state.seen and not retry_group):
         raise ValueError("Unknown or repeated candidate action")
     item = state.candidate(identity)
     if action == "analyze_segment" and "segmentIds" in raw:
@@ -475,7 +495,7 @@ def _observed_result(state: AgentState) -> dict | None:
     return {"step": previous["step"], "tool": previous["action"],
             "candidateId": previous["candidateId"],
             **{key: result[key] for key in ("observedValue", "referenceValue",
-                                            "measurementQuality", "independentObservations",
+                                            "measurementQuality", "independentObservations", "groupingStatus", "groupingReason",
                                             "relationship", "conceptObservationCount",
                                             "support", "comparable", "difference")
                if key in result}}

@@ -518,13 +518,15 @@ class DecisionAgentTests(unittest.TestCase):
             if previous["action"] == "compare_previous_session":
                 self.assertTrue(previous["result"]["comparable"])
                 self.assertLess(previous["result"]["difference"], 0)
+                return {"action": "analyze_segment", "candidateId": "pitch_change", "segmentIds": ["high-1", "high-2"]}
+            if previous["action"] == "analyze_segment":
                 return {"action": "analyze_concept", "candidateId": "pitch_change"}
             self.assertEqual(previous["result"]["relationship"], "co_observed_not_causal")
             return {"action": "finish", "priorityCandidateIds": ["pitch_change"]}
         state = run_agent(request, summary, candidates, decide=decide, prior=prior,
                           model_version="test-model")
         self.assertEqual([row["selectedAction"]["action"] for row in state.decisions],
-                         ["compare_previous_session", "analyze_concept", "finish"])
+                         ["compare_previous_session", "analyze_segment", "analyze_concept", "finish"])
         self.assertEqual(state.decisions[1]["observedResult"]["difference"], -10)
         self.assertEqual(state.actions[0]["result"]["previousSessionId"], "older")
         def report_decide(view):

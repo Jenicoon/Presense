@@ -88,6 +88,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
   const peak = report.observationReport?.peakSegment;
   const raw = report.rawSegments ?? [];
   const first = report.priorities[0];
+  const references = (report.referenceFindings ?? []).flatMap(finding => (finding.observations ?? []).map(observation=>({finding,observation})));
   const baseline = report.observationReport?.personalBaseline;
   const baselineScore = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(2)} / 100` : "—";
   const difference = (value: number | null) => value === null ? "—" : `${value > 0 ? "+" : ""}${(value * 100).toFixed(2)}${ko ? "점" : " points"}`;
@@ -109,7 +110,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
       <span className="review-next-icon"><Sparkles size={19} /></span>
       <div><span className="review-eyebrow">{ko ? "다음으로 할 일" : "Your next step"}</span>
         <h3>{first ? findingGuidance(first, ko).title : ko ? "이번 발표 돌아보기" : "Review this presentation"}</h3>
-        <p>{first ? (ko ? "영상을 보고 확인 결과를 선택하면, 그에 맞는 짧은 연습으로 이어집니다." : "Review the recording and select what you noticed to start a matching short exercise.") : ko ? "영상을 보며 잘 유지한 부분을 확인해 보세요." : "Review the recording to see what you maintained well."}</p>
+        <p>{first ? (ko ? "영상을 보고 확인 결과를 선택하면, 그에 맞는 짧은 연습으로 이어집니다." : "Review the recording and select what you noticed to start a matching short exercise.") : references.length ? (ko ? "아래 참고 시점을 개별적으로 살펴보세요." : "Review the individual reference intervals below.") : ko ? "영상을 보며 잘 유지한 부분을 확인해 보세요." : "Review the recording to see what you maintained well."}</p>
       </div>
       {report.coachingAvailable === false ? <p role="status">{report.coachingDisabledReason === "dataset_privacy" ? (ko ? "예시 영상은 직접 살펴볼 수 있습니다. AI 코칭은 직접 촬영한 발표에서 이용해 주세요." : "Review this example locally. Use your own recording for AI coaching.") : (ko ? "연결을 확인한 후 보고서를 다시 생성해 주세요." : "Check the connection and regenerate the report.")}</p> :
         <button type="button" className="btn btn-primary" onClick={() => open(first?.id)}>{hasSavedCoaching ? (ko ? "저장된 코칭 이어가기" : "Continue saved coaching") : first ? (ko ? "이 구간 함께 확인하기" : "Review this interval together") : ko ? "코치와 살펴보기" : "Review with coach"}<ArrowRight size={15} /></button>}
@@ -149,14 +150,14 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
     <aside className="review-section review-timeline-aside" aria-label={ko ? "발표 분석 요약" : "Presentation analysis summary"}>
       <div className="panel-head"><div className="panel-head-left"><h3 className="panel-title">{ko ? "발표 분석" : "Presentation Analysis"}</h3><span className="panel-subtitle">{ko ? "이번 세션에서 확인할 것" : "What to review"}</span></div><Sparkles size={16} color="var(--text-secondary)" /></div>
       <div className="coach-stack">
-        <div className={`coach-card ${first ? "coach-alert" : "coach-ok"}`}><h4>{ko ? "확인할 부분" : "Review focus"}</h4><p>{first ? findingGuidance(first, ko).observation : Number(a.coverage ?? 0) < .5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient data to judge major issues.") : (ko ? "반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found.")}</p>{first?.observations?.[0] && onSeek && <button type="button" className="review-time-link" onClick={() => onSeek(first.observations![0].startMs)}>{ko ? "근거 영상 보기" : "View supporting video"}<ArrowRight size={13} /></button>}</div>
+        <div className={`coach-card ${first ? "coach-alert" : "coach-ok"}`}><h4>{ko ? "확인할 부분" : "Review focus"}</h4><p>{first ? findingGuidance(first, ko).observation : Number(a.coverage ?? 0) < .5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient data to judge major issues.") : references.length ? (ko ? "같은 변화가 반복됐다고 판단할 근거가 부족합니다." : "There is not enough evidence of a repeated change.") : (ko ? "반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found.")}</p>{first?.observations?.[0] && onSeek && <button type="button" className="review-time-link" onClick={() => onSeek(first.observations![0].startMs)}>{ko ? "근거 영상 보기" : "View supporting video"}<ArrowRight size={13} /></button>}</div>
         <div className="coach-card coach-data"><h4>{ko ? "스트레스 신호가 가장 높았던 구간" : "Peak stress signal"}</h4><p>{typeof a.peakStress === "number" ? signalScore(a.peakStress) : (ko ? "분석 자료 없음" : "No analysis data")}{peak && <><br /><button type="button" className="review-time-link" disabled={!onSeek} onClick={() => onSeek?.(peak.startMs)}>{clock(peak.startMs)}–{clock(peak.endMs)}{onSeek && <ArrowRight size={13} />}</button></>}</p></div>
       </div>
     </aside>
     </div>}
     <AgentModelOutputs report={report} ko={ko} />
-    <section className="review-findings"><div className="review-section-heading"><div><h3>{ko ? "함께 확인할 부분" : "What to review together"}</h3><p>{ko ? "반복된 관측과 실제 측정값을 함께 살펴보세요." : "Review repeated observations alongside the measurements."}</p></div><span className="review-count">{report.priorities.length}</span></div>
-    {report.priorities.length === 0 ? <div className="review-empty"><ScanLine size={21} /><p>{Number(a.coverage ?? 0) < 0.5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient analysis data to judge major issues.") : ko ? "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found in this session."}</p></div> : report.priorities.slice(0, 3).map((f, index) => {
+    <section className="review-findings"><div className="review-section-heading"><div><h3>{ko ? "함께 확인할 부분" : "What to review together"}</h3><p>{ko ? "같은 변화가 반복된 구간을 함께 살펴보세요." : "Review intervals showing the same repeated change."}</p></div><span className="review-count">{report.priorities.length}</span></div>
+    {report.priorities.length === 0 ? <div className="review-empty"><ScanLine size={21} /><p>{Number(a.coverage ?? 0) < 0.5 ? (ko ? "분석 자료가 부족해 주요 문제를 판단하지 않았습니다." : "Insufficient analysis data to judge major issues.") : references.length ? (ko ? "같은 변화가 반복됐다고 판단할 근거가 부족합니다." : "There is not enough evidence of a repeated change.") : ko ? "이번 세션에서는 반복적으로 확인된 주요 문제를 찾지 못했습니다." : "No repeatedly observed major issue was found in this session."}</p></div> : report.priorities.slice(0, 3).map((f, index) => {
       const text = findingText(f, ko);
       const view = findingGuidance(f, ko);
       return <article key={f.id} className="review-finding">
@@ -173,6 +174,13 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
         <button type="button" className="btn btn-outline" disabled={report.coachingAvailable === false} onClick={() => open(f.id)}>{ko ? "이 구간 함께 확인하기" : "Review this interval together"}<ArrowRight size={14} /></button>
       </article>;
     })}</section>
+    {references.length > 0 && <section className="review-section review-reference-findings" aria-label={ko ? "참고할 측정 구간" : "Individual measurement references"}>
+      <div className="review-section-heading"><div><h3>{ko ? "참고할 측정 구간" : "Individual measurement references"}</h3><p>{ko ? "반복된 문제로 묶지 않고, 각 시점의 측정값을 보여드립니다." : "These are individual measurements, not a group of repeated issues."}</p></div></div>
+      <div className="review-reference-list">{references.map(({finding,observation:o},i)=><article className="review-reference-row" key={`${finding.id}-${o.segmentId}-${i}`}>
+        <button type="button" className="review-time-link" disabled={!onSeek} onClick={()=>onSeek?.(o.startMs)}>{clock(o.startMs)}–{clock(o.endMs)}</button>
+        <span>{measurementLabel(finding.metric ?? finding.id.split(":").at(-1) ?? "",ko)}</span><strong>{Number(o.value.toFixed(2))}{finding.metric?.startsWith("f0_") ? " Hz" : ""}</strong>
+      </article>)}</div>
+    </section>}
     {raw.length > 0 && <details className="review-details review-raw"><summary>{ko ? `실제 분석 결과 ${raw.length}개 확인` : `Inspect ${raw.length} original analysis windows`}</summary><div className="observation-table-wrap"><table className="review-raw-table"><thead><tr><th>{ko ? "구간" : "Interval"}</th><th>{ko ? "스트레스 신호 점수" : "Stress signal score"}</th><th>{ko ? "분석 신뢰도" : "Confidence"}</th><th>{ko ? "자료 상태" : "Data quality"}</th></tr></thead><tbody>{raw.slice(page * 30, (page + 1) * 30).map(s => <tr key={s.segmentId}><td>{clock(s.startMs)}–{clock(s.endMs)}</td><td>{signalScore(s.stressScore)}</td><td>{s.predictionConfidence?.toFixed(3) ?? "—"}</td><td>{s.quality.audioValid ? (ko ? "음성 유효" : "Audio valid") : ko ? "음성 자료 부족" : "Audio unavailable"} · {s.quality.faceDetected ? (ko ? "얼굴 검출" : "Face detected") : ko ? "얼굴 자료 부족" : "Face unavailable"}</td></tr>)}</tbody></table></div>{raw.length > 30 && <div className="review-pagination"><button className="btn btn-outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>{ko ? "이전" : "Previous"}</button><span>{page + 1} / {Math.ceil(raw.length / 30)}</span><button className="btn btn-outline" disabled={(page + 1) * 30 >= raw.length} onClick={() => setPage(p => p + 1)}>{ko ? "다음" : "Next"}</button></div>}</details>}
   </section>;
 }

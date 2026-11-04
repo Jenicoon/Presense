@@ -2007,6 +2007,9 @@ h1, h2, h3 { margin: 0; }
 .review-model-outputs p { color: var(--text-secondary); font-size: 13px; line-height: 1.75; }
 .review-model-outputs .observation-bar-row { grid-template-columns: minmax(110px, 210px) minmax(50px, 1fr) 38px; font-size: 13px; }
 .review-model-outputs .observation-scale { margin-left: min(210px, 40%); }
+.review-reference-list { display: grid; margin-top: 14px; }
+.review-reference-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; font-size: 13px; border-top: 1px solid var(--border); }
+.review-reference-row strong { font-variant-numeric: tabular-nums; }
 .review-findings { display: grid; gap: 14px; min-width: 0; }
 .review-count { display: grid; place-items: center; background: var(--accent-light); color: var(--accent); font-size: 12px; width: 25px; height: 25px; border-radius: 8px; }
 .review-finding { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }

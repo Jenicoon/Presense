@@ -591,6 +591,10 @@ _DECISION_PROMPT = dedent("""
     valid earlier comparison windows. For example, if windows 1-3 are baseline
     and 4-5 changed, select 4-5 only. Never select all windows or a baseline
     window just to inspect it. No absolute stress cutoff is given.
+    Group only independent windows with the same direction and similar size of
+    measured change relative to an earlier reference. If groupingStatus is
+    reference_only, do not finish with that candidate or claim repetition.
+    You may re-analyze that candidate with corrected segmentIds, or omit it.
 
     Use conceptEligibleCandidateIds, comparableCandidateIds, and
     paperEligibleCandidateIds for their respective tools. Compare a pending

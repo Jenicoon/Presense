@@ -183,6 +183,9 @@ def _session_summary_without_baseline(report, ko):
     if findings:
         view = guidance(findings[0], ko)
         return view["observation"] + " " + view["question"]
+    if report.get("referenceFindings"):
+        return ("같은 변화가 반복됐다고 판단할 근거가 부족합니다. 개별 측정 구간을 참고해 주세요."
+                if ko else "There is not enough evidence of a repeated change. Review the individual measurement intervals.")
     if report.get("analysis", {}).get("coverage", 0) < 0.5:
         return (
             "분석된 시간이 부족해 이번 발표의 개선점을 고르기 어렵습니다. 카메라와 마이크를 확인하고 조금 더 길게 발표해 주세요."

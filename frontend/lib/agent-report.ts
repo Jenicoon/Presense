@@ -1,3 +1,4 @@
+import { completeReportEvidence } from "@/lib/finding-evidence";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { findingText, localizedSummary, matchesLanguage, presentationSummary, findingGuidance } from "@/lib/report-locale";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -58,7 +59,10 @@ export type AgentReport = {
   coachingAvailable?: boolean;
   coachingDisabledReason?: "dataset_privacy";
   previousCoaching?: { previousSessionId:string;goalLabel:string;comparable:boolean;lastOutcome:string|null };
+  referenceFindings?: AgentReport["priorities"];
   priorities: Array<{
+    groupingStatus?: "verified" | "reference_only";
+    groupingReason?: string | null;
     metric?: string;
     referenceValue?: number | null;
     modality?: string;
@@ -67,6 +71,7 @@ export type AgentReport = {
     selectedSegmentIds?: string[];
     observationEvidenceComplete?: boolean;
     verifiedObservationCount?: number;
+    recordedObservationCount?: number;
     observations?: Array<{segmentId: string; startMs: number; endMs: number; value: number; stressScore: number; conceptValues: Record<string,number>}>;
     id: string;
     label: string;
@@ -86,7 +91,7 @@ export type AgentReport = {
 
 /** Expand older, generic saved summaries using measurements already stored in the report. */
 export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
-  if (report.analysis && Array.isArray(report.priorities)) return presentationSummary(report, ko);
+  if (report.analysis && Array.isArray(report.priorities)) return presentationSummary(completeReportEvidence(report), ko);
   const original = localizedSummary(report, ko);
   if (!original.includes(ko ? "음성·영상 특징은 뚜렷한 구간 차이를 보이지 않았습니다" :
     "The measured audio and video features showed no clear interval difference")) return original;
@@ -142,6 +147,10 @@ export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
 }
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
+  if (report.analysis && Array.isArray(report.priorities)) report = completeReportEvidence(report);
+  if (!report.priorities.length && report.referenceFindings?.length) return ko
+    ? "분석만으로 교정 목표를 정하기 어렵습니다. 참고 시점을 개별적으로 보고 바꿔 보고 싶은 행동이 있는지 확인하세요."
+    : "The analysis does not support a corrective goal. Review the individual reference intervals and decide whether you want to change a delivery action.";
   const reflection = report.reflection;
   if (reflection?.kind === "overall" && reflection.answer === "intentional") return ko
     ? "의도한 전달 방식으로 기록했습니다. 영상을 다시 보며 목소리와 표정이 전달하려던 내용과 맞는지 확인해 보세요."

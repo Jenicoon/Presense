@@ -2,20 +2,26 @@
 
 from copy import deepcopy
 
-from .report_schema import ReviewRequest
+from statistics import median
+
+from .report_schema import SegmentAnalysis
+from .finding_groups import repeated_group_reason
 from .session_analyzer import metric
 
 
 def complete_report_evidence(report, segments):
     report = deepcopy(report)
-    request = ReviewRequest(
-        sessionId=report["sessionId"],
-        durationMs=max((s["endMs"] for s in segments), default=1),
-        segments=segments,
-    )
-    raw = {s.segmentId: s for s in request.segments}
-    for finding in report.get("priorities", []):
+    raw = {row["segmentId"]: SegmentAnalysis.model_validate(row) for row in segments}
+    verified, references = [], []
+    findings = report.get("priorities", []) + report.get("referenceFindings", [])
+    seen = set()
+    for finding in findings:
+        if finding["id"] in seen:
+            continue
+        seen.add(finding["id"])
         if not finding.get("modality") or not finding.get("metric"):
+            finding.update(groupingStatus="reference_only", groupingReason="missing_original_evidence")
+            references.append(finding)
             continue
         ids = finding.get("selectedSegmentIds")
         if not ids:
@@ -57,12 +63,31 @@ def complete_report_evidence(report, segments):
             }
             for s in independent
         ]
-        finding["observationEvidenceComplete"] = len(independent) == finding.get(
-            "independentObservations", len(independent)
-        )
+        recorded_count = finding.setdefault("recordedObservationCount", finding.get("independentObservations", len(independent)))
+        finding["observationEvidenceComplete"] = len(independent) == recorded_count
         finding["verifiedObservationCount"] = len(independent)
         if ids:
             finding["selectedSegmentIds"] = list(dict.fromkeys(ids))
+        earliest = min((row.startMs for row in selected), default=0)
+        earlier = []
+        for row in sorted(raw.values(), key=lambda row: (row.endMs, row.startMs)):
+            if (row.endMs <= earliest and metric(row, finding["modality"], finding["metric"]) is not None
+                    and (not earlier or row.startMs >= earlier[-1].endMs)):
+                earlier.append(row)
+        reference = median(metric(row, finding["modality"], finding["metric"]) for row in earlier) if len(earlier) >= 2 else None
+        reason = repeated_group_reason(finding["observations"], reference, finding["metric"])
+        finding.update(groupingStatus="verified" if reason is None else "reference_only", groupingReason=reason)
+        if reason is None:
+            finding["referenceValue"] = reference
+            finding["independentObservations"] = len(independent)
+            verified.append(finding)
+        else:
+            finding["observations"] = [{"segmentId": row.segmentId, "startMs": row.startMs,
+                "endMs": row.endMs, "value": metric(row, finding["modality"], finding["metric"]),
+                "stressScore": row.stressScore, "conceptValues": row.concepts if row.quality.audioValid and row.quality.faceDetected else {}}
+                for row in sorted(selected, key=lambda row: (row.startMs, row.endMs))]
+            references.append(finding)
+    report["priorities"], report["referenceFindings"] = verified, references
     return report
 
 
@@ -74,6 +99,12 @@ def complete_document_evidence(doc):
     snapshot["report"] = complete_report_evidence(
         snapshot["report"], snapshot["request"]["segments"]
     )
+    state = doc["state"]
+    valid_ids = {finding["id"] for finding in snapshot["report"]["priorities"]}
+    if state.get("selectedFindingId") not in valid_ids and not state.get("activePracticeId"):
+        state["selectedFindingId"] = None
+        if state.get("stage") == "finding_selected":
+            state["stage"] = "session_review"
     return doc
 
 

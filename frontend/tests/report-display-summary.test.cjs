@@ -12,6 +12,7 @@ function loadTs(file) {
   new Function('exports', 'require', js)(exports, (id) => {
     if (id.endsWith("concept-v2-guidance.json")) return {default:JSON.parse(fs.readFileSync(path.join(__dirname,"../../shared/concept-v2-guidance.json"),"utf8"))};
     if (id === '@/lib/measurement-labels') return loadTs('../lib/measurement-labels.ts');
+    if (id === '@/lib/finding-evidence') return loadTs('../lib/finding-evidence.ts');
     if (id === '@/lib/report-locale') return loadTs('../lib/report-locale.ts');
     return {};
   });
@@ -75,8 +76,9 @@ test('English findings render in Korean without fabricating missing observations
 
 
 test('the main report explains an observable change and the next review action without a Hertz dump', () => {
-  const report = { summaryText: '목소리 높이는 200 Hz였습니다.', analysis: { coverage: .83 }, priorities: [
-    { id: 'pitch_change', referenceValue: 100, independentObservations: 3, observations: [{ startMs: 25000, endMs: 35000, value: 200 }] }
+  const rawSegments=[100,100,200,210].map((value,n)=>({segmentId:`s${n}`,startMs:n<2?n*10000:25000+(n-2)*10000,endMs:n<2?(n+1)*10000:35000+(n-2)*10000,stressScore:.6,quality:{audioValid:true,faceDetected:true},audioFeatures:{f0_mean:value},videoFeatures:{},concepts:{}}));
+  const report = { summaryText: '목소리 높이는 200 Hz였습니다.', rawSegments, analysis: { coverage: .83 }, priorities: [
+    { id: 'pitch_change',metric:'f0_mean',modality:'audio',selectedSegmentIds:['s2','s3'],referenceValue:100,independentObservations:2 }
   ] };
   const ko = reportDisplaySummary(report, true);
   assert.match(ko, /00:25–00:35/);
@@ -169,4 +171,11 @@ test('report summary includes the stored thirty-second reference without changin
   assert.doesNotMatch(en,/[가-힣]/);
   assert.equal(report.analysis.averageStress,.6);
   assert.match(ko,/주요 문제를 찾지 못/);
+});
+
+test('unverified saved groups cannot reappear as repeated change in either summary language',()=>{
+  const report={analysis:{coverage:1},priorities:[{id:'audio:energy_variability',referenceValue:.24,observations:[{segmentId:'a',startMs:57000,endMs:67000,value:.52},{segmentId:'b',startMs:68000,endMs:78000,value:.2}]}]};
+  assert.match(reportDisplaySummary(report,true),/판단할 근거가 부족/);
+  assert.doesNotMatch(reportDisplaySummary(report,true),/변화가 있었|영상은 2곳/);
+  assert.match(reportDisplaySummary(report,false),/not enough evidence/);
 });
