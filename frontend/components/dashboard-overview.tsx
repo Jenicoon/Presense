@@ -158,7 +158,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
                 <Activity size={11} />{sceneText(record.sceneLabel, lang === "ko")}
               </span>
             )}
-            <span className={`severity-pill ${severityClass(record.result)}`}>{localizeDiagnosis(record.result, t)}</span>
+            {!["AI report complete", "AI report limited"].includes(record.result) && <span className={`severity-pill ${severityClass(record.result)}`}>{localizeDiagnosis(record.result, t)}</span>}
           </div>
         </div>
 
@@ -471,9 +471,9 @@ export function DashboardOverview() {
                     <td className="td-mono">{durationText(record.duration, lang === "ko")}</td>
                     <td className="td-mono" style={{ color: "var(--accent)" }}>{signalScore(record.stressAverage)}</td>
                     <td>
-                      <span className={`severity-pill ${severityClass(record.result)}`}>
+                      {["AI report complete", "AI report limited"].includes(record.result) ? "—" : <span className={`severity-pill ${severityClass(record.result)}`}>
                         {localizeDiagnosis(record.result, t)}
-                      </span>
+                      </span>}
                     </td>
                     <td>
                       <button type="button" className="table-action" onClick={() => setSelectedRecord(record)}>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ArrowRight, Clock3, Gauge, Layers3, ScanLine, Sparkles } from "lucide-react";
+import { ArrowRight, Gauge, Layers3, ScanLine, Sparkles } from "lucide-react";
 import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
 import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence } from "@/components/agent-observation-report";
@@ -94,12 +94,6 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
   const open = (findingId?: string) => window.dispatchEvent(new CustomEvent("presense:open-agent", {
     detail: { sessionId: report.sessionId, findingId },
   }));
-  const stats = [
-    { icon: Clock3, label: ko ? "실제 분석 시간" : "Time analyzed", value: `${(Number(a.observedMs ?? 0) / 1000).toFixed(0)}${ko ? "초" : "s"}`, note: ko ? `전체 ${(duration / 1000).toFixed(0)}초 중` : `of ${(duration / 1000).toFixed(0)}s total` },
-    { icon: ScanLine, label: ko ? "분석 커버리지" : "Analysis coverage", value: `${Math.round(Number(a.coverage ?? 0) * 100)}%`, note: ko ? "자료가 있는 시간 기준" : "Time with usable data" },
-    { icon: Layers3, label: ko ? "분석 구간" : "Usable intervals", value: `${Number(a.usableSegmentCount ?? 0)}`, note: ko ? `수집한 ${Number(a.segmentCount ?? 0)}개 중` : `of ${Number(a.segmentCount ?? 0)} collected` },
-    { icon: Gauge, label: ko ? "평균 스트레스 신호" : "Mean stress signal", value: signalScore(a.averageStress), note: typeof a.peakStress === "number" ? `${ko ? "최고" : "Peak"} ${Math.round(a.peakStress * 100)}${peak ? ` · ${clock(peak.startMs)}` : ""}` : ko ? "분석 자료 없음" : "No analysis data" },
-  ];
   return <section className="session-agent-report" aria-label={ko ? "세션 분석과 코칭" : "Session analysis and coaching"}>
     {report.dataOrigin === "stressid" && <p className="review-context" role="status">{ko ? "StressID 예시 영상을 기기 내 모델로 분석한 결과입니다. 이 자료는 외부 AI 코칭에 전송하지 않습니다." : "This StressID example was analyzed by the local model. Its data is not sent to external AI coaching."}</p>}
     {report.dataOrigin === "synthetic" && <p className="review-context" role="status">{ko ? "합성 예시 분석 자료입니다." : "This analysis uses synthetic sample data."}</p>}
@@ -110,12 +104,6 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
     </section>}
     {!baseline && report.baselineComparison?.status === "missing" && <p className="review-context" role="status">{ko ? "이 세션에 저장된 초기 측정값이 없어 개인 초기값 비교는 생략했습니다." : "No initial measurement was saved for this session, so a personal-reference comparison is unavailable."}</p>}
     {!baseline && report.baselineComparison?.status === "model_mismatch" && <p className="review-context" role="status">{ko ? "초기 측정과 발표의 분석 모델이 달라 비교하지 않았습니다. 초기값을 다시 측정해 주세요." : "The initial measurement and presentation used different models. Remeasure the initial reference to compare them."}</p>}
-    <div className="review-stats">
-      {stats.map(({ icon: Icon, label, value, note }) => <div className="review-stat" key={label}>
-        <div className="review-stat-label"><Icon size={14} />{label}</div>
-        <strong>{value}</strong><span>{note}</span>
-      </div>)}
-    </div>
     <details className="review-details review-score-explainer"><summary>{ko ? "스트레스 신호 점수는 무엇인가요?" : "What does the stress signal score mean?"}</summary><p>{ko ? "AI가 음성·영상에서 학습한 스트레스 관련 패턴을 얼마나 강하게 감지했는지 0–100으로 표시합니다. 같은 발표에서 다시 볼 구간을 찾고, 같은 조건의 재촬영과 비교하는 참고 자료입니다. 70점이 실제 스트레스 70%라는 뜻은 아니며, 발표 실력의 성적도 아닙니다. 평균은 실제 분석된 시간만 반영합니다." : "This 0–100 score shows how strongly the AI detected learned stress-related patterns in audio and video. Use it to find intervals to review and compare takes under the same conditions. A score of 70 does not mean 70% actual stress or grade your presentation. The mean includes analyzed time only."}</p></details>
     <div className="review-next-step">
       <span className="review-next-icon"><Sparkles size={19} /></span>
