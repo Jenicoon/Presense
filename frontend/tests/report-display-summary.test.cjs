@@ -18,7 +18,7 @@ function loadTs(file) {
   });
   return exports;
 }
-const { reportDisplaySummary, agentNextPractice, reportIntentReflection } = loadTs('../lib/agent-report.ts');
+const { reportDisplaySummary, agentNextPractice, reportIntentReflection, savedReportAiFeedback } = loadTs('../lib/agent-report.ts');
 const { findingText, sceneText } = loadTs('../lib/report-locale.ts');
 
 test('older generic report uses its saved measurements in the displayed summary', () => {
@@ -205,4 +205,20 @@ test('a saved intent question is shown only for a verified pitch observation at 
   assert.equal(reportIntentReflection({ ...report, priorities: [] }), undefined);
   assert.equal(reportIntentReflection({ ...report, reflection: { ...reflection, kind: 'overall' } }), undefined);
   assert.equal(reportIntentReflection({ ...report, reflection: { ...reflection, segmentId: 's0', startMs: 0, endMs: 10000 } }), undefined);
+});
+
+
+test('report feedback uses the accepted generated advice and its saved citation', () => {
+  const report = { synthesisStatus: 'generated', evidence: [{ id: 'source' }] };
+  const review = {
+    evidenceStatus: 'cited_excerpt', evidenceIds: ['source'],
+    reviewAction: '강조한 단어 앞뒤의 쉼을 비교하세요.', practiceSuggestion: '',
+  };
+  assert.deepEqual(savedReportAiFeedback(report, review, true), { kind: 'review', text: review.reviewAction });
+  const practice = { ...review, reviewAction: '', practiceSuggestion: 'Record the key sentence twice and compare the pause.' };
+  assert.deepEqual(savedReportAiFeedback(report, practice, false), { kind: 'practice', text: practice.practiceSuggestion });
+  assert.equal(savedReportAiFeedback(report, review, false), null);
+  assert.equal(savedReportAiFeedback({ ...report, synthesisStatus: 'not_required' }, review, true), null);
+  assert.equal(savedReportAiFeedback({ ...report, evidence: [] }, review, true), null);
+  assert.equal(savedReportAiFeedback(report, { ...review, evidenceStatus: 'insufficient' }, true), null);
 });

@@ -128,11 +128,11 @@ export function AgentPatternReview({ report, ko, onSeek }: {
         <p>{fixedUnit(pattern.value, pattern.unit)} · {ko ? "다른 구간 기준값" : "Reference from other intervals"} {fixedUnit(pattern.comparisonValue, pattern.unit)}</p>
       </div>
       {onSeek && interpretation && <div>
-        <strong>{ko ? "듣고 확인할 점" : "What to listen for"}</strong>
+        <strong>{ko ? "직접 점검 가이드" : "Self-review guide"}</strong>
         <p>{interpretation}</p>
       </div>}
       {onSeek && narrowerPitch && <div className="review-pattern-practice">
-        <strong>{ko ? "핵심 문장이 묻혀 들린다면" : "If the key sentence blends in"}</strong>
+        <strong>{ko ? "직접 연습 · 핵심 문장이 묻혀 들린다면" : "Self-guided practice · If the key sentence blends in"}</strong>
         <p>{ko
           ? "같은 구간을 다시 말하되 핵심 문장 직전에 한 박자 쉬세요. 두 녹음을 번갈아 듣고 어느 쪽에서 핵심 문장이 더 또렷하게 구분되는지 비교하세요. 처음부터 잘 구분됐다면 현재 전달 방식을 유지하세요."
           : "Record the same passage again, pausing for one beat before the key sentence. Listen to both versions and compare which makes the key sentence easier to pick out. If it already stands out, keep your original delivery."}</p>

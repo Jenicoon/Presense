@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, Gauge, Layers3, Sparkles } from "lucide-react";
-import { bilingualLabel, findingText, findingGuidance, matchesLanguage, signalScore } from "@/lib/report-locale";
+import { bilingualLabel, findingText, findingGuidance, signalScore } from "@/lib/report-locale";
 import { StressChart } from "@/components/stress-chart";
 import { AgentEvidence, AgentModelOutputs, AgentPatternReview } from "@/components/agent-observation-report";
-import { agentNextPractice, agentReflectionInterpretation, reportIntentReflection, showPriorityAdvice, type AgentReport } from "@/lib/agent-report";
+import { agentNextPractice, agentReflectionInterpretation, reportIntentReflection, savedReportAiFeedback, showPriorityAdvice, type AgentReport } from "@/lib/agent-report";
 import { completeReportEvidence } from "@/lib/finding-evidence";
 import { measurementLabel } from "@/lib/measurement-labels";
 import { clock, restoreCoach } from "@/lib/coaching";
@@ -158,10 +158,9 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
       const text = findingText(f, ko);
       const view = findingGuidance(f, ko);
       const showAdvice = showPriorityAdvice(report, f.ranges ?? []);
+      const aiFeedback = showAdvice ? savedReportAiFeedback(report, f, ko) : null;
       const review = showAdvice ? view.question : agentReflectionInterpretation(report, ko);
-      const practice = showAdvice
-        ? (matchesLanguage(f.practiceSuggestion, ko) ? f.practiceSuggestion : view.goal)
-        : agentNextPractice(report, ko);
+      const reflectionPractice = showAdvice ? "" : agentNextPractice(report, ko);
       return <article key={f.id} className="review-finding">
         <div className="review-finding-heading"><span className="review-finding-number">{String(index + 1).padStart(2, "0")}</span><h4>{view.title}</h4><span className="review-finding-count">{f.findingKind === "distinct" ? (ko ? "한 구간의 두드러진 변화" : "A distinct change in one interval") : (ko ? `확인할 영상 ${f.observations?.length ?? 0}곳` : `${f.observations?.length ?? 0} intervals to review`)}</span></div>
         <p className="review-finding-summary">{view.observation}</p>
@@ -172,8 +171,17 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
           <span>{ko ? "스트레스 신호 점수" : "Stress signal score"}<strong>{signalScore(o.stressScore)}</strong></span>
         </div>)}</div></details>
         <div className="review-finding-action">
-          {review && <div><strong>{ko ? "확인 사항" : "What to review"}</strong><p>{review}</p></div>}
-          {practice && <div><strong>{ko ? "권장 연습" : "Recommended practice"}</strong><p>{practice}</p></div>}
+          {aiFeedback && <div>
+            <strong>{aiFeedback.kind === "practice"
+              ? (ko ? "AI 피드백 · 권장 연습" : "AI feedback · Practice")
+              : (ko ? "AI 피드백 · 확인 사항" : "AI feedback · What to review")}</strong>
+            <p>{aiFeedback.text}</p>
+          </div>}
+          {review && aiFeedback?.kind !== "review" && <div>
+            <strong>{showAdvice ? (ko ? "직접 점검 가이드" : "Self-review guide") : (ko ? "전달 의도 확인 결과" : "Delivery intent response")}</strong>
+            <p>{review}</p>
+          </div>}
+          {reflectionPractice && <div><strong>{ko ? "권장 연습" : "Recommended practice"}</strong><p>{reflectionPractice}</p></div>}
         </div>
         <details className="review-details"><summary>{ko ? "관련 패턴 값과 참고 근거" : "Related patterns and sources"}</summary>{f.observations?.map(o => <p key={o.segmentId}>{clock(o.startMs)}–{clock(o.endMs)} · {Object.entries(o.conceptValues).map(([k, v]) => `${measurementLabel(k, ko)} ${v.toFixed(3)}`).join(" · ")}</p>)}<AgentEvidence report={report} ids={f.evidenceIds} ko={ko} /></details>
       </article>;

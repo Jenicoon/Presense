@@ -29,6 +29,7 @@ export type AgentReport = {
   summaryText: string;
   presenterSummary?: { ko: string; en: string };
   analysisStatus: string;
+  synthesisStatus?: "generated" | "not_required" | "unavailable";
   observationReport?: {
     observedMs: number;
     coverage: number;
@@ -81,6 +82,7 @@ export type AgentReport = {
     reviewAction: string;
     practiceSuggestion: string;
     evidenceIds?: string[];
+    evidenceStatus?: "cited_excerpt" | "insufficient";
     ranges: Array<{ startMs: number; endMs: number }>;
   }>;
   limitations: string[];
@@ -89,6 +91,17 @@ export type AgentReport = {
   agentRun?: { stopReason: string; actions?: Array<{action: string; candidateId: string; segmentIds?: string[]}> };
   [key: string]: unknown;
 };
+
+/** Only surface advice released by report synthesis in the selected language. */
+export function savedReportAiFeedback(report: AgentReport, finding: AgentReport["priorities"][number], ko: boolean) {
+  if (report.synthesisStatus !== "generated" || finding.evidenceStatus !== "cited_excerpt") return null;
+  const cited = finding.evidenceIds?.some(id => report.evidence?.some(source => source.id === id));
+  if (!cited) return null;
+
+  if (matchesLanguage(finding.practiceSuggestion, ko)) return { kind: "practice" as const, text: finding.practiceSuggestion };
+  if (matchesLanguage(finding.reviewAction, ko)) return { kind: "review" as const, text: finding.reviewAction };
+  return null;
+}
 
 /** Expand older, generic saved summaries using measurements already stored in the report. */
 export function reportDisplaySummary(report: AgentReport, ko: boolean): string {
