@@ -2028,6 +2028,7 @@ h1, h2, h3 { margin: 0; }
 .review-time-link { border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 500; padding: 0; text-align: left; cursor: pointer; white-space: nowrap; }
 .review-time-link:disabled { cursor: default; color: #64748b; }
 .review-finding-action { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 18px 0; }
+.review-pattern-practice { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--border); }
 .review-finding-action strong { font-size: 12px; color: var(--text-primary); font-weight: 600; }
 .review-finding-action p { font-size: 13px; color: #475569; line-height: 1.8; margin-top: 4px; word-break: keep-all; overflow-wrap: break-word; }
 .review-finding > .btn { margin-top: 14px; }
