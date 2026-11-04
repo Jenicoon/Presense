@@ -178,7 +178,7 @@ export function SessionAgentReport({ report, language, onSeek, showTimeline = tr
             <p>{aiFeedback.text}</p>
           </div>}
           {review && aiFeedback?.kind !== "review" && <div>
-            <strong>{showAdvice ? (ko ? "직접 점검 가이드" : "Self-review guide") : (ko ? "전달 의도 확인 결과" : "Delivery intent response")}</strong>
+            <strong>{showAdvice ? (ko ? "확인 사항" : "What to review") : (ko ? "전달 의도 확인 결과" : "Delivery intent response")}</strong>
             <p>{review}</p>
           </div>}
           {reflectionPractice && <div><strong>{ko ? "권장 연습" : "Recommended practice"}</strong><p>{reflectionPractice}</p></div>}
