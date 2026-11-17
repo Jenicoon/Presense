@@ -103,18 +103,16 @@ class AgentReportTests(unittest.TestCase):
         self.assertAlmostEqual(baseline["averageDifference"], .25)
         self.assertAlmostEqual(baseline["peakDifference"], .55)
         self.assertEqual(report["observationReport"]["peakSegment"]["stressScore"], .8)
-        self.assertEqual(report["reflection"]["segmentId"], "peak")
-        self.assertIsNone(report["reflection"]["answer"])
+        self.assertNotIn("reflection", report)
 
-    def test_changed_model_does_not_apply_old_baseline_and_flat_scores_get_general_question(self):
+    def test_changed_model_does_not_apply_old_baseline_or_ask_about_flat_scores(self):
         request = ReviewRequest(sessionId="s", durationMs=20000,
                                 segments=[segment("one", 0, 10000, .8), segment("two", 10000, 20000, .8)],
                                 personalBaseline=.2, baselineSampleCount=3,
                                 baselineModelVersion="old-model")
         report = self.report(request, selected=(), model_version="new-model")
         self.assertNotIn("personalBaseline", report["observationReport"])
-        self.assertEqual(report["reflection"]["kind"], "overall")
-        self.assertNotIn("강조한 부분", report["reflection"]["question"])
+        self.assertNotIn("reflection", report)
 
     def test_summary_connects_peak_phase_feature_and_concept(self):
         windows = [segment("opening", 0, 10000, .2),
@@ -128,7 +126,7 @@ class AgentReportTests(unittest.TestCase):
         self.assertIn("70/100", text)
         self.assertIn("중반 평균", text)
         self.assertIn("평균 목소리 높이 160.00 Hz", text)
-        self.assertIn("Concept 출력 ‘음성 피치’ 값은 0.80", text)
+        self.assertIn("Concept 출력 ‘목소리 높이 패턴’ 값은 0.80", text)
         self.assertNotIn("긴장이 발견", text)
 
     def test_observation_report_omits_invalid_channel_values(self):
@@ -284,7 +282,8 @@ class AgentReportTests(unittest.TestCase):
                 {"issueId": issue["id"], "recommendation": "Review the recording.", "evidenceIds": []}
                 for issue in context["issues"]]}
         report = self.report(request, rag=None, synthesize=synthesize)
-        self.assertEqual(report["synthesisStatus"], "generated")
+        self.assertEqual(report["synthesisStatus"], "unavailable")
+        self.assertTrue(report["synthesisGenerated"])
         self.assertTrue(report["summaryFallbackUsed"])
         self.assertNotIn("긴장이 잘 드러납니다", report["summaryText"])
 

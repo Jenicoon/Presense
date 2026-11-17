@@ -23,10 +23,22 @@
     "pdf_url": "https://pure.mpg.de/rest/items/item_3513860/component/file_3513861/content",
     "topics": [
       "lip_tension",
-      "face_measurement"
+      "face_measurement",
+      "concept_facial_variability",
+      "concept_mouth_aperture",
+      "v2_eye_squint",
+      "v2_jaw_open"
     ],
     "scope": "Psychosocial stress task including speaking; brow lowering was not measured. Mouth actions are confounded by speaking.",
     "finding_ko": "말하기를 포함한 스트레스 과제에서 입 움직임은 발화의 영향을 받을 수 있었습니다. 이 연구는 눈썹 내림을 측정하지 않았습니다.",
+    "finding_ko_by_issue": {
+      "v2_eye_squint": "AU07 눈꺼풀 조임 빈도는 더 높은 주관적 스트레스 반응과 연관됐지만 심박 및 HF-HRV 반응과의 방향은 달랐습니다.",
+      "v2_jaw_open": "AU26 턱 열림을 측정했지만 말하기 과제가 하안면 움직임에 영향을 줄 수 있어 스트레스 고유 신호로 해석할 수 없습니다."
+    },
+    "applicability_by_issue": {
+      "v2_eye_squint": "related",
+      "v2_jaw_open": "related"
+    },
     "layout": "two_column_after_first_page"
   },
   {
@@ -38,7 +50,10 @@
     "pdf_url": "https://pdfs.semanticscholar.org/181c/f913d6eb6ff2737d469a2990aa16cb50b300.pdf",
     "topics": [
       "pitch_change",
-      "pitch_variability"
+      "pitch_variability",
+      "concept_spectral_contrast",
+      "concept_mfcc_spectral_envelope",
+      "concept_mean_f0"
     ],
     "scope": "Associations among acoustic parameters and anxiety; not a test of rehearsal interventions.",
     "finding_ko": "여러 음성 지표와 불안 상태 사이의 연관성을 분석했습니다. 특정 발표 연습법의 효과는 시험하지 않았습니다."
@@ -115,9 +130,13 @@
       "gaze",
       "practice"
     ],
-    "scope": "Clinical social-anxiety VR exposure with eye tracking; not a webcam eye-contact rule for ordinary presentations.",
-    "finding_ko": "사회불안 임상 집단에서 가상현실 발표 중 주의 전환을 시험했습니다. 일반 발표의 웹캠 시선 교정법은 시험하지 않았습니다.",
-    "evidence_role": "practice_general",
+    "scope": "Randomized one-session VR attention training in people with marked social anxiety; it tested external attention and gaze behavior, not eyelid tightening or an ordinary webcam eye-contact rule.",
+    "finding_ko": "사회불안이 높은 참가자를 무작위 배정해 가상현실 발표 중 자기 자신이 아닌 청중 또는 주변 대상에 주의를 두게 했습니다. 청중에 주의를 둔 집단은 청중 얼굴을 보는 시간이 늘었지만 발표 공포 자체의 집단 차이는 뚜렷하지 않았습니다.",
+    "finding_ko_by_issue": {
+      "gaze": "사회불안이 높은 참가자를 무작위 배정해 가상현실 발표 중 자기 자신이 아닌 청중 또는 주변 대상에 주의를 두게 했습니다. 청중에 주의를 둔 집단은 청중 얼굴을 보는 시간이 늘었지만 발표 공포 자체의 집단 차이는 뚜렷하지 않았습니다."
+    },
+    "applicability": "direct",
+    "evidence_role": "practice_specific",
     "layout": "two_column_after_first_page"
   },
   {
@@ -160,7 +179,10 @@
     "topics": [
       "brow_tension",
       "lip_tension",
-      "face_measurement"
+      "face_measurement",
+      "concept_facial_variability",
+      "concept_mouth_aperture",
+      "concept_inner_brow_distance"
     ],
     "scope": "Facial action-unit associations outside public speaking; cannot identify the presenter's state from one facial cue.",
     "finding_ko": "발표가 아닌 상황에서 표정 움직임과 정서 경험의 연관성을 관찰했습니다. 표정 하나로 발표자의 상태를 판정할 수는 없습니다.",
@@ -174,7 +196,8 @@
     "article_url": "https://doi.org/10.1098/rsos.241632",
     "pdf_url": "https://pure.mpg.de/rest/items/item_3389878_4/component/file_3641920/content",
     "topics": [
-      "brow_tension"
+      "brow_tension",
+      "concept_inner_brow_distance"
     ],
     "scope": "Eyebrow furrows in conversational repair, not presenter stress or a frowning-reduction intervention.",
     "finding_ko": "대화 중 눈썹 움직임과 의사소통 문제의 관계를 살펴봤습니다. 발표 스트레스나 찡그림 교정법을 시험한 연구는 아닙니다."
@@ -190,7 +213,10 @@
       "brow_tension",
       "lip_tension",
       "gaze",
-      "face_measurement"
+      "face_measurement",
+      "concept_facial_variability",
+      "concept_mouth_aperture",
+      "concept_inner_brow_distance"
     ],
     "scope": "Methodological review: movement detection is distinct from psychological or social inference.",
     "finding_ko": "영상에서 움직임을 감지하는 것과 그 사람의 심리 상태를 추론하는 것은 다른 문제라고 정리한 방법론 연구입니다.",
@@ -220,12 +246,22 @@
     "pdf_url": "https://push-zb.helmholtz-munich.de/deliver.php?id=43427",
     "topics": [
       "brow_tension",
+      "concept_facial_variability",
+      "concept_inner_brow_distance",
+      "concept_mouth_aperture",
+      "face_measurement",
       "lip_tension",
-      "face_measurement"
+      "v2_brow_down"
     ],
     "scope": "Speaking and arithmetic stress task with facial action-unit measurement; facial movements did not reliably predict individual acute stress responses. No facial-expression correction was tested.",
     "finding_ko": "말하기 등을 포함한 과제에서 표정 움직임은 개인의 급성 스트레스 지표를 안정적으로 설명하지 못했습니다. 표정 교정은 시험하지 않았습니다.",
-    "layout": "two_column_after_first_page"
+    "layout": "two_column_after_first_page",
+    "finding_ko_by_issue": {
+      "v2_brow_down": "동일 참가자의 TSST와 친화적 통제 조건을 비교했을 때 AU04 추정값이 TSST에서 더 높았습니다. 현재 target은 MediaPipe browDown이므로 FACS AU04와 동일한 값은 아닙니다."
+    },
+    "applicability_by_issue": {
+      "v2_brow_down": "related"
+    }
   },
   {
     "file": "Frontiers_2019_speaker_confidence.pdf",
@@ -236,10 +272,214 @@
     "pdf_url": "https://www.frontiersin.org/journals/communication/articles/10.3389/fcomm.2019.00063/pdf",
     "topics": [
       "brow_tension",
-      "gaze"
+      "gaze",
+      "concept_inner_brow_distance"
     ],
     "scope": "Observers judged confidence in answers to general-knowledge questions from muted video; this is not presentation anxiety or a tested facial intervention.",
     "finding_ko": "무음 답변 영상을 보고 관찰자가 자신감을 어떻게 판단하는지 살펴봤습니다. 발표 불안이나 표정 교정의 효과를 시험한 연구는 아닙니다.",
     "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Kappen_2022_acoustic_stress.pdf",
+    "title": "Acoustic speech features in social comparison: how stress impacts the way you sound",
+    "year": 2022,
+    "doi": "10.1038/s41598-022-26375-9",
+    "article_url": "https://www.nature.com/articles/s41598-022-26375-9",
+    "pdf_url": "https://www.nature.com/articles/s41598-022-26375-9.pdf",
+    "topics": [
+      "concept_mean_f0",
+      "concept_spectral_contrast",
+      "v2_hnr",
+      "v2_jitter",
+      "v2_mean_f0",
+      "v2_shimmer"
+    ],
+    "scope": "Controlled within-participant psychosocial stress study of read speech. It directly measured F0 and HNR, but not spectral-contrast band 5 and not free-form presentations.",
+    "finding_ko": "통제된 심리사회적 스트레스 조건에서 F0와 HNR 등 음향 지표의 변화를 측정했습니다. 현재의 스펙트럼 대비 5번 밴드를 직접 검증한 연구는 아닙니다.",
+    "finding_ko_by_issue": {
+      "concept_mean_f0": "통제된 참가자 내 스트레스 실험에서 부정적 피드백 조건의 평균 F0가 유의하게 증가했습니다. 낭독 음성이므로 자유 발표에 그대로 일반화할 수는 없습니다.",
+      "concept_spectral_contrast": "스트레스 조건에서 HNR 등 음질 관련 지표가 달라졌지만, 현재 모델의 스펙트럼 대비 5번 밴드를 직접 시험하지는 않았습니다.",
+      "v2_mean_f0": "통제된 참가자 내 스트레스 조건에서 평균 F0가 유의하게 증가했습니다.",
+      "v2_jitter": "같은 연구가 local jitter를 직접 측정했지만 조건 효과는 유의하지 않았습니다.",
+      "v2_shimmer": "같은 연구에서 local shimmer가 스트레스 조건에서 감소했습니다.",
+      "v2_hnr": "같은 연구에서 HNR이 스트레스 조건에서 증가했습니다."
+    },
+    "applicability_by_issue": {
+      "concept_mean_f0": "direct",
+      "concept_spectral_contrast": "related",
+      "v2_mean_f0": "direct",
+      "v2_jitter": "direct",
+      "v2_shimmer": "direct",
+      "v2_hnr": "direct"
+    },
+    "evidence_role": "measurement"
+  },
+  {
+    "file": "Harte_2006_tonnetz.pdf",
+    "title": "Detecting Harmonic Change in Musical Audio",
+    "year": 2006,
+    "doi": "10.1145/1178723.1178727",
+    "article_url": "https://doi.org/10.1145/1178723.1178727",
+    "pdf_url": "https://ofai.at/papers/oefai-tr-2006-13.pdf",
+    "topics": [
+      "concept_tonnetz_variability"
+    ],
+    "scope": "Foundational Tonnetz/tonal-centroid method for harmonic change in music; it contains no speech-stress experiment.",
+    "finding_ko": "Tonnetz 기반 tonal centroid가 음악의 화성 변화를 표현하는 방법임을 제안했습니다. 말하기 스트레스나 발표 품질을 검증한 연구는 아닙니다.",
+    "applicability": "related",
+    "evidence_role": "measurement"
+  },
+  {
+    "file": "Kappen_2024_multistressor_speech.pdf",
+    "title": "Acoustic and prosodic speech features reflect physiological stress but not isolated negative affect: a multi-paradigm study on psychosocial stressors",
+    "year": 2024,
+    "doi": "10.1038/s41598-024-55550-3",
+    "article_url": "https://www.nature.com/articles/s41598-024-55550-3",
+    "pdf_url": "https://www.nature.com/articles/s41598-024-55550-3.pdf",
+    "topics": [
+      "v2_hnr",
+      "v2_jitter",
+      "v2_mean_f0",
+      "v2_mean_voiced_segment_length",
+      "v2_shimmer",
+      "v2_voiced_segments_per_sec"
+    ],
+    "scope": "Within-participant MIST and Cyberball study using the exact GeMAPS variables. Effects differed by stressor; HNR and shimmer did not show robust corrected effects.",
+    "finding_ko": "MIST와 Cyberball에서 동일 참가자의 음성을 비교하고 현재 후보와 정확히 같은 GeMAPS 변수명을 사용했습니다. 효과는 스트레스 과제에 따라 달랐습니다.",
+    "finding_ko_by_issue": {
+      "v2_mean_f0": "F0semitoneFrom27.5Hz_sma3nz_amean을 직접 사용했으며 MIST에서 F0가 유의하게 증가했지만 Cyberball에서는 그렇지 않았습니다.",
+      "v2_jitter": "jitterLocal_sma3nz_amean을 직접 사용했으며 MIST에서 jitter가 유의하게 감소했지만 Cyberball에서는 그렇지 않았습니다.",
+      "v2_shimmer": "shimmerLocaldB_sma3nz_amean을 직접 사용했지만 두 과제에서 유의한 변화가 없었습니다.",
+      "v2_hnr": "HNRdBACF_sma3nz_amean을 직접 사용했지만 다중비교 보정 뒤 강한 조건 효과는 확인되지 않았습니다.",
+      "v2_voiced_segments_per_sec": "VoicedSegmentsPerSec를 발화 속도의 대리 지표로 직접 사용했으며 MIST에서 유의한 변화가 관찰됐습니다.",
+      "v2_mean_voiced_segment_length": "MeanVoicedSegmentLengthSec를 직접 사용했으며 MIST에서 유의한 변화가 관찰됐습니다."
+    },
+    "applicability_by_issue": {
+      "v2_mean_f0": "direct",
+      "v2_jitter": "direct",
+      "v2_shimmer": "direct",
+      "v2_hnr": "direct",
+      "v2_voiced_segments_per_sec": "direct",
+      "v2_mean_voiced_segment_length": "direct"
+    },
+    "evidence_role": "measurement"
+  },
+  {
+    "file": "Kappen_2022_network_stress.pdf",
+    "title": "Speech as an indicator for psychosocial stress: A network analytic approach",
+    "year": 2022,
+    "doi": "10.3758/s13428-021-01670-x",
+    "article_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9046336/",
+    "pdf_url": "https://biblio.ugent.be/publication/8719543/file/8719544.pdf",
+    "topics": [
+      "concept_mean_f0",
+      "v2_mean_f0",
+      "v2_jitter",
+      "v2_hnr",
+      "v2_mean_voiced_segment_length"
+    ],
+    "scope": "Controlled psychosocial-stress study using GeMAPS speech parameters and network analysis. Associations among changes are not causal directions or presentation-quality targets.",
+    "finding_ko": "통제된 심리사회적 스트레스 실험에서 F0, jitter, HNR, 평균 유성 구간 길이의 관계를 함께 분석했습니다. 스트레스 전후 전체 네트워크는 비슷했고, jitter 변화는 자기보고 부정 정서 변화와 직접 연결됐지만 인과관계는 확인하지 않았습니다.",
+    "finding_ko_by_issue": {
+      "concept_mean_f0": "통제된 스트레스 실험에서 F0를 다른 음성 변수와 함께 분석했으며, 스트레스 전후 변수 관계망 전체가 크게 달라지지는 않았습니다.",
+      "v2_mean_f0": "GeMAPS의 F0를 측정했지만 특정 방향을 발표 개선 목표로 검증한 연구는 아닙니다.",
+      "v2_jitter": "jitter의 전후 변화가 자기보고 부정 정서 변화와 직접 연결됐지만, 인과관계나 모두에게 같은 방향은 확인하지 않았습니다.",
+      "v2_hnr": "HNR은 음성 변수 관계망에서 중심적인 변수였지만, 단독 수치로 스트레스나 전달력을 판정하지는 않았습니다.",
+      "v2_mean_voiced_segment_length": "평균 유성 구간 길이를 F0, jitter, HNR과 함께 분석했으며 단독 교정 목표의 효과는 시험하지 않았습니다."
+    },
+    "applicability": "direct",
+    "evidence_role": "measurement"
+  },
+  {
+    "file": "Berger_2022_eyebrow_prominence.pdf",
+    "title": "Multimodal Prominence Marking in Semi-Spontaneous YouTube Monologs: The Interaction of Intonation and Eyebrow Movements",
+    "year": 2022,
+    "doi": "10.3389/fcomm.2022.903015",
+    "article_url": "https://www.frontiersin.org/journals/communication/articles/10.3389/fcomm.2022.903015/full",
+    "pdf_url": "https://public-pages-files-2025.frontiersin.org/journals/communication/articles/10.3389/fcomm.2022.903015/pdf",
+    "topics": [
+      "concept_mean_f0",
+      "concept_inner_brow_distance",
+      "v2_mean_f0",
+      "v2_brow_down"
+    ],
+    "scope": "Observational study of six English-speaking YouTubers. It links eyebrow movement with pitch-accent timing, but does not test a correction exercise or identify stress.",
+    "finding_ko": "준자발적 유튜브 독백에서 눈썹 움직임과 음높이 악센트가 함께 나타나는 방식을 분석했습니다. 일부 측정에서 두 움직임이 연관됐지만 사람별 차이가 있었고, 눈썹 움직임을 곧바로 교정 대상으로 보지는 않았습니다.",
+    "finding_ko_by_issue": {
+      "concept_mean_f0": "음높이 악센트와 눈썹 움직임이 일부 측정에서 함께 나타났으며, 강조 의도와 영상 맥락을 같이 확인할 필요가 있었습니다.",
+      "concept_inner_brow_distance": "눈썹 랜드마크 거리와 Action Unit을 함께 분석했지만 내측 눈썹 거리 하나를 좋고 나쁨으로 평가하지는 않았습니다.",
+      "v2_mean_f0": "높은 음높이 악센트가 눈썹 움직임과 함께 나타나는 경우가 있었지만 화자별 차이가 컸습니다.",
+      "v2_brow_down": "눈썹 관련 Action Unit과 음높이 악센트의 동시 발생을 관찰했지만 MediaPipe browDown 자체나 교정 효과를 시험하지는 않았습니다."
+    },
+    "applicability": "related",
+    "evidence_role": "measurement",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Krason_2021_mouth_movements.pdf",
+    "title": "The role of iconic gestures and mouth movements in face-to-face communication",
+    "year": 2022,
+    "doi": "10.3758/s13414-021-02392-0",
+    "article_url": "https://pubmed.ncbi.nlm.nih.gov/34671936/",
+    "pdf_url": "https://discovery.ucl.ac.uk/id/eprint/10137471/1/Krason2021_Article_TheRoleOfIconicGesturesAndMout.pdf",
+    "topics": [
+      "concept_mouth_aperture",
+      "v2_jaw_open"
+    ],
+    "scope": "Word-recognition experiment using visible mouth movements and gestures. It does not validate jaw-open magnitude, presentation quality, or a stress interpretation.",
+    "finding_ko": "도전적인 듣기 조건에서 더 정보가 많은 입 움직임은 단어 인식을 도왔습니다. 하지만 입을 크게 벌릴수록 좋다는 연구가 아니며, 현재 jawOpen이나 입 벌어짐 비율의 목표값을 제시하지 않습니다.",
+    "finding_ko_by_issue": {
+      "concept_mouth_aperture": "입 움직임이 전달하는 시각 정보가 어려운 듣기 조건의 단어 인식을 도왔지만, 특정 입 벌어짐 비율을 연습 목표로 검증하지는 않았습니다.",
+      "v2_jaw_open": "입 움직임의 정보성을 시험한 연구로, jawOpen 크기 자체나 발표 스트레스를 검증한 자료는 아닙니다."
+    },
+    "applicability": "related",
+    "evidence_role": "measurement",
+    "layout": "two_column_after_first_page"
+  },
+  {
+    "file": "Mayo_2019_corrugator_stress.pdf",
+    "title": "In the face of stress: Interpreting individual differences in stress-induced facial expressions",
+    "year": 2019,
+    "doi": "10.1016/j.ynstr.2019.100166",
+    "article_url": "https://pubmed.ncbi.nlm.nih.gov/31193535/",
+    "pdf_url": "https://www.diva-portal.org/smash/get/diva2%3A1342256/FULLTEXT01.pdf",
+    "topics": [
+      "brow_tension",
+      "concept_inner_brow_distance",
+      "v2_brow_down"
+    ],
+    "scope": "Corrugator-EMG stress reanalysis emphasizing individual and sex differences. Corrugator activity is not equivalent to MediaPipe browDown or landmark distance.",
+    "finding_ko": "급성 스트레스 전후의 눈썹 찡그림근 반응을 다시 분석했으며 개인차와 성별 차이가 있었습니다. 따라서 눈썹 관련 움직임은 같은 사람 안에서 맥락과 함께 비교해야 합니다.",
+    "finding_ko_by_issue": {
+      "concept_inner_brow_distance": "눈썹 찡그림근 반응에는 뚜렷한 개인차가 있었으며, 랜드마크 거리와 근전도는 같은 측정값이 아닙니다.",
+      "v2_brow_down": "눈썹 찡그림근 반응의 개인차를 보여주지만 MediaPipe browDown 계수를 직접 검증한 연구는 아닙니다."
+    },
+    "applicability": "related",
+    "evidence_role": "measurement"
+  },
+  {
+    "file": "Giannakakis_2025_facial_aus.pdf",
+    "title": "Stress recognition identifying relevant facial action units through explainable artificial intelligence and machine learning",
+    "year": 2025,
+    "doi": "10.1016/j.cmpb.2024.108507",
+    "article_url": "https://research.uni-luebeck.de/en/publications/stress-recognition-identifying-relevant-facial-action-units-throu/",
+    "pdf_url": "https://users.ics.forth.gr/~ggian/publications/journals/2024%20Giannakakis%20Stress%20recognition%20identifying%20relevant%20facial%20action%20units%20through%20explainable%20artificial%20intelligence%20and%20machine%20learning.pdf",
+    "topics": [
+      "face_measurement",
+      "concept_facial_variability",
+      "v2_brow_down",
+      "v2_eye_squint",
+      "v2_jaw_open"
+    ],
+    "scope": "Personalized machine-learning study of combinations of automatically estimated facial Action Units across stress and neutral tasks. It does not validate any single MediaPipe coefficient as a universal stress marker.",
+    "finding_ko": "58명이 여러 스트레스·중립 과제를 수행한 자료에서 얼굴 Action Unit 조합을 개인 기준으로 분석했습니다. 단일 표정값보다 여러 움직임의 조합과 개인 기준이 중요했으며, 한 계수의 보편적인 방향을 제시하지 않았습니다.",
+    "finding_ko_by_issue": {
+      "concept_facial_variability": "스트레스 조건에서 여러 Action Unit의 수와 강도가 함께 달라졌지만, 현재의 전체 blendshape 변동성 하나와 동일한 측정은 아닙니다.",
+      "v2_brow_down": "개인화된 Action Unit 조합이 조건 구분에 기여했지만 browDown 하나를 보편적인 판정값으로 검증하지는 않았습니다.",
+      "v2_eye_squint": "여러 얼굴 움직임의 조합을 사용한 연구로 eyeSquint 하나의 방향이나 교정법을 검증하지는 않았습니다.",
+      "v2_jaw_open": "여러 얼굴 움직임의 조합을 사용한 연구로 jawOpen 하나의 방향이나 교정법을 검증하지는 않았습니다."
+    },
+    "applicability": "related",
+    "evidence_role": "measurement"
   }
 ]

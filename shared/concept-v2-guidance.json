@@ -1,0 +1,277 @@
+{
+  "v2_mean_f0": {
+    "title": [
+      "중요한 문장이 구분되는지 듣기",
+      "Listen for the key sentence"
+    ],
+    "higher": [
+      "평균적인 목소리 높이가 앞부분보다 높게 측정됐어요",
+      "Mean voice pitch was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "평균적인 목소리 높이가 앞부분보다 낮게 측정됐어요",
+      "Mean voice pitch was lower than earlier in the presentation"
+    ],
+    "same": [
+      "평균적인 목소리 높이는 앞부분과 비슷했어요",
+      "Mean voice pitch was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "구간에서 비교할 문장 하나와 중요한 단어 하나를 본인이 고르세요. 그 단어가 나머지와 구분돼 들리는지 원본을 한 번 듣고 확인하세요.",
+      "Choose one sentence and one important word yourself. Listen once and check whether that word stands out from the rest."
+    ],
+    "goal": [
+      "선택한 한 단어가 문장의 나머지와 구분되게 말하기",
+      "Make one chosen word stand out from the rest of the sentence"
+    ],
+    "instruction": [
+      "원본에서 다시 말할 문장 하나와 강조할 단어 하나를 고르세요.\n같은 문장을 말하되 고른 단어에만 강조를 주세요.\n두 버전을 번갈아 듣고 고른 단어가 구분되는 쪽을 선택하세요.",
+      "Choose one sentence from the original and one word to emphasize.\nRepeat the same sentence, emphasizing only the chosen word.\nAlternate the two versions and choose the one where that word stands out."
+    ],
+    "strategies": [
+      "contrast",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "pitch_change"
+  },
+  "v2_jitter": {
+    "title": [
+      "문장 끝의 전달을 비교하기",
+      "Compare the sentence ending"
+    ],
+    "higher": [
+      "음높이의 미세 변동이 앞부분보다 컸습니다",
+      "cycle-to-cycle frequency variation was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "음높이의 미세 변동이 앞부분보다 작았습니다",
+      "cycle-to-cycle frequency variation was lower than earlier in the presentation"
+    ],
+    "same": [
+      "음높이의 미세 변동은 앞부분과 비슷했습니다",
+      "cycle-to-cycle frequency variation was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "원본에서 문장 하나를 고르고 끝 단어까지 한 번에 구분되는지 들어보세요. 다시 듣고 싶었던 지점을 표시한 뒤, 아래 연습으로 같은 문장의 끝부분을 비교하세요.",
+      "Choose one sentence and listen for its final word on the first play. Mark any point you wanted to replay, then compare the sentence ending with the exercise below."
+    ],
+    "goal": [
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
+    ],
+    "instruction": [
+      "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.\n같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.\n원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+      "Choose one sentence from the original, including its last word.\nRepeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable.\nListen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
+    ],
+    "strategies": [
+      "clear_phrases",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "lip_tension"
+  },
+  "v2_shimmer": {
+    "title": [
+      "끝 단어까지 들리는지 비교하기",
+      "Compare delivery through the final word"
+    ],
+    "higher": [
+      "아주 짧은 소리 단위에서 크기가 달라지는 정도가 앞부분보다 크게 측정됐어요",
+      "cycle-to-cycle amplitude variation was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "아주 짧은 소리 단위에서 크기가 달라지는 정도가 앞부분보다 작게 측정됐어요",
+      "cycle-to-cycle amplitude variation was lower than earlier in the presentation"
+    ],
+    "same": [
+      "아주 짧은 소리 단위에서 크기가 달라지는 정도는 앞부분과 비슷했어요",
+      "cycle-to-cycle amplitude variation was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "문장 하나를 골라 처음 단어와 끝 단어를 차례로 들어보세요. 끝 단어가 구분되는지 확인한 뒤 같은 내용을 아래 방법으로 비교하세요.",
+      "Choose a sentence and listen to its first and final words. Check whether you can identify the final word, then compare the same content using the exercise below."
+    ],
+    "goal": [
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
+    ],
+    "instruction": [
+      "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.\n같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.\n원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+      "Choose one sentence from the original, including its last word.\nRepeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable.\nListen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
+    ],
+    "strategies": [
+      "clear_phrases",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "lip_tension"
+  },
+  "v2_hnr": {
+    "title": [
+      "같은 환경에서 말소리 비교하기",
+      "Compare speech in the same setup"
+    ],
+    "higher": [
+      "목소리의 규칙적인 성분을 잡음 성분과 비교한 값이 앞부분보다 크게 측정됐어요",
+      "the voice harmonics-to-noise ratio was higher than earlier in the presentation"
+    ],
+    "lower": [
+      "목소리의 규칙적인 성분을 잡음 성분과 비교한 값이 앞부분보다 작게 측정됐어요",
+      "the voice harmonics-to-noise ratio was lower than earlier in the presentation"
+    ],
+    "same": [
+      "목소리의 규칙적인 성분을 잡음 성분과 비교한 값은 앞부분과 비슷했어요",
+      "the voice harmonics-to-noise ratio was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "같은 구간을 화면 없이 한 번 듣고, 다시 듣고 싶은 문장 하나를 본인이 고르세요. 같은 카메라·마이크 위치에서 그 문장을 다시 녹음해 말소리가 구분되는지 비교하세요.",
+      "Listen once without the picture and choose a sentence you want to replay. Record it in the same camera and microphone setup and compare how clearly you can identify the words."
+    ],
+    "goal": [
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
+    ],
+    "instruction": [
+      "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.\n같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.\n원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+      "Choose one sentence from the original, including its last word.\nRepeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable.\nListen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
+    ],
+    "strategies": [
+      "clear_phrases",
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "lip_tension"
+  },
+  "v2_brow_down": {
+    "title": [
+      "눈썹 움직임과 전달 의도 함께 보기",
+      "Review brow movement with your intended expression"
+    ],
+    "higher": [
+      "눈썹을 내리는 움직임이 앞부분보다 크게 측정됐어요",
+      "Brow lowering movement was greater than earlier in the presentation"
+    ],
+    "lower": [
+      "눈썹을 내리는 움직임이 앞부분보다 작게 측정됐어요",
+      "Brow lowering movement was smaller than earlier in the presentation"
+    ],
+    "same": [
+      "눈썹을 내리는 움직임은 앞부분과 비슷했어요",
+      "Brow lowering movement was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "같은 문장을 소리만 듣고 한 번, 소리와 영상으로 한 번 확인하세요. 본인이 전달하려던 느낌과 표정이 맞는지 비교할 문장을 고르세요.",
+      "Listen to the same sentence once, then watch it with sound. Choose the sentence whose expression you want to compare with the feeling you intended."
+    ],
+    "goal": [
+      "전달할 느낌을 정하고 한 문장 다시 말하기",
+      "Choose what you want to convey, then repeat one sentence"
+    ],
+    "instruction": [
+      "다시 말할 문장과 전달할 느낌 하나를 본인이 고르세요.\n말하기 직전에 잠깐 준비한 뒤 같은 문장을 자연스러운 표정으로 말하세요.\n두 버전을 소리와 함께 보고 본인이 고른 느낌에 가까운 쪽을 선택하세요.",
+      "Choose one sentence and the feeling you want to convey.\nTake a brief moment to prepare, then say the same sentence with a natural expression.\nWatch both versions with sound and choose the one closer to the feeling you selected."
+    ],
+    "strategies": [
+      "expression"
+    ],
+    "profile": "brow_tension"
+  },
+  "v2_eye_squint": {
+    "title": [
+      "눈 주변과 시선을 편하게 두고 확인하기",
+      "Review comfortable eyes and gaze"
+    ],
+    "higher": [
+      "눈꺼풀을 좁히는 움직임이 앞부분보다 크게 측정됐어요",
+      "Eyelid tightening movement was greater than earlier in the presentation"
+    ],
+    "lower": [
+      "눈꺼풀을 좁히는 움직임이 앞부분보다 작게 측정됐어요",
+      "Eyelid tightening movement was smaller than earlier in the presentation"
+    ],
+    "same": [
+      "눈꺼풀을 좁히는 움직임은 앞부분과 비슷했어요",
+      "Eyelid tightening movement was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "문장을 말할 때와 문장 사이에 눈 주변이 어떻게 움직이는지 나누어 보세요. 조명과 카메라 위치를 유지하고 같은 문장에서 의도하지 않은 조임이 반복되는지 비교하세요.",
+      "Compare eye-area movement while speaking and between sentences. Keep lighting and camera position unchanged and check whether unintended tightening repeats in the same sentence."
+    ],
+    "goal": [
+      "같은 촬영 환경에서 렌즈나 청중 위치를 보며 한 문장 다시 말하기",
+      "Repeat one sentence toward the lens or an audience position in the same setup"
+    ],
+    "instruction": [
+      "다시 말할 문장 하나를 고르고 조명과 카메라 위치를 그대로 두세요.\n렌즈나 청중 위치를 보며 같은 문장을 여러 번 말하세요.\n두 버전을 보고 의도하지 않은 눈꺼풀 조임이 반복되는지 원본과 비교하세요.",
+      "Choose one sentence and keep the lighting and camera position unchanged.\nRepeat it several times while looking toward the lens or an audience position.\nCompare both versions and check whether unintended eyelid tightening repeats."
+    ],
+    "strategies": [
+      "face_reset"
+    ],
+    "profile": "eye_reset"
+  },
+  "v2_jaw_open": {
+    "title": [
+      "말이 급하게 이어졌는지 직접 듣기",
+      "Listen for rushed delivery yourself"
+    ],
+    "higher": [
+      "턱을 여는 움직임이 앞부분보다 크게 측정됐어요",
+      "Jaw opening movement was greater than earlier in the presentation"
+    ],
+    "lower": [
+      "턱을 여는 움직임이 앞부분보다 작게 측정됐어요",
+      "Jaw opening movement was smaller than earlier in the presentation"
+    ],
+    "same": [
+      "턱을 여는 움직임은 앞부분과 비슷했어요",
+      "Jaw opening movement was similar to earlier in the presentation"
+    ],
+    "missing": [
+      "앞부분과 이 움직임·음성을 비교할 자료가 부족해요",
+      "There is not enough data to compare this measurement with earlier intervals"
+    ],
+    "check": [
+      "소리만 듣고 문장 끝의 쉼을 본인이 표시한 뒤, 같은 장면을 영상과 함께 보세요. 아래 연습에서는 입 모양 대신 같은 문장의 경계가 구분되는지를 비교하세요.",
+      "Listen without the picture and mark a sentence boundary yourself, then watch with sound. In the exercise below, compare the boundary in the same sentence rather than the amount of mouth opening."
+    ],
+    "goal": [
+      "뜻이 끝나는 곳에서 한 번 쉬고 다음 문장 시작하기",
+      "Pause once at a completed thought before starting the next sentence"
+    ],
+    "instruction": [
+      "다시 말할 문장을 고르고 뜻이 끝나는 곳에 쉼 표시를 하세요.\n같은 내용을 말하며 표시한 곳에서 한 번 쉬세요. 다른 부분은 평소처럼 말하세요.\n두 버전을 듣고 문장 끝과 다음 시작이 구분되는 쪽을 고르세요.",
+      "Choose a sentence and mark where a complete thought ends.\nRepeat the same content with one pause at your mark. Keep the rest of your delivery natural.\nListen to both versions and choose the one with a clearer sentence boundary."
+    ],
+    "strategies": [
+      "phrasing",
+      "two_versions"
+    ],
+    "profile": "jaw_review"
+  }
+}

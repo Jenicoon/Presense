@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fix-webm-duration/fix": "^1.0.1",
@@ -15,7 +17,8 @@
     "lucide-react": "^0.525.0",
     "next": "^16.2.7",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.31",

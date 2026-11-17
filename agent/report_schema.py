@@ -17,6 +17,9 @@ class SignalQuality(Contract):
 
 
 class SegmentAnalysis(Contract):
+    modelVersion: str | None = Field(default=None, max_length=100)
+    metricDefinitionVersion: str | None = Field(default=None, max_length=100)
+    conceptDefinitionVersion: str | None = Field(default=None, max_length=100)
     segmentId: str = Field(min_length=1, max_length=100)
     startMs: int = Field(ge=0)
     endMs: int = Field(gt=0)
@@ -38,19 +41,51 @@ class SegmentAnalysis(Contract):
         return self
 
 
+class PracticeContext(Contract):
+    sessionId: str = Field(min_length=1, max_length=100)
+    practiceId: str = Field(min_length=1, max_length=100)
+
+
 class ReviewRequest(Contract):
     sessionId: str = Field(min_length=1, max_length=100)
     durationMs: int = Field(gt=0, le=14_400_000)
     language: Literal["ko", "en"] = "ko"
+    modelVersion: str | None = Field(default=None, max_length=100)
+    metricDefinitionVersion: str = Field(default="session-analysis-v4", max_length=100)
+    conceptDefinitionVersion: str | None = Field(default=None, max_length=100)
     source: Literal["live"] = "live"
     sceneLabel: str | None = Field(default=None, max_length=120)
-    segments: list[SegmentAnalysis] = Field(min_length=1, max_length=7200)
+    externalAiConsent: bool = False
+    practiceContext: PracticeContext | None = None
+    segments: list[SegmentAnalysis] = Field(min_length=0, max_length=7200)
     personalBaseline: Probability | None = None
     baselineSampleCount: int | None = Field(default=None, ge=3, le=100)
     baselineModelVersion: str | None = Field(default=None, max_length=100)
+    baselineSource: Literal["preparation", "dataset_example", "synthetic"] | None = None
 
     @model_validator(mode="after")
     def valid_session(self):
+        for field in ("modelVersion", "metricDefinitionVersion", "conceptDefinitionVersion"):
+            values = {getattr(row,field) for row in self.segments}
+            specified = values - {None}
+            if len(specified)>1 or (specified and None in values):
+                raise ValueError("A session cannot mix model or metric definition versions")
+            if specified:
+                value=next(iter(specified))
+                if field in self.model_fields_set and getattr(self,field)!=value:
+                    raise ValueError("Session and window versions differ")
+                setattr(self,field,value)
+        from .model_contract import RAW_METRICS
+        new_keys={key for _,key,_,_ in RAW_METRICS}
+        if self.metricDefinitionVersion!="session-analysis-v5-exact7" and (any(new_keys.intersection(row.audioFeatures.keys()|row.videoFeatures.keys()) for row in self.segments) or (self.modelVersion or "").startswith("exact7-v2-")):
+            raise ValueError("New measurements cannot use legacy definitions")
+        if self.metricDefinitionVersion=="session-analysis-v5-exact7":
+            if not self.modelVersion or not self.modelVersion.startswith("exact7-v2-") or self.conceptDefinitionVersion!="literature-exact7-v2":
+                raise ValueError("V2 measurements require their paired model and concept definition versions")
+            from ai.concept_registry import PROPOSED_CONCEPTS_V2
+            names={c.model_name_ko for c in PROPOSED_CONCEPTS_V2}
+            if any(not set(row.concepts).issubset(names) for row in self.segments):
+                raise ValueError("Legacy concept names cannot label V2 predictions")
         ids = [s.segmentId for s in self.segments]
         if len(ids) != len(set(ids)):
             raise ValueError("Segment IDs must be unique.")
@@ -59,6 +94,8 @@ class ReviewRequest(Contract):
         baseline_fields = (self.personalBaseline, self.baselineSampleCount, self.baselineModelVersion)
         if any(value is not None for value in baseline_fields) and not all(value is not None for value in baseline_fields):
             raise ValueError("Personal baseline, sample count, and model version must be provided together.")
+        if self.baselineSource is not None and self.personalBaseline is None:
+            raise ValueError("Baseline source requires an actual saved baseline.")
         return self
 
 
@@ -79,13 +116,27 @@ class Evidence(Contract):
     applicability: Literal["direct", "related"] = "related"
 
 
+class PracticeInstructions(Contract):
+    reason: str = Field(min_length=10, max_length=500)
+    goal: str = Field(min_length=8, max_length=250)
+    steps: list[Annotated[str, Field(min_length=8, max_length=350)]] = Field(min_length=2, max_length=4)
+    question: str = Field(min_length=8, max_length=250)
+
+
+class PracticeChoice(Contract):
+    strategyId: Literal["contrast", "phrasing", "two_versions", "clear_phrases", "expression", "gaze_anchor", "face_reset"]
+    segmentId: str = Field(min_length=1, max_length=100)
+    instructions: PracticeInstructions | None = None
+
+
 class CoachingItem(Contract):
     issueId: str
+    practicePlan: PracticeChoice | None = None
     researchBasis: str = Field(default="", max_length=600)
-    recommendation: str = Field(min_length=1, max_length=900)
+    recommendation: str = Field(default="", max_length=900)
     evidenceIds: list[str] = Field(default_factory=list, max_length=3)
 
 
 class Synthesis(Contract):
     summary: str = Field(min_length=1, max_length=1400)
-    coaching: list[CoachingItem] = Field(default_factory=list, max_length=5)
+    coaching: list[CoachingItem] = Field(default_factory=list)

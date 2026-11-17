@@ -19,11 +19,13 @@ function setup(respond = async () => ({ stressScore: 0.4, confidence: 0.6, model
   const refs = { generation: { current: 0 }, inFlight: { current: false }, active: { current: false }, baseline: { current: null }, samples: { current: [] } };
   const env = {
     recordingActiveRef: refs.active, preparationFrameRef: refs.baseline,
+    calibrationActiveRef: { current: true }, calibrationRoundRef: { current: 1 },
+    setCalibrationRound() {}, setCalibrationError() {}, lang: 'ko',
     calibrationSamplesRef: refs.samples, calibrationModelVersion: 'v1',
     addCalibrationSample: (samples, frame, capturedAtMs) => [...samples, { stressScore: frame.stressScore, capturedAtMs }],
     calibrationMedian: (samples) => samples.length >= 3 ? 0.4 : null,
     setCalibrationCount() {},
-    inferInFlightRef: refs.inFlight,
+    inferInFlightRef: refs.inFlight, lastInferenceAtRef: { current: 0 },
     analysisGenerationRef: refs.generation,
     inferenceAbortRef: { current: null },
     frameBufferRef: { current: Array.from({ length: 16 }, () => new Blob(['frame'])) },
@@ -98,6 +100,10 @@ test('report response makes the session summary use the same model average and p
   const request = { sessionId: 'same', durationMs: 40000 };
   const generate = loadFunction('requestAgentReport', {
     reportRequestRef: { current: request }, sessionIdRef: { current: 'same' },
+    reportTaskRef: { current: null }, baseSavedRef: { current: true },
+    draftRef: { current: null }, user: null, calibration: null,
+    saveGeneratedSessionReport: async () => {},
+
     setAgentReportLoading() {}, setAgentReportError() {},
     generateAgentReport: async () => ({ observationReport: {
       averageStressScore: 0.71,
@@ -106,12 +112,35 @@ test('report response makes the session summary use the same model average and p
     setAgentReport: (value) => { received = value; },
     setReport: (update) => { report = update(report); },
     PHASES: ['Open', 'Build', 'Core', 'Close'], lang: 'ko',
+    attemptContextRef: {current:null}, window: {dispatchEvent() {}}, CustomEvent: class {},
   });
   await generate();
   assert.equal(received.observationReport.averageStressScore, report.averageStress);
   assert.equal(report.peakValue, 78);
   assert.equal(report.peakBin, 5);
   assert.equal(report.peakPhase, 'Build');
+});
+
+test('saved analysis retries only failed AI feedback instead of reusing the failed cache', async () => {
+  let retried = 0, generated = 0, received;
+  const request = { sessionId: 'saved', durationMs: 40000, externalAiConsent: true };
+  const draftRef = { current: { id: 'saved', saveVideo: true, videoSaved: false, reportSaved: true,
+    agentReport: { sessionId: 'saved', generationState: 'ready', analysisStatus: 'complete', reportFeedback: { status: 'failed' } } } };
+  const generate = loadFunction('requestAgentReport', {
+    reportRequestRef: { current: request }, sessionIdRef: { current: 'saved' }, reportTaskRef: { current: null },
+    baseSavedRef: { current: true }, draftRef, user: null, calibration: null, lang: 'ko',
+    setAgentReportLoading() {}, setAgentReportError() {}, setReport() {},
+    retryReportFeedback: async () => { retried++; return { sessionId: 'saved', analysisStatus: 'complete', reportFeedback: { status: 'ready' } }; },
+    generateAgentReport: async () => { generated++; throw new Error('full generation should not run'); },
+    saveGeneratedSessionReport: async () => {}, saveSessionDraft: async () => {}, removeSessionDraft: async () => {},
+    setAgentReport: value => { received = value; }, PHASES: ['Open', 'Build', 'Core', 'Close'],
+    window: { dispatchEvent() {} }, CustomEvent: class {},
+  });
+  await generate();
+  assert.equal(retried, 1);
+  assert.equal(generated, 0);
+  assert.equal(received.reportFeedback.status, 'ready');
+  assert.equal(draftRef.current.reportSaved, true);
 });
 
 test('video collection fills its 16-frame window in 10 seconds', async () => {
@@ -130,6 +159,50 @@ test('video collection fills its 16-frame window in 10 seconds', async () => {
   assert.equal(interval * 16, 10000);
   await tick();
   assert.equal(frames.current.length, 16);
+});
+
+test('video collection keeps running after a recalibration generation change', async () => {
+  let tick;
+  const frames = { current: [] };
+  const generation = { current: 0 };
+  const start = loadFunction('startCollection', {
+    startAudioMeter: () => {}, collectionTickRef: { current: null },
+    analysisGenerationRef: generation, collectionBusyRef: { current: false },
+    captureFrameBlob: async () => new Blob(['frame']), frameBufferRef: frames,
+    setCollectedFrames: () => {}, setLiveStatus: () => {},
+    window: { setInterval: (fn) => { tick = fn; return 1; } },
+  });
+  start({});
+  generation.current += 1;
+  await tick();
+  assert.equal(frames.current.length, 1);
+});
+
+test('completed baseline capture advances immediately without waiting for inference', () => {
+  let queued = 0, advanced = 0, captured = 0, roundState = 'capturing', phase = 'collecting';
+  const active = { current: true };
+  const capturedRef = { current: 0 };
+  const finish = loadFunction('finishCalibrationCapture', {
+    calibrationCaptureFinishingRef: { current: false }, calibrationActiveRef: active,
+    calibrationRound: 'capturing', frameBufferRef: { current: Array.from({ length: 16 }, () => new Blob(['frame'])) },
+    audioSeconds: 10, getRecentAudioPcm: () => new Float32Array(160000), calibrationRunRef: { current: 7 },
+    calibrationCapturedRef: capturedRef, setCalibrationCapturedCount: (value) => { captured = value; },
+    queueCalibrationInference: () => { queued++; }, beginCalibrationCaptureWindow: () => { advanced++; },
+    setCalibrationRound: (value) => { roundState = value; }, setPreparationPhase: (value) => { phase = value; },
+    performance,
+  });
+  finish();
+  assert.equal(captured, 1);
+  assert.equal(advanced, 1);
+  assert.equal(queued, 1);
+  capturedRef.current = 2;
+  finish();
+  assert.equal(captured, 3);
+  assert.equal(advanced, 1);
+  assert.equal(queued, 2);
+  assert.equal(active.current, false);
+  assert.equal(roundState, 'analyzing');
+  assert.equal(phase, 'analyzing');
 });
 
 test('audio uses only the latest ten seconds and returns 16 kHz PCM', () => {
@@ -173,6 +246,9 @@ test('stopping clears media and baseline, invalidates requests, and stops timers
   const env = {
     recordingActiveRef: { current: true }, preparationFrameRef: { current: { stressScore: 0.8 } },
     calibrationSamplesRef: { current: [{ stressScore: .8 }] }, setCalibrationCount() {},
+    calibrationRunRef: { current: 0 }, calibrationControllersRef: { current: new Set() },
+    calibrationInferenceChainRef: { current: Promise.resolve() }, calibrationCapturedRef: { current: 1 },
+    calibrationProcessedRef: { current: 1 }, setCalibrationCapturedCount() {},
     analysisGenerationRef: { current: 1 }, inferenceAbortRef: { current: controller },
     inferInFlightRef: { current: true }, audioChunksRef: { current: [new Float32Array(100)] },
     frameBufferRef: { current: [new Blob(['old'])] }, collectionTickRef: { current: 1 },
@@ -191,4 +267,55 @@ test('stopping clears media and baseline, invalidates requests, and stops timers
   assert.deepEqual(env.frameBufferRef.current, []);
   assert.equal(env.collectionTickRef.current, null);
   assert.equal(env.tickRef.current, null);
+});
+
+
+test('a 30-second live recording retains multiple arrived windows including identical outputs', async()=>{
+  const segments=[]; const sessionStart=performance.now()-10_000;
+  const state=setup(async()=>({stressScore:segments.length===1?.8:.3,confidence:.8,quality:{audioValid:true,faceDetected:true}}), {
+    reportSegmentsRef:{current:segments}, sessionStartedAtRef:{current:sessionStart},
+    toReportSegment:(frame,index,endMs)=>({segmentId:`capture-${index}`,startMs:endMs-10000,endMs,stressScore:frame.stressScore})
+  });
+  for(const elapsed of [10000,20000,30000]) {
+    // The handler records capture time before inference returns.
+    const old=performance.now;
+    Object.defineProperty(performance,'now',{value:()=>sessionStart+elapsed,configurable:true});
+    await state.request();
+    Object.defineProperty(performance,'now',{value:old,configurable:true});
+  }
+  assert.deepEqual(segments.map(s=>s.stressScore),[.3,.8,.3]);
+  assert.deepEqual(segments.map(s=>[s.startMs,s.endMs]),[[0,10000],[10000,20000],[20000,30000]]);
+});
+
+test('microphone analysis can run with a silent output sink and still retain captured PCM',()=>{
+  let processor;const sinks=[];const chunks=[];const audioContextRef={current:null};let seconds=0;
+  class AudioContext {
+    constructor(){this.state='running';this.sampleRate=48000;this.destination={};}
+    setSinkId(sink){sinks.push(sink);return Promise.resolve();}
+    createAnalyser(){return {frequencyBinCount:256,getByteFrequencyData(){}};}
+    createMediaStreamSource(){return {connect(){}};}
+    createScriptProcessor(){processor={connect(){}};return processor;}
+  }
+  const start=loadFunction('startAudioMeter',{audioContextRef,window:{AudioContext},setAudioRunning(){},setVoiceDetected(){},audioChunksRef:{current:chunks},setAudioSeconds:v=>seconds=v,audioSampleRateRef:{current:48000},analyserRef:{current:null},audioProcessorRef:{current:null},setAudioLevel(){},rafRef:{current:null},requestAnimationFrame:()=>1});
+  start({});processor.onaudioprocess({inputBuffer:{getChannelData:()=>new Float32Array(48000).fill(.1)}});
+  assert.deepEqual(sinks,[{type:'none'}]);assert.equal(chunks[0].length,48000);assert.equal(seconds,1);
+});
+
+test('completed initial measurement does not submit more windows or change its reference', async () => {
+  let requests=0;
+  const state=setup(async()=>{requests++;return {stressScore:.9};});
+  state.refs.samples.current=[{stressScore:.2},{stressScore:.8},{stressScore:.4}];
+  await state.request(true);
+  assert.equal(requests,0);
+  assert.equal(state.refs.samples.current.length,3);
+  assert.deepEqual(state.results,[]);
+});
+
+
+test('waiting between baseline rounds does not send inference or collect another sample', async () => {
+  let calls = 0;
+  const state = setup(async () => { calls++; return {}; }, { calibrationActiveRef: { current: false } });
+  await state.request(true);
+  assert.equal(calls, 0);
+  assert.equal(state.refs.samples.current.length, 0);
 });

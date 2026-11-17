@@ -1,0 +1,73 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+const React = require('react');
+const {renderToStaticMarkup} = require('react-dom/server');
+function compile(file, requireDependency) {
+  const code = ts.transpileModule(fs.readFileSync(__dirname+'/../'+file,'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  const exports = {};
+  new Function('exports','require',code)(exports,requireDependency);
+  return exports;
+}
+const {PracticeReviewForm} = compile('components/practice-review-form.tsx',require);
+const card = {type:'practice_review',practiceId:'p',attemptSessionId:'a',checks:[{id:'boundary',label:'의미가 끝나는 곳에서 멈췄나요?'},{id:'start',label:'다음 문장을 새로 시작했나요?'}]};
+test('review starts unanswered and asks for both conditions and the saved actions',()=>{
+  const html=renderToStaticMarkup(React.createElement(PracticeReviewForm,{card,ko:true,busy:false,onSubmit(){}}));
+  assert.equal((html.match(/<select/g)||[]).length,4);
+  assert.match(html,/다시 말한 내용/);assert.match(html,/카메라·마이크 환경/);
+  assert.match(html,/다음 문장을 새로 시작/);assert.match(html,/확인 결과 저장/);
+  assert.match(html,/<button[^>]*disabled/);
+  assert.equal((html.match(/value="" selected/g)||[]).length,4);
+});
+test('review controls follow the selected UI language',()=>{
+  const english={...card,checks:[{id:'boundary',label:'Did you pause at a completed thought?'},{id:'start',label:'Did the next sentence start separately?'}]};
+  const html=renderToStaticMarkup(React.createElement(PracticeReviewForm,{card:english,ko:false,busy:false,onSubmit(){}}));
+  assert.doesNotMatch(html,/[가-힣]/);assert.match(html,/Unable to assess/);assert.match(html,/Save my review/);
+});
+test('selected answers and attempt identity reach the coaching API without being converted to a grade',async()=>{
+  const review={practiceId:'p',attemptSessionId:'a',sameContent:'same',sameEnvironment:'same',answers:{boundary:'yes',start:'partly'}};
+  let sent;
+  const originalFetch=global.fetch, originalWindow=global.window;
+  global.window={dispatchEvent(){}};
+  global.fetch=async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {ok:true,json:async()=>({conversationState:{stage:'comparison_ready'}})};};
+  try {
+    const api=compile('lib/coaching.ts',id=>id==='@/lib/supabase/client'?{getSupabaseBrowserClient:()=>({auth:{getSession:async()=>({data:{session:{access_token:'local-test'}}})}})}:id==='@/lib/live-signal'?{INFERENCE_URL:'http://127.0.0.1:8016'}:require(id));
+    await api.actCoach({sessionId:'s',action:'submit_practice_review',language:'ko',revision:4,deliveryReview:review});
+    assert.equal(sent.url,'http://127.0.0.1:8016/agent/coach');assert.deepEqual(sent.body.deliveryReview,review);
+    assert.equal(sent.body.revision,4);assert.equal(sent.body.outcome,undefined);
+  } finally {global.fetch=originalFetch;global.window=originalWindow;}
+});
+
+test('a saved recommendation uses an existing primary action in both languages',()=>{
+  const {CoachComponents}=compile('components/coach-components.tsx',id=>{
+    if(id==='@/components/practice-review-form')return {PracticeReviewForm};
+    if(id==='@/lib/report-locale')return {signalScore:()=>''};
+    if(id==='@/lib/measurement-labels')return {measurementLabel:x=>x};
+    if(id==='@/lib/coaching')return {clock:()=>'',jumpToVideo(){}};
+    return require(id);
+  });
+  const components=[{type:'insufficient_data',label:'Saved review details'},{type:'action_choices',choices:[{id:'recommended_try_phrasing',action:'create_practice',practiceStrategyId:'phrasing',label:'문장 경계 연습',recommended:true},{id:'finish',action:'finish_coaching',label:'마치기'}]}];
+  const html=renderToStaticMarkup(React.createElement(CoachComponents,{components,ko:true,busy:false,onAction(){}}));
+  assert.match(html,/btn btn-primary/);assert.match(html,/추천 · 문장 경계 연습/);
+  assert.equal((html.match(/<button/g)||[]).length,2);
+  assert.ok(html.indexOf('추천 · 문장 경계 연습') < html.indexOf('Saved review details'));
+  const english=[{type:'action_choices',choices:[{...components[1].choices[0],label:'Sentence boundary practice'}]}];
+  const en=renderToStaticMarkup(React.createElement(CoachComponents,{components:english,ko:false,busy:false,onAction(){}}));
+  assert.match(en,/Suggested · Sentence boundary practice/);assert.doesNotMatch(en,/[가-힣]/);
+});
+
+test('coaching research is shown in a collapsed reference section',()=>{
+  const {CoachComponents}=compile('components/coach-components.tsx',id=>{
+    if(id==='@/components/practice-review-form')return {PracticeReviewForm};
+    if(id==='@/lib/report-locale')return {signalScore:()=>''};
+    if(id==='@/lib/measurement-labels')return {measurementLabel:x=>x};
+    if(id==='@/lib/coaching')return {clock:()=>'',jumpToVideo(){}};
+    return require(id);
+  });
+  const components=[{type:'research_references',items:[{id:'paper-1',title:'AU7 study',articleUrl:'https://example.test/paper',finding:'눈꺼풀 조임과 관련된 연구 결과',scope:'연습 효과를 시험한 연구는 아닙니다.'}]}];
+  const html=renderToStaticMarkup(React.createElement(CoachComponents,{components,ko:true,busy:false,onAction(){}}));
+  assert.match(html,/<details[^>]*coach-research-references/);
+  assert.match(html,/참고 논문/);assert.match(html,/AU7 study/);assert.match(html,/눈꺼풀 조임과 관련된 연구 결과/);
+  assert.match(html,/href="https:\/\/example.test\/paper"/);
+});

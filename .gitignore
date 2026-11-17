@@ -16,6 +16,8 @@ archive/
 !weights/
 !weights/*.pt
 !weights/*.npy
+!weights/concept_v2/*.pt
+!weights/concept_v2/*.npy
 
 # Standard Python ignores
 __pycache__/
@@ -59,3 +61,11 @@ AGENTS.md
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+/frontend/node_modules
+
+# Separate local preview build; V2 model bundle is versioned.
+.next-*/
+
+# Private local request/response audits are never committed.
+/local-validation/

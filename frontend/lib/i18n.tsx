@@ -10,16 +10,18 @@ const DEFAULT_LANG: Lang = "en";
 // Flat key → { ko, en }. Use t("key") to read the current language.
 const dict: Record<string, { ko: string; en: string }> = {
   // ── App shell ──
+  "diag.reportComplete": { ko: "AI 보고서 완료", en: "AI report complete" },
+  "diag.reportLimited": { ko: "일부 분석 보고서", en: "AI report limited" },
   "brand.tagline": { ko: "발표 AI", en: "Presentation AI" },
   "nav.dashboard": { ko: "대시보드", en: "Dashboard" },
   "nav.history": { ko: "기록", en: "History" },
   "nav.practice": { ko: "연습", en: "Practice" },
   "nav.settings": { ko: "설정", en: "Settings" },
-  "agent.title": { ko: "AI ChatBot", en: "AI ChatBot" },
+  "agent.title": { ko: "AI 발표 코치", en: "AI Presentation Coach" },
   "agent.sidebarHint": { ko: "최근 세션과 대화", en: "Talk about your sessions" },
   "agent.subtitle": { ko: "언제든 연습 기록을 함께 살펴보세요", en: "Discuss your practice anytime" },
-  "agent.open": { ko: "AI ChatBot 열기", en: "Open AI ChatBot" },
-  "agent.close": { ko: "AI ChatBot 닫기", en: "Close AI ChatBot" },
+  "agent.open": { ko: "AI 발표 코치 열기", en: "Open AI ChatBot" },
+  "agent.close": { ko: "AI 발표 코치 닫기", en: "Close AI ChatBot" },
   "agent.expand": { ko: "채팅창 크게 보기", en: "Expand chat" },
   "agent.shrink": { ko: "채팅창 작게 보기", en: "Shrink chat" },
   "agent.contextTitle": { ko: "연결된 세션", en: "Session context" },
@@ -28,7 +30,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "agent.loadingSessions": { ko: "최근 세션을 불러오는 중…", en: "Loading recent sessions…" },
   "agent.sessionsError": { ko: "세션 기록을 불러오지 못했습니다. 새로고침해 주세요.", en: "Could not load sessions. Please refresh." },
   "agent.noSessions": { ko: "저장된 세션이 없어도 연습에 관해 질문할 수 있어요.", en: "You can ask practice questions before saving a session." },
-  "agent.allRecent": { ko: "최근 5개 모두", en: "Latest five sessions" },
+  "agent.allRecent": { ko: "최근 세션", en: "Recent sessions" },
   "agent.welcome": { ko: "연습 방법을 물어보거나 최근 세션을 비교해 보세요.", en: "Ask for practice advice or compare recent sessions." },
   "agent.thinking": { ko: "답변을 작성하는 중…", en: "Writing a reply…" },
   "agent.placeholder": { ko: "최근 세션에서 가장 개선할 점은?", en: "What should I improve from my recent sessions?" },
@@ -36,9 +38,9 @@ const dict: Record<string, { ko: string; en: string }> = {
   "agent.signIn": { ko: "로그인 후 AI ChatBot을 사용할 수 있습니다.", en: "Sign in to use the AI ChatBot." },
   "agent.requestFailed": { ko: "AI ChatBot에 연결하지 못했습니다. 다시 시도해 주세요.", en: "Could not reach the AI ChatBot. Please try again." },
   "agent.emptyReply": { ko: "AI ChatBot에서 빈 답변을 받았습니다.", en: "The AI ChatBot returned an empty reply." },
-  "agent.privacy": { ko: "질문과 최근 세션 최대 5개의 요약이 AI 코칭 서비스로 전송됩니다.", en: "Your question and summaries of up to five recent sessions are sent to the AI coaching service." },
+  "agent.privacy": { ko: "AI는 저장된 분석 수치와 대화를 읽습니다. 영상·음성 원본은 AI에 보내지 않습니다.", en: "The AI reads saved measurements and conversation. Original video and audio are not sent to the AI." },
   "agent.reportHint": { ko: "이번 세션과 최근 기록을 함께 살펴보세요.", en: "Discuss this session alongside your recent records." },
-  "agent.openForReport": { ko: "이번 세션으로 AI ChatBot 열기", en: "Open AI ChatBot with this session" },
+  "agent.openForReport": { ko: "이번 세션으로 AI 발표 코치 열기", en: "Open AI ChatBot with this session" },
   "cta.startPractice": { ko: "연습 시작", en: "Start Practice" },
   "header.search": { ko: "세션 검색...", en: "Search sessions..." },
   "menu.settings": { ko: "설정", en: "Settings" },
@@ -50,11 +52,11 @@ const dict: Record<string, { ko: string; en: string }> = {
   // ── Auth ──
   "auth.headline": { ko: "더 똑똑하게 연습하고,\n더 잘 발표하세요.", en: "Practice smarter,\npresent better." },
   "auth.desc": {
-    ko: "웹캠과 마이크만으로 실시간 스트레스 감지하는 플랫폼",
-    en: "Real-time stress detection platform\nfrom your webcam and microphone",
+    ko: "웹캠과 마이크만으로 발표의 모델 신호를 분석하는 플랫폼",
+    en: "Presentation signal analysis platform\nfrom your webcam and microphone",
   },
   "auth.feature1": { ko: "실시간 카메라 + 마이크 분석", en: "Live camera + microphone analysis" },
-  "auth.feature2": { ko: "세션마다 AI 스트레스 감지", en: "AI stress detection after each session" },
+  "auth.feature2": { ko: "세션마다 AI 발표 신호 분석", en: "AI presentation signal analysis after each session" },
   "auth.feature3": { ko: "세션 기록 및 진행 상황 추적", en: "Session history and progress tracking" },
   "auth.welcomeBack": { ko: "다시 오신 걸 환영합니다", en: "Welcome back" },
   "auth.createAccount": { ko: "계정 만들기", en: "Create account" },
@@ -124,8 +126,8 @@ const dict: Record<string, { ko: string; en: string }> = {
   "kpi.totalSessions": { ko: "전체 세션", en: "Total Sessions" },
   "kpi.totalSessions.synced": { ko: "계정에 저장됨", en: "Saved to your account" },
   "kpi.totalSessions.local": { ko: "Supabase 연결 시 동기화", en: "Add Supabase to sync" },
-  "kpi.latestAvgStress": { ko: "최근 평균 스트레스", en: "Latest Avg Stress" },
-  "kpi.scoreOutOf": { ko: "1.00 만점 점수", en: "Score out of 1.00" },
+  "kpi.latestAvgStress": { ko: "최근 평균 스트레스 신호", en: "Latest mean stress signal" },
+  "kpi.scoreOutOf": { ko: "0–100 · AI가 추정한 신호", en: "0–100 · AI-estimated signal" },
   "kpi.currentFocus": { ko: "현재 집중 영역", en: "Current Focus Area" },
   "kpi.currentFocusSub": { ko: "가장 주의가 필요한 맥락", en: "Context needing the most attention" },
   "kpi.latestDiagnosis": { ko: "최근 진단", en: "Latest Diagnosis" },
@@ -133,9 +135,9 @@ const dict: Record<string, { ko: string; en: string }> = {
   "badge.synced": { ko: "동기화됨", en: "Synced" },
   "badge.local": { ko: "로컬", en: "Local" },
   "badge.latest": { ko: "최근", en: "Latest" },
-  "panel.stressTrend": { ko: "시간별 스트레스 추이", en: "Stress Trend Over Time" },
-  "panel.stressTrendSub": { ko: "세션별 평균 스트레스 점수", en: "Average stress score per session" },
-  "legend.stressScore": { ko: "스트레스 점수", en: "Stress score" },
+  "panel.stressTrend": { ko: "시간별 스트레스 신호 점수", en: "Stress signals over time" },
+  "panel.stressTrendSub": { ko: "세션별 평균 스트레스 신호", en: "Mean stress signal score per session" },
+  "legend.stressScore": { ko: "스트레스 신호", en: "Model stress signal" },
   "chart.oldest": { ko: "가장 오래됨", en: "Oldest" },
   "chart.latest": { ko: "최근", en: "Latest" },
   "panel.sessionsByScene": { ko: "장면별 세션", en: "Sessions by Scene" },
@@ -150,7 +152,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "table.date": { ko: "날짜", en: "Date" },
   "table.title": { ko: "제목", en: "Title" },
   "table.duration": { ko: "시간", en: "Duration" },
-  "table.avgStress": { ko: "평균 스트레스", en: "Avg Stress" },
+  "table.avgStress": { ko: "평균 스트레스 신호", en: "Mean stress signal score" },
   "table.result": { ko: "결과", en: "Result" },
   "table.action": { ko: "동작", en: "Action" },
   "table.review": { ko: "리뷰", en: "Review" },
@@ -159,12 +161,12 @@ const dict: Record<string, { ko: string; en: string }> = {
 
   // ── Review modal ──
   "modal.sessionReview": { ko: "세션 리뷰", en: "Session Review" },
-  "modal.avgStressScore": { ko: "평균 스트레스 점수", en: "Average Stress Score" },
-  "modal.outOfHigh": { ko: "1.00 만점 — 높은 압박", en: "Out of 1.00 — High pressure" },
-  "modal.outOfModerate": { ko: "1.00 만점 — 보통 압박", en: "Out of 1.00 — Moderate pressure" },
-  "modal.outOfLow": { ko: "1.00 만점 — 낮은 압박", en: "Out of 1.00 — Low pressure" },
-  "modal.stressPhaseBreakdown": { ko: "단계별 스트레스 분석", en: "Stress Phase Breakdown" },
-  "modal.aiDiagnosis": { ko: "AI 진단", en: "AI Diagnosis" },
+  "modal.avgStressScore": { ko: "평균 스트레스 신호", en: "Mean stress signal score" },
+  "modal.outOfHigh": { ko: "0–100 참고 눈금 · 높은 스트레스 신호 점수", en: "0–100 reference scale \u00b7 higher stress signal score" },
+  "modal.outOfModerate": { ko: "0–100 참고 눈금 · 중간 스트레스 신호 점수", en: "0–100 reference scale \u00b7 middle stress signal score" },
+  "modal.outOfLow": { ko: "0–100 참고 눈금 · 낮은 스트레스 신호 점수", en: "0–100 reference scale \u00b7 lower stress signal score" },
+  "modal.stressPhaseBreakdown": { ko: "표시 구간별 스트레스 신호 점수", en: "Model scores by display interval" },
+  "modal.aiDiagnosis": { ko: "발표 분석", en: "Presentation Analysis" },
   "modal.overallJudgment": { ko: "종합 판단", en: "Overall Judgment" },
   "modal.viewDetails": { ko: "상세 보기", en: "View details" },
   "modal.peakPressureAnalysis": { ko: "최고 압박 분석", en: "Peak Pressure Analysis" },
@@ -187,9 +189,9 @@ const dict: Record<string, { ko: string; en: string }> = {
   "sev.moderate": { ko: "보통", en: "Moderate" },
   "sev.low": { ko: "낮음", en: "Low" },
   "diag.latestSessionResult": { ko: "최근 세션 결과", en: "Latest session result" },
-  "diag.averageStress": { ko: "평균 스트레스", en: "Average stress" },
+  "diag.averageStress": { ko: "평균 스트레스 신호", en: "Mean stress signal score" },
   "diag.nextCoachingFocus": { ko: "다음 코칭 집중 영역", en: "Next coaching focus" },
-  "diag.generatedFromSession": { ko: "AI 진단", en: "AI diagnosis" },
+  "diag.generatedFromSession": { ko: "발표 분석", en: "Presentation analysis" },
   "diag.noDeck": { ko: "사용한 자료 없음", en: "No deck used" },
   "diag.phase.open": { ko: "도입", en: "Open" },
   "diag.phase.build": { ko: "전개", en: "Build" },
@@ -223,7 +225,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "signal.elapsed": { ko: "경과 시간", en: "Elapsed Time" },
   "signal.mic": { ko: "마이크 활동", en: "Mic Activity" },
   "signal.camera": { ko: "카메라", en: "Camera" },
-  "signal.liveStress": { ko: "실시간 스트레스", en: "Live Stress" },
+  "signal.liveStress": { ko: "스트레스 신호", en: "Model stress signal" },
   "signal.feedbackState": { ko: "피드백 상태", en: "Feedback State" },
   "val.live": { ko: "라이브", en: "LIVE" },
   "val.done": { ko: "완료", en: "DONE" },
@@ -240,12 +242,12 @@ const dict: Record<string, { ko: string; en: string }> = {
 
   // FeedbackEngine messages
   "fb.idle": { ko: "자세한 피드백은 세션 종료 후 제공됩니다.", en: "Detailed feedback appears after the session." },
-  "fb.learning": { ko: "개인 기준선을 보정하는 중…", en: "Calibrating your personal baseline…" },
-  "fb.stable": { ko: "완벽한 속도", en: "Perfect pace" },
-  "fb.steady": { ko: "안정적인 속도 — 한 포인트씩 분명하게.", en: "Steady pace — let each point land." },
-  "fb.mid": { ko: "조금 더 천천히 말해보세요", en: "Try to speak slower" },
-  "fb.high": { ko: "깊게 숨을 들이쉬세요", en: "Take a deep breath" },
-  "fb.activeQuiet": { ko: "조용히 듣는 중 — 뚜렷한 스트레스 급등 시에만 알림이 표시됩니다.", en: "Listening quietly — nudges appear on clear stress spikes." },
+  "fb.learning": { ko: "분석 결과를 수집하는 중…", en: "Collecting analysis results\u2026" },
+  "fb.stable": { ko: "스트레스 신호 점수가 낮게 나타났습니다", en: "The stress signal score is lower" },
+  "fb.steady": { ko: "관측된 신호는 세션 보고서에서 확인하세요.", en: "Review observed signals in the session report." },
+  "fb.mid": { ko: "스트레스 신호 점수 변화가 관측되었습니다", en: "A model-score change was observed" },
+  "fb.high": { ko: "이 구간은 종료 후 영상에서 확인하세요", en: "Review this interval in the recording after the session" },
+  "fb.activeQuiet": { ko: "스트레스 신호 점수의 변화를 관찰하고 있습니다.", en: "Observing changes in the stress signal score." },
 
   // Signal note
   "note.simulated": {
@@ -282,23 +284,23 @@ const dict: Record<string, { ko: string; en: string }> = {
   "deck.pptDesc": { ko: "PowerPoint 미리보기는 PDF 변환이 필요합니다. 라이브 리허설 화면을 위해 PDF로 내보내세요.", en: "PowerPoint preview requires PDF conversion. Export this deck as PDF for the live rehearsal view." },
 
   // Report
-  "report.timeline": { ko: "세션 스트레스 타임라인", en: "Session Stress Timeline" },
-  "report.timelineSub": { ko: "세션 후 개요", en: "Post-session overview" },
+  "report.timeline": { ko: "세션 모델 신호 타임라인", en: "Session model signal timeline" },
+  "report.timelineSub": { ko: "실제 관측 시간별 분석 점수", en: "Analysis scores at observed times" },
   "report.diagnosis": { ko: "진단", en: "Diagnosis" },
   "report.diagnosisSub": { ko: "AI 분석 결과", en: "AI analysis result" },
   "report.overallJudgment": { ko: "종합 판단", en: "Overall Judgment" },
-  "report.peakPoint": { ko: "최고 압박 지점", en: "Peak Pressure Point" },
+  "report.peakPoint": { ko: "다시 볼 관측 구간", en: "Observed interval to review" },
   "report.summary": { ko: "세션 요약", en: "Session Summary" },
   "report.summarySub": { ko: "다음 리허설에서 개선할 점", en: "What to improve next rehearsal" },
-  "report.overallAvg": { ko: "전체 평균 스트레스", en: "Overall Average Stress" },
-  "report.overallAvgDesc": { ko: "순간 잡음을 제외한 세션 수준의 그림.", en: "Session-level picture without momentary noise." },
-  "report.peakStress": { ko: "최고 스트레스 지점", en: "Peak Stress Point" },
-  "report.peakStressDesc": { ko: "타임라인에서 가장 높은 단일 구간.", en: "Highest single bin across the timeline." },
-  "report.mostStressfulPhase": { ko: "가장 스트레스 높은 단계", en: "Most Stressful Phase" },
-  "report.mostStressfulPhaseDesc": { ko: "평균 압박이 가장 높았던 단계.", en: "Phase with the highest average pressure." },
+  "report.overallAvg": { ko: "세션 평균 스트레스 신호", en: "Session mean stress signal score" },
+  "report.overallAvgDesc": { ko: "품질 확인을 통과한 관측 시간의 평균입니다.", en: "Mean over observed time passing quality checks." },
+  "report.peakStress": { ko: "최고 스트레스 신호와 시간", en: "Peak stress signal score and time" },
+  "report.peakStressDesc": { ko: "실제 분석창 중 가장 높은 스트레스 신호 점수입니다.", en: "Highest stress signal score from an actual analysis window." },
+  "report.mostStressfulPhase": { ko: "평균 스트레스 신호가 높은 표시 구간", en: "Display interval with highest mean stress signal score" },
+  "report.mostStressfulPhaseDesc": { ko: "발표 구조 인식이 아닌 시간 분할입니다.", en: "A division of time, not recognized presentation structure." },
   "report.nextStep": { ko: "추천 다음 단계", en: "Recommended Next Step" },
   "report.nextStepDesc": { ko: "다음 리허설의 집중 영역.", en: "Focus area for your next rehearsal." },
-  "report.confidence": { ko: "Confidence", en: "Confidence" },
+  "report.confidence": { ko: "분류 확신도", en: "Classification confidence" },
   "report.deck": { ko: "자료", en: "Deck" },
   "report.scene": { ko: "장면", en: "Scene" },
   "report.aiAgent": { ko: "AI ChatBot", en: "AI ChatBot" },
@@ -309,11 +311,8 @@ const dict: Record<string, { ko: string; en: string }> = {
   // Report dynamic text
   "phase.suffix": { ko: "단계", en: "phase" },
   "report.binLabel": { ko: "구간", en: "bin" },
-  "report.stateStable": { ko: "대체로 안정적인 전달", en: "Mostly stable delivery" },
-  "report.nextActionText": {
-    ko: "주요 설명 블록 사이의 전환을 더 천천히 연습하고, 핵심 용어마다 짧게 쉬어 주세요.",
-    en: "Practice slower transitions between your main explanation blocks and leave a short pause after each key term.",
-  },
+  "report.stateStable": { ko: "관측 구간에서 스트레스 신호 점수가 비슷했습니다", en: "Observed stress signal scores were similar" },
+  "report.nextActionText": { ko: "실제 구간별 분석 결과를 확인한 뒤 다음 연습을 선택하세요.", en: "Review the observed intervals, then choose your next practice." },
   "report.chatIntro": {
     ko: "세션이 끝나면 성과를 요약하고 후속 질문에 답해 드릴게요.",
     en: "After the session ends, I will summarize your performance and answer follow-up questions here.",
@@ -325,24 +324,16 @@ const dict: Record<string, { ko: string; en: string }> = {
   "report.chatSummaryPrefix": { ko: "세션 요약이 준비됐어요. 가장 개선할 부분: ", en: "Session summary ready. Biggest improvement area: " },
 
   // AI agent replies
-  "agent.stressPre": { ko: "가장 강한 압박 지점은 ", en: "The strongest pressure point appears around " },
-  "agent.stressPost": { ko: " 부근으로 보입니다. 속도를 늦추고 핵심 용어 앞에 짧은 쉼을 넣어 보세요.", en: ". Focus on slowing your pace and adding a short pause before key terms." },
-  "agent.stressFallback": { ko: "후반 중반부", en: "the later middle section" },
-  "agent.calm": { ko: "꾸준한 속도가 가장 도움이 됩니다. 문장을 짧게 유지하고 한 포인트가 충분히 전달된 뒤 다음으로 넘어가세요.", en: "Steadier pacing will help most. Keep sentence lengths shorter and let one point land before moving to the next." },
-  "agent.default": { ko: "먼저 압박이 높았던 설명 구간을 다시 보고, 기술적 내용으로 넘어가는 전환 하나를 더 차분하게 연습해 보세요.", en: "Review the high-pressure explanation segment first, then rehearse one calmer transition into your technical content." },
+  "agent.stressPre": { ko: "스트레스 신호 점수가 높았던 구간은 ", en: "The interval with the higher stress signal score was " },
+  "agent.stressPost": { ko: "입니다. 영상에서 실제 발화와 표정을 확인하세요.", en: ". Review the recorded speech and expression." },
+  "agent.stressFallback": { ko: "분석 자료 없음", en: "No analysis data" },
+  "agent.calm": { ko: "저장된 분석 결과와 영상을 함께 확인해 주세요.", en: "Review saved analysis alongside the recording." },
+  "agent.default": { ko: "관측 구간과 측정값을 확인하고 연습 목표를 선택하세요.", en: "Review observed intervals and measurements, then choose a practice goal." },
 
   // Agent starter pills
-  "starter.0": { ko: "내 발표에서 가장 스트레스가 높은 부분은?", en: "Which part of my presentation seems most stressful?" },
+  "starter.0": { ko: "스트레스 신호 점수가 가장 두드러진 구간은?", en: "Where was the stress signal score most prominent?" },
   "starter.1": { ko: "다음 리허설 전에 무엇을 개선해야 할까?", en: "What should I improve before the next rehearsal?" },
-  "starter.2": { ko: "기술 설명 중 더 차분하게 들리려면?", en: "How can I sound calmer during technical explanations?" },
-
-  // Post-session highlights
-  "highlight.0.title": { ko: "오프닝 안정성", en: "Opening Stability" },
-  "highlight.0.detail": { ko: "첫 구간이 안정적으로 유지되어, 오프닝 스크립트가 이미 든든한 기준점이 되고 있습니다.", en: "The first segment stayed controlled, which means your opening script is already a strong anchor." },
-  "highlight.1.title": { ko: "기술 설명 압박", en: "Technical Explanation Pressure" },
-  "highlight.1.detail": { ko: "충분한 전환 표현 없이 세부 내용을 너무 빠르게 설명하면서 스트레스가 올라갔을 가능성이 있습니다.", en: "Stress likely rose while explaining detailed content too quickly without enough transition language." },
-  "highlight.2.title": { ko: "최고의 개선 레버", en: "Best Improvement Lever" },
-  "highlight.2.detail": { ko: "슬라이드 전환 사이의 짧은 쉼이 명료함과 자신감 모두를 높여줄 것입니다.", en: "Short pauses between slide changes will probably improve both clarity and perceived confidence." },
+  "starter.2": { ko: "해당 구간에서 어떤 측정값이 관측됐어?", en: "What measurements were observed in that interval?" },
 
   // Session naming
   "save.title": { ko: "세션 저장", en: "Save Session" },
@@ -393,7 +384,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "ko" || stored === "en") setLangState(stored);
+    if (stored === "ko" || stored === "en") {
+      setLangState(stored);
+      document.documentElement.lang = stored;
+    }
   }, []);
 
   const setLang = useCallback((l: Lang) => {

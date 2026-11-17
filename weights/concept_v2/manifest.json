@@ -1,0 +1,151 @@
+{
+  "variant": "concept-v2",
+  "metricDefinitionVersion": "session-analysis-v5-exact7",
+  "conceptDefinitionVersion": "literature-exact7-v2",
+  "conceptNames": [
+    "평균 음성 높이",
+    "주파수 미세 불규칙성",
+    "진폭 미세 불규칙성",
+    "조화음-잡음비",
+    "눈썹 내림 움직임",
+    "눈꺼풀 조임 움직임",
+    "턱 열림 움직임"
+  ],
+  "scaling": {
+    "p2": [
+      0.0,
+      0.0,
+      0.0,
+      -0.079973965883255,
+      0.0008700737962499261,
+      0.22400018572807312,
+      0.0005359041388146579
+    ],
+    "p98": [
+      61.23757553100586,
+      0.07686550170183182,
+      1.9976842403411865,
+      23.12226104736328,
+      0.39159199595451355,
+      0.6469950079917908,
+      0.20560488104820251
+    ]
+  },
+  "formula": {
+    "baseWeight": 1.0,
+    "conceptWeight": 0.03,
+    "temperature": 1.0
+  },
+  "featureContract": {
+    "frames": [
+      16,
+      512
+    ],
+    "audio": [
+      256
+    ],
+    "geometry": [
+      16,
+      24
+    ],
+    "eGeMAPS": [
+      88
+    ],
+    "audioSampleRate": 16000,
+    "audioWindowSamples": 160000,
+    "egeRawIndices": [
+      0,
+      30,
+      32,
+      34
+    ],
+    "videoRawIndices": [
+      [
+        14,
+        15
+      ],
+      [
+        19,
+        20
+      ],
+      [
+        21
+      ]
+    ],
+    "inputScalerScope": "historical normalization preserved; geometry affine recovered on training participants and verified held-out; eGeMAPS uses historical full-cohort statistics",
+    "geometryTransformMaxHeldoutError": 5.960464477539063e-08,
+    "geometryEpsilon": 0.0,
+    "conceptScalerScope": "training participants p2-p98; not medical probabilities"
+  },
+  "validation": {
+    "accuracy": 0.8016528925619835,
+    "correct": 97,
+    "total": 121,
+    "balanced_accuracy": 0.7985571587125416,
+    "macro_f1": 0.7985571587125416,
+    "concept_r2": [
+      0.8549346923828125,
+      0.7226253151893616,
+      0.7419734597206116,
+      0.8796241283416748,
+      0.8452814817428589,
+      0.8098803758621216,
+      0.7783719897270203
+    ],
+    "concept_influence": [
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 4.0900085878092796e-05
+      },
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 2.8462063710321672e-05
+      },
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 3.9262344216695055e-05
+      },
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 5.987868280499242e-05
+      },
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 8.511554187862203e-05
+      },
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 0.0001560942764626816
+      },
+      {
+        "accuracyWithout": 0.8016528925619835,
+        "accuracyDelta": 0.0,
+        "meanAbsStressProbabilityChange": 2.8718477551592514e-05
+      }
+    ],
+    "concept_r2_mean": 0.8046702061380658
+  },
+  "limitations": [
+    "Previously inspected external participant split; not an independent final test",
+    "Eye-squint internal fold R2 reached 0.357",
+    "Concept mean replacement did not change validation correct count",
+    "No causal or diagnostic interpretation"
+  ],
+  "files": {
+    "audio_projection_bias.npy": "3d74b2c995ba0d6806c82575b3ae083677c65d063bc82f64526a954a5e7f68cc",
+    "audio_projection_manifest.json": "105715110e6912f8ef7585ef3fb199516553bc48a5ca24a112ca2038d08cc0cd",
+    "audio_projection_weight.npy": "eb9e2dae76614b293f91c7c4c9c171640b6f46031c62178da539f5f4e07061c1",
+    "ege_mean.npy": "8dbcf256317201f67b1789823d86bbafc0fdfae9eb0ac12925ddda54d5ef1a2f",
+    "ege_std.npy": "7fe41d49681dd74a5c70f4e98c32721d881c91162d34cb48002bd31cf084783d",
+    "geo_mean.npy": "2656a077d897876cabe3394925c30046811e445dbd9c0c5f89fec90009a880af",
+    "geo_std.npy": "a9a533a2c5ec58bd881f35a881a4e0a1bb3792b6349ab87d189a3d621c785d71",
+    "head.pt": "9850a8ff56b2bb0dc5cafcab04ac930b63961b900c48b1fbf84d073a5c9e8e2c",
+    "student.pt": "3dc8a3620832bf81ea909cb122c5033a3d3870d82cc57f7a6ecebec9a9f7e2e7"
+  }
+}

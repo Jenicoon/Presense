@@ -4,6 +4,8 @@ import {
 } from "@/lib/app-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { agentNextPractice, type AgentReport } from "@/lib/agent-report";
+import { removeSessionDraft } from "@/lib/session-drafts";
+import { uploadSessionVideo, type UploadProgress } from "@/lib/session-upload";
 import type { DriftObservation, PersonalCalibration } from "@/lib/calibration";
 
 export type PresentationRecord = {
@@ -40,11 +42,11 @@ export type PersistedSettings = {
   sections: Record<string, boolean>;
 };
 
-type SavePracticeSessionInput = {
+export type SavePracticeSessionInput = {
   id?: string;
   title?: string;
   durationSeconds: number;
-  averageStress: number;
+  averageStress: number | null;
   result: string;
   diagnosis: string;
   nextAction: string;
@@ -52,9 +54,15 @@ type SavePracticeSessionInput = {
   timeline: number[];
   video: Blob | null;
   agentReport?: AgentReport | null;
+  recordedAt?: string;
 };
 
 const LOCAL_HISTORY_KEY = "presense-local-session-history";
+
+function isCoachingAttempt(report: AgentReport | null | undefined) {
+  const input = report?.reportInput as { practiceContext?: unknown } | undefined;
+  return Boolean(input?.practiceContext);
+}
 
 function formatDuration(durationSeconds: number) {
   const minutes = Math.floor(durationSeconds / 60);
@@ -63,7 +71,7 @@ function formatDuration(durationSeconds: number) {
 }
 
 function formatSessionDate(timestamp: string) {
-  return new Date(timestamp).toISOString().slice(0, 10);
+  return new Date(timestamp).toLocaleDateString("sv-SE");
 }
 
 function buildDefaultSettings(): PersistedSettings {
@@ -144,14 +152,36 @@ export async function loadRecentDriftObservations(): Promise<DriftObservation[]>
   });
 }
 
-export async function saveSessionReflection(sessionId: string, report: AgentReport): Promise<void> {
+async function updateStoredReport(sessionId: string, patch: (current: AgentReport) => Partial<AgentReport>, columns: Record<string, unknown> = {}) {
   const supabase = getSupabaseBrowserClient();
-  if (!supabase) throw new Error("보고서 응답을 저장하려면 로그인해 주세요.");
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) throw authError ?? new Error("로그인 세션을 확인할 수 없습니다.");
-  const { error } = await supabase.from("presentation_records")
-    .update({ agent_report: report, next_action: agentNextPractice(report, false) }).eq("id", sessionId).eq("user_id", user.id);
-  if (error) throw error;
+  if (!supabase) throw new Error("기록을 저장하려면 로그인해 주세요.");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("다시 로그인한 뒤 저장을 이어갈 수 있어요.");
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: record, error: readError } = await supabase.from("presentation_records")
+      .select("agent_report").eq("id", sessionId).eq("user_id", session.user.id).abortSignal(AbortSignal.timeout(20_000)).single();
+    if (readError) throw readError;
+    const current = (record.agent_report ?? {}) as AgentReport;
+    const revision = current.storageRevision;
+    if (revision != null && (!Number.isSafeInteger(revision) || Number(revision) < 0)) throw new Error("저장된 기록의 버전을 확인하지 못했어요.");
+    const changes = patch(current);
+    if (changes.reportFeedback && (current.reportFeedback?.status === "ready" || current.reportFeedback?.status === "partial")
+      && (changes.reportFeedback.status === "failed" || changes.reportFeedback.status === "blocked")) return current;
+    const next: AgentReport = { ...current, ...changes, storageRevision: Number(revision ?? 0) + 1 };
+    // A newly generated report or stale UI object must not erase coaching.
+    if (current.coachingSession) next.coachingSession = current.coachingSession;
+    let query = supabase.from("presentation_records").update({ ...columns, agent_report: next })
+      .eq("id", sessionId).eq("user_id", session.user.id);
+    query = revision == null ? query.is("agent_report->>storageRevision", null) : query.eq("agent_report->>storageRevision", revision);
+    const { data: rows, error } = await query.select("id").abortSignal(AbortSignal.timeout(20_000));
+    if (error) throw error;
+    if (rows?.length) return next;
+  }
+  throw new Error("다른 화면에서 기록이 변경됐어요. 저장된 내용을 확인하고 다시 시도해 주세요.");
+}
+
+export async function saveSessionReflection(sessionId: string, report: AgentReport): Promise<void> {
+  await updateStoredReport(sessionId, () => ({ reflection: report.reflection }), { next_action: agentNextPractice(report, false) });
 }
 
 export async function loadDashboardData() {
@@ -193,13 +223,13 @@ export async function loadDashboardData() {
   }
 
   return {
-    presentationRecords: (recordRows ?? []).map((row) => ({
+    presentationRecords: (recordRows ?? []).filter((row) => !isCoachingAttempt(row.agent_report && typeof row.agent_report === "object" ? row.agent_report as AgentReport : null)).map((row) => ({
       id: row.id,
       title: row.title,
       date: formatSessionDate(row.session_date),
       duration: formatDuration(row.duration_seconds),
       result: row.result,
-      stressAverage: Number(row.stress_average).toFixed(2),
+      stressAverage: row.stress_average == null ? "—" : Number(row.stress_average).toFixed(2),
       diagnosis: row.diagnosis,
       nextAction: row.next_action ?? "",
       sceneLabel: row.scene_label ?? "",
@@ -222,18 +252,18 @@ export async function loadAgentSessions(): Promise<PresentationRecord[]> {
 
   const { data, error } = await supabase
     .from("presentation_records")
-    .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label")
+    .select("id, title, session_date, duration_seconds, result, stress_average, diagnosis, next_action, scene_label, agent_report")
     .order("session_date", { ascending: false })
-    .limit(5);
+    .limit(20);
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
+  return (data ?? []).filter((row) => !isCoachingAttempt(row.agent_report && typeof row.agent_report === "object" ? row.agent_report as AgentReport : null)).map((row) => ({
     id: row.id,
     title: row.title,
     date: formatSessionDate(row.session_date),
     duration: formatDuration(row.duration_seconds),
     result: row.result,
-    stressAverage: Number(row.stress_average).toFixed(2),
+    stressAverage: row.stress_average == null ? "—" : Number(row.stress_average).toFixed(2),
     diagnosis: row.diagnosis,
     nextAction: row.next_action ?? "",
     sceneLabel: row.scene_label ?? "",
@@ -275,7 +305,7 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     try {
-      return JSON.parse(window.localStorage.getItem(LOCAL_HISTORY_KEY) ?? "[]") as SessionHistoryRecord[];
+      return (JSON.parse(window.localStorage.getItem(LOCAL_HISTORY_KEY) ?? "[]") as SessionHistoryRecord[]).filter((row) => !isCoachingAttempt(row.agentReport));
     } catch {
       return [];
     }
@@ -304,7 +334,7 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
   }
   if (error) throw error;
 
-  return Promise.all((data ?? []).map(async (row) => {
+  return Promise.all((data ?? []).filter((row) => !isCoachingAttempt(row.agent_report && typeof row.agent_report === "object" ? row.agent_report as AgentReport : null)).map(async (row) => {
     let videoUrl: string | null = null;
     let videoError: string | undefined;
     if (row.video_path) {
@@ -323,7 +353,7 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
       duration: formatDuration(row.duration_seconds),
       durationSeconds: Number(row.duration_seconds),
       result: row.result,
-      stressAverage: Number(row.stress_average).toFixed(2),
+      stressAverage: row.stress_average == null ? "—" : Number(row.stress_average).toFixed(2),
       diagnosis: row.diagnosis,
       nextAction: row.next_action ?? "",
       sceneLabel: row.scene_label ?? "",
@@ -334,6 +364,20 @@ export async function loadSessionHistory(): Promise<SessionHistoryRecord[]> {
       agentReport: row.agent_report && typeof row.agent_report === "object" ? row.agent_report as AgentReport : null,
     };
   }));
+}
+
+export async function loadSessionVideoUrl(sessionId: string): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    const row = (JSON.parse(window.localStorage.getItem(LOCAL_HISTORY_KEY) ?? "[]") as SessionHistoryRecord[]).find(item => item.id === sessionId);
+    return row?.videoUrl ?? null;
+  }
+  const { data, error } = await supabase.from("presentation_records").select("video_path").eq("id", sessionId).maybeSingle();
+  if (error) throw error;
+  if (!data?.video_path) return null;
+  const { data: signed, error: signedError } = await supabase.storage.from("session-videos").createSignedUrl(data.video_path, 60 * 60);
+  if (signedError) throw signedError;
+  return signed?.signedUrl ?? null;
 }
 
 export async function saveUserSettings(settings: PersistedSettings) {
@@ -377,13 +421,13 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     if (input.video) throw new Error("영상 저장에는 서버 연결이 필요합니다.");
     const sessionDate = new Date().toISOString();
     const localRecord: SessionHistoryRecord = {
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
       title: input.title?.trim() || `${input.sceneLabel} Practice`,
       date: formatSessionDate(sessionDate),
       duration: formatDuration(input.durationSeconds),
       durationSeconds: input.durationSeconds,
       result: input.result,
-      stressAverage: input.averageStress.toFixed(2),
+      stressAverage: input.averageStress?.toFixed(2) ?? "—",
       diagnosis: input.diagnosis,
       nextAction: input.nextAction,
       sceneLabel: input.sceneLabel,
@@ -410,42 +454,30 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     throw new Error("로그인이 만료되었습니다. 다시 로그인한 뒤 저장해 주세요.");
   }
 
-  const sessionDate = new Date().toISOString();
-  const title = input.title?.trim() || `${input.sceneLabel} Practice`;
+  const sessionDate = input.recordedAt ?? new Date().toISOString();
   const recordId = input.id ?? crypto.randomUUID();
-  let videoPath: string | null = null;
-  if (input.video) {
-    if (!input.video.size) throw new Error("녹화 영상이 비어 있습니다. 다시 녹화해 주세요.");
-    const extension = input.video.type.includes("mp4") ? "mp4" : "webm";
-    videoPath = `${user.id}/${recordId}.${extension}`;
-    const { error } = await supabase.storage.from("session-videos").upload(videoPath, input.video, {
-      contentType: input.video.type || `video/${extension}`,
-      upsert: false,
-    });
-    if (error) throw new Error(`영상 업로드 실패: ${error.message}`);
-  }
-
   const recordInput = {
-    id: recordId,
-    user_id: user.id,
-    title,
-    session_date: sessionDate,
-    duration_seconds: input.durationSeconds,
-    result: input.result,
-    stress_average: input.averageStress,
-    diagnosis: input.diagnosis,
-    next_action: input.nextAction,
-    scene_label: input.sceneLabel,
-    timeline: input.timeline,
-    video_path: videoPath,
+    id: recordId, user_id: user.id,
+    title: input.title?.trim() || `${input.sceneLabel} Practice`,
+    session_date: sessionDate, duration_seconds: input.durationSeconds,
+    result: input.result, stress_average: input.averageStress,
+    diagnosis: input.diagnosis, next_action: input.nextAction,
+    scene_label: input.sceneLabel, timeline: input.timeline, video_path: null,
     ...(input.agentReport ? { agent_report: input.agentReport } : {}),
   };
-  const { error: recordError } = await supabase.from("presentation_records").insert(recordInput);
-
-  if (recordError) {
-    if (videoPath) await supabase.storage.from("session-videos").remove([videoPath]);
-    throw new Error(`세션 저장 실패: ${recordError.message}`);
+  // Stable ID makes a retry safe even when the first response was lost.
+  const { error: recordError } = await supabase.from("presentation_records")
+    .upsert(recordInput, { onConflict: "id", ignoreDuplicates: true })
+    .abortSignal(AbortSignal.timeout(20_000));
+  if (recordError) throw new Error(`세션 기록을 서버에 저장하지 못했어요: ${recordError.message}`);
+  let warning: string | undefined;
+  if (input.video) {
+    try { await uploadPracticeVideo(recordId, input.video); }
+    catch (error) {
+      warning = `세션 기록은 저장됐어요. 영상 업로드는 다시 시도해 주세요. ${error instanceof Error ? error.message : ""}`;
+    }
   }
+  if (input.agentReport?.generationState === "pending") return { warning };
 
   const diagnosisEntries = [
     {
@@ -457,7 +489,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     {
       user_id: user.id,
       label: "Average stress",
-      value: input.averageStress.toFixed(2),
+      value: input.averageStress?.toFixed(2) ?? "—",
       detail: input.diagnosis,
     },
     {
@@ -475,6 +507,7 @@ export async function savePracticeSession(input: SavePracticeSessionInput) {
     const detail = error && typeof error === "object" && "message" in error ? String(error.message) : "네트워크 오류";
     return { warning: `세션은 저장됐지만 대시보드 요약 갱신에 실패했습니다: ${detail}` };
   }
+  return { warning };
 }
 
 export async function deletePracticeSession(id: string, videoPath: string | null) {
@@ -482,6 +515,7 @@ export async function deletePracticeSession(id: string, videoPath: string | null
   if (!supabase) {
     const remaining = (await loadSessionHistory()).filter((record) => record.id !== id);
     window.localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(remaining));
+    await removeSessionDraft(id).catch(() => undefined);
     return;
   }
 
@@ -490,4 +524,35 @@ export async function deletePracticeSession(id: string, videoPath: string | null
   }
   const { error } = await supabase.from("presentation_records").delete().eq("id", id);
   if (error) throw error;
+  await removeSessionDraft(id).catch(() => undefined);
+}
+
+
+export async function uploadPracticeVideo(sessionId: string, video: Blob, onProgress?: (value: UploadProgress) => void) {
+  const supabase = getSupabaseBrowserClient();
+  const { data } = await supabase!.auth.getSession();
+  if (!data.session) throw new Error("다시 로그인한 뒤 영상 업로드를 이어갈 수 있어요.");
+  const extension = video.type.includes("mp4") ? "mp4" : "webm";
+  const path = `${data.session.user.id}/${sessionId}.${extension}`;
+  await uploadSessionVideo(path, video, onProgress);
+  const { error } = await supabase!.from("presentation_records").update({ video_path: path })
+    .eq("id", sessionId).eq("user_id", data.session.user.id)
+    .abortSignal(AbortSignal.timeout(20_000));
+  if (error) throw new Error(`영상 연결을 저장하지 못했어요: ${error.message}`);
+}
+
+export async function saveGeneratedSessionReport(sessionId: string, report: AgentReport) {
+  await updateStoredReport(sessionId, current => ({ ...report,
+    ...(Object.hasOwn(current, "selfFeedback") ? { selfFeedback: current.selfFeedback } : {}),
+    ...(current.reflection?.segmentId === report.reflection?.segmentId && current.reflection?.answer
+      ? { reflection: { ...report.reflection!, answer: current.reflection.answer } } : {}),
+  }), {
+    diagnosis: report.summaryText,
+    next_action: agentNextPractice(report, false),
+    result: report.generationState === "failed" ? "Report needs retry" : report.generationState === "pending" ? "Report pending" : "AI report complete",
+    stress_average: typeof report.analysis.averageStress === "number" ? report.analysis.averageStress : null,
+  });
+}
+export async function saveSessionNote(sessionId: string, note: string) {
+  await updateStoredReport(sessionId, () => ({ selfFeedback: note }));
 }

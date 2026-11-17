@@ -22,7 +22,16 @@ PARSER_VERSION = 5
 # In two-column PDFs, text extraction may append the right-column heading
 # to an unrelated left-column sentence on the same line.
 _REFERENCE_HEADING = re.compile(r"(?im)(?:^|\s)(?:references|bibliography)\s*$")
-_ISSUE_TOPICS = ("pitch_change", "pitch_variability", "lip_tension", "brow_tension", "gaze")
+_ISSUE_TOPICS = (
+    "pitch_change", "pitch_variability", "lip_tension", "brow_tension", "gaze",
+    "concept_spectral_contrast", "concept_tonnetz_variability",
+    "concept_mfcc_spectral_envelope", "concept_mean_f0",
+    "concept_facial_variability", "concept_mouth_aperture",
+    "concept_inner_brow_distance",
+    "v2_mean_f0", "v2_jitter", "v2_shimmer", "v2_hnr",
+    "v2_voiced_segments_per_sec", "v2_mean_voiced_segment_length",
+    "v2_brow_down", "v2_eye_squint", "v2_jaw_open",
+)
 
 
 def _chunk(text: str) -> list[str]:
@@ -59,9 +68,10 @@ class PaperRAG:
     def __init__(self, db_path: str | Path | None = None,
                  papers_dir: str | Path | None = None, sync: bool = True):
         import chromadb
+        from chromadb.config import Settings
 
         Path(db_path or _DB_PATH).mkdir(parents=True, exist_ok=True)
-        self._client     = chromadb.PersistentClient(path=str(db_path or _DB_PATH))
+        self._client     = chromadb.PersistentClient(path=str(db_path or _DB_PATH), settings=Settings(anonymized_telemetry=False))
         self._collection = self._client.get_or_create_collection(
             name='stress_papers_v2',
             metadata={'hnsw:space': 'cosine'},
@@ -138,6 +148,7 @@ class PaperRAG:
                                 'finding_ko_by_issue': json.dumps(source.get('finding_ko_by_issue', {}), ensure_ascii=False),
                                 'evidence_role': source.get('evidence_role', 'measurement'),
                                 'applicability': source.get('applicability', 'related'),
+                                'applicability_by_issue': json.dumps(source.get('applicability_by_issue', {})),
                                 'topics': ','.join(source.get('topics', [])),
                                 **{f'topic_{topic}': topic in source.get('topics', []) for topic in _ISSUE_TOPICS},
                             })
@@ -198,7 +209,9 @@ class PaperRAG:
                                'findingKo': (json.loads(metadata.get('finding_ko_by_issue') or '{}').get(topic)
                                              if topic else None) or metadata.get('finding_ko') or None,
                                'evidenceRole': metadata.get('evidence_role') or 'measurement',
-                               'applicability': metadata.get('applicability') or 'related',
+                               'applicability': ((json.loads(metadata.get('applicability_by_issue') or '{}').get(topic)
+                                                  if topic else None)
+                                                 or metadata.get('applicability') or 'related'),
                                'topics': (metadata.get('topics') or '').split(',') if metadata.get('topics') else []})
                 per_source[source] = per_source.get(source, 0) + 1
                 if len(output) == k:

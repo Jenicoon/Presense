@@ -1,19 +1,25 @@
 "use client";
 
+import { SessionAgentReport } from "@/components/session-agent-report";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Activity, BrainCircuit, CalendarDays, Clock, FolderClock, MoreHorizontal, Play, SlidersHorizontal, Sparkles, TrendingDown, TrendingUp, X } from "lucide-react";
 import { useSupabaseAuth } from "@/components/supabase-provider";
 import { useLang } from "@/lib/i18n";
+import { durationText, sceneText, signalScore } from "@/lib/report-locale";
 import { reportDisplaySummary } from "@/lib/agent-report";
+import { jumpToVideo } from "@/lib/coaching";
 import { loadDashboardData, type DiagnosisRecord, type PresentationRecord } from "@/lib/supabase/data";
 
 type Translate = (key: string, fallback?: string) => string;
 
 function localizeDiagnosis(value: string, t: Translate) {
   const fixedLabels: Record<string, string> = {
+    "AI report complete": "diag.reportComplete",
+    "AI report limited": "diag.reportLimited",
     "Latest session result": "diag.latestSessionResult",
     "Average stress": "diag.averageStress",
+    "Mean model score": "diag.averageStress",
     "Next coaching focus": "diag.nextCoachingFocus",
     "Generated from the most recent practice session.": "diag.generatedFromSession",
     "Mostly stable delivery": "diag.stableDelivery",
@@ -51,7 +57,7 @@ function StressTrend({ records }: { records: PresentationRecord[] }) {
     .reverse()
     .map((r) => parseFloat(r.stressAverage));
 
-  const max = Math.max(...values, 0.01);
+  const max = Math.max(...values.filter(Number.isFinite), 0.01);
 
   return (
     <div>
@@ -63,8 +69,8 @@ function StressTrend({ records }: { records: PresentationRecord[] }) {
           <div
             key={i}
             className="stress-bar"
-            style={{ height: `${Math.round((v / max) * 100)}%` }}
-            title={`Session ${i + 1}: ${v.toFixed(2)}`}
+            style={{ height: `${Number.isFinite(v)?Math.round((v / max) * 100):0}%` }}
+            title={Number.isFinite(v) ? `Session ${i + 1}: ${Math.round(v * 100)} / 100` : "No analysis data"}
           />
         ))}
       </div>
@@ -106,24 +112,18 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
   const { lang, t } = useLang();
   const stressValue = parseFloat(record.stressAverage);
   const stressPercent = Math.round(stressValue * 100);
-  const stressColor = stressPercent > 65 ? "#ef4444" : stressPercent > 45 ? "#f59e0b" : "#22c55e";
+  const stressColor = !Number.isFinite(stressValue) ? "var(--text-secondary)" : stressPercent > 65 ? "#ef4444" : stressPercent > 45 ? "#f59e0b" : "#22c55e";
   const stressTier = stressPercent > 65 ? "high" : stressPercent > 45 ? "moderate" : "low";
 
-  const simulatedBars = (() => {
-    const base = stressValue;
-    return [
-      Math.min(1, base * 0.72),
-      Math.min(1, base * 1.05),
-      Math.min(1, base * 1.28),
-      Math.min(1, base * 0.95),
-    ];
-  })();
-  const barMax = Math.max(...simulatedBars, 0.01);
+  const cells=(record.agentReport?.analysis.timeline ?? []) as {startMs:number;endMs:number;stressScore:number}[];
+  const duration=Number(record.agentReport?.analysis.durationMs ?? 0);
+  const observedBars=Array.from({length:4},(_,i)=>{let time=0,total=0;for(const c of cells){const n=Math.max(0,Math.min(c.endMs,duration*(i+1)/4)-Math.max(c.startMs,duration*i/4));time+=n;total+=n*c.stressScore;}return time?total/time:null;});
+  const barMax=1;
 
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 50,
+        position: "fixed", inset: 0, zIndex: 110,
         background: "rgba(0,0,0,0.6)", display: "flex",
         alignItems: "center", justifyContent: "center", padding: 24,
       }}
@@ -152,14 +152,14 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
               <CalendarDays size={11} />{record.date}
             </span>
             <span style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
-              <Clock size={11} />{record.duration}
+              <Clock size={11} />{durationText(record.duration, lang === "ko")}
             </span>
             {record.sceneLabel && (
               <span style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
-                <Activity size={11} />{record.sceneLabel}
+                <Activity size={11} />{sceneText(record.sceneLabel, lang === "ko")}
               </span>
             )}
-            <span className={`severity-pill ${severityClass(record.result)}`}>{record.result}</span>
+            {!["AI report complete", "AI report limited"].includes(record.result) && <span className={`severity-pill ${severityClass(record.result)}`}>{localizeDiagnosis(record.result, t)}</span>}
           </div>
         </div>
 
@@ -167,34 +167,41 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           <div className="report-card">
             <div className="rc-label">{t("modal.avgStressScore")}</div>
-            <div className="rc-value" style={{ color: stressColor }}>{record.stressAverage}</div>
-            <div className="rc-desc" style={{ marginBottom: 8 }}>{t(`modal.outOf${stressTier === "high" ? "High" : stressTier === "moderate" ? "Moderate" : "Low"}`)}</div>
-            <StressBar percent={stressPercent} color={stressColor} />
+            <div className="rc-value" style={{ color: stressColor }}>{signalScore(record.stressAverage)}</div>
+            <div className="rc-desc" style={{ marginBottom: 8 }}>{Number.isFinite(stressValue) ? t(`modal.outOf${stressTier === "high" ? "High" : stressTier === "moderate" ? "Moderate" : "Low"}`) : (lang === "ko" ? "분석 자료 없음" : "No analysis data")}</div>
+            {Number.isFinite(stressPercent) && <StressBar percent={stressPercent} color={stressColor} />}
           </div>
           <div className="report-card">
             <div className="rc-label">{t("modal.stressPhaseBreakdown")}</div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 52, marginTop: 8, marginBottom: 8 }}>
-              {simulatedBars.map((v, i) => (
+              {observedBars.map((v, i) => (
                 <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                  <div style={{ width: "100%", background: stressColor, borderRadius: "3px 3px 0 0", opacity: 0.75 + i * 0.06, height: `${Math.round((v / barMax) * 48)}px` }} />
+                  <small>{v===null?"—":Math.round(v * 100)}</small><div style={{ width: "100%", background: stressColor, borderRadius: "3px 3px 0 0", opacity: 0.75 + i * 0.06, height: `${v===null?0:Math.round((v / barMax) * 48)}px` }} />
                 </div>
               ))}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-secondary)" }}>
-              <span>Open</span><span>Build</span><span>Core</span><span>Close</span>
+              {(lang === "ko" ? ["도입", "전개", "핵심", "마무리"] : ["Open", "Build", "Core", "Close"]).map(label => <span key={label}>{label}</span>)}
             </div>
           </div>
         </div>
 
+        {record.agentReport && <>
+          <section className="review-overview-summary">
+            <h3>{lang === "ko" ? "발표 분석 요약" : "Presentation summary"}</h3>
+            <p>{reportDisplaySummary(record.agentReport, lang === "ko")}</p>
+          </section>
+          <SessionAgentReport report={record.agentReport} language={lang} onSeek={ms => jumpToVideo(record.id, ms)} practiceHref={`/history?session=${encodeURIComponent(record.id)}`} />
+        </>}
         {/* AI Diagnosis */}
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 14 }}>
+        {!record.agentReport && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
             <Sparkles size={13} color="var(--accent)" /> {t("modal.aiDiagnosis")}
           </div>
           <div className="coach-stack" style={{ gap: 8 }}>
             <div className="coach-card coach-alert">
               <h3>{t("modal.overallJudgment")}</h3>
-              <p>{record.agentReport ? reportDisplaySummary(record.agentReport, lang === "ko") : record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
+              <p>{record.diagnosis ? localizeDiagnosis(record.diagnosis, t) : t("modal.noDiagnosis")}</p>
             </div>
             {record.nextAction && (
               <div className="coach-card coach-ok">
@@ -203,7 +210,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* Coaching tips based on stress level */}
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
@@ -211,7 +218,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
             <BrainCircuit size={13} color="var(--accent)" /> {t("modal.coachingInsight")}
           </div>
           <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7, background: "var(--surface-2, var(--border))", borderRadius: 8, padding: "12px 14px" }}>
-            {t(`modal.coach.${stressTier}`)}
+            {record.agentReport ? (lang === "ko" ? "실제 관측 구간과 측정값을 확인하고, 근거 있는 목표 하나를 선택해 연습하세요." : "Review observed intervals and measurements, then choose one supported goal for practice.") : (lang === "ko" ? "구간 분석 자료가 없어 개선 목표를 판단할 수 없습니다." : "No interval data is available to select a practice goal.")}
           </div>
         </div>
         <div className="dashboard-review-actions">
@@ -226,7 +233,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
 
 export function DashboardOverview() {
   const { hasEnv, user } = useSupabaseAuth();
-  const { t } = useLang();
+  const { lang, t } = useLang();
   const [presentationRecords, setPresentationRecords] = useState<PresentationRecord[]>([]);
   const [diagnosisHistory, setDiagnosisHistory] = useState<DiagnosisRecord[]>([]);
   const [isLoading, setIsLoading] = useState(hasEnv);
@@ -261,9 +268,9 @@ export function DashboardOverview() {
   }, [hasEnv, user]);
 
   const totalSessions = presentationRecords.length;
-  const latestAvg = parseFloat(presentationRecords[0]?.stressAverage ?? "0");
-  const prevAvg = parseFloat(presentationRecords[1]?.stressAverage ?? "0");
-  const stressDelta = totalSessions >= 2 ? latestAvg - prevAvg : null;
+  const latestAvg = parseFloat(presentationRecords[0]?.stressAverage ?? "—");
+  const prevAvg = parseFloat(presentationRecords[1]?.stressAverage ?? "—");
+  const stressDelta = totalSessions >= 2 && Number.isFinite(latestAvg) && Number.isFinite(prevAvg) ? latestAvg - prevAvg : null;
   const latestDiagnosis = diagnosisHistory[0] ? localizeDiagnosis(diagnosisHistory[0].detail, t) : "No sessions yet";
 
   // Current Focus Area (Progress Report §1.3.2): the practice context that needs
@@ -339,11 +346,11 @@ export function DashboardOverview() {
             {stressDelta !== null && (
               <span className={`kpi-badge ${stressDelta < 0 ? "up" : "down"}`}>
                 {stressDelta < 0 ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
-                {Math.abs(stressDelta).toFixed(2)}
+                {Math.round(Math.abs(stressDelta) * 100)}
               </span>
             )}
           </div>
-          <div className="kpi-value">{latestAvg.toFixed(2)}</div>
+          <div className="kpi-value">{signalScore(latestAvg)}</div>
           <div className="kpi-label">{t("kpi.latestAvgStress")}</div>
           <div className="kpi-sub">{t("kpi.scoreOutOf")}</div>
         </div>
@@ -355,7 +362,7 @@ export function DashboardOverview() {
             </div>
             <span className="kpi-badge neutral">{t("badge.latest")}</span>
           </div>
-          <div className="kpi-value" style={{ fontSize: 18, marginBottom: 6, lineHeight: 1.3 }}>{currentFocus}</div>
+          <div className="kpi-value" style={{ fontSize: 18, marginBottom: 6, lineHeight: 1.3 }}>{sceneText(currentFocus, lang === "ko")}</div>
           <div className="kpi-label">{t("kpi.currentFocus")}</div>
           <div className="kpi-sub">{t("kpi.currentFocusSub")}</div>
         </div>
@@ -419,7 +426,7 @@ export function DashboardOverview() {
             sceneTotals.map(([scene, value]) => (
               <div key={scene} className="asset-row">
                 <div className="asset-info">
-                  <div className="asset-name" style={{ textTransform: "capitalize" }}>{scene}</div>
+                  <div className="asset-name" style={{ textTransform: "capitalize" }}>{sceneText(scene, lang === "ko")}</div>
                   <div className="asset-bar-track">
                     <div className="asset-bar-fill" style={{ width: `${Math.round((value / maxScene) * 100)}%` }} />
                   </div>
@@ -468,12 +475,12 @@ export function DashboardOverview() {
                   <tr key={record.id}>
                     <td className="td-mono">{record.date}</td>
                     <td style={{ fontWeight: 500 }}>{record.title}</td>
-                    <td className="td-mono">{record.duration}</td>
-                    <td className="td-mono" style={{ color: "var(--accent)" }}>{record.stressAverage}</td>
+                    <td className="td-mono">{durationText(record.duration, lang === "ko")}</td>
+                    <td className="td-mono" style={{ color: "var(--accent)" }}>{signalScore(record.stressAverage)}</td>
                     <td>
-                      <span className={`severity-pill ${severityClass(record.result)}`}>
-                        {record.result}
-                      </span>
+                      {["AI report complete", "AI report limited"].includes(record.result) ? "—" : <span className={`severity-pill ${severityClass(record.result)}`}>
+                        {localizeDiagnosis(record.result, t)}
+                      </span>}
                     </td>
                     <td>
                       <button type="button" className="table-action" onClick={() => setSelectedRecord(record)}>

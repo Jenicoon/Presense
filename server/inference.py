@@ -49,7 +49,9 @@ def health() -> dict:
     return {
         "checkpointLoaded": _engine is not None and _engine.model is not None,
         "error": _load_error or None,
-        "model": "student_kd + CBM residual",
+        "model": getattr(_engine,"variant","legacy"),
+        "modelVersion": getattr(_engine,"model_version",None),
+        "metricDefinitionVersion": getattr(_engine,"metric_definition_version",None),
     }
 
 
@@ -68,6 +70,9 @@ def predict(video_frames: np.ndarray, audio_samples: np.ndarray, task_name: str 
         )
 
     return {
+        "modelVersion": getattr(engine,"model_version","unknown"),
+        "metricDefinitionVersion": getattr(engine,"metric_definition_version","session-analysis-v4"),
+        "conceptDefinitionVersion": getattr(engine,"concept_definition_version","legacy-seven-v1"),
         "stressScore": float(stress),
         "confidence": float(max(stress, 1 - stress)),
         "checkpointLoaded": True,
