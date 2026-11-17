@@ -120,7 +120,7 @@ class ConceptV2Contracts(unittest.TestCase):
         import json
         from tempfile import TemporaryDirectory
 
-        from server.tests.tools.verify_concept_v2_ai import SyntheticAudit, synthetic_request
+        from server.verify_concept_v2_ai import SyntheticAudit, synthetic_request
 
         first, second = synthetic_request(), synthetic_request()
         self.assertNotEqual(first.sessionId, second.sessionId)
@@ -295,7 +295,7 @@ class ConceptV2Contracts(unittest.TestCase):
 )
 class FrozenConceptV2Runtime(unittest.TestCase):
     def test_full_runtime_reproduces_frozen_97_of_121_and_all_seven_r2(self):
-        from server.tests.tools.verify_concept_v2 import verify
+        from server.verify_concept_v2 import verify
 
         result = verify(
             Path(os.environ["PRESENSE_V2_SOURCE_ROOT"]), ROOT / "weights/concept_v2"
