@@ -8,6 +8,7 @@ import { useSupabaseAuth } from "@/components/supabase-provider";
 import { useLang } from "@/lib/i18n";
 import { durationText, sceneText, signalScore } from "@/lib/report-locale";
 import { reportDisplaySummary } from "@/lib/agent-report";
+import { jumpToVideo } from "@/lib/coaching";
 import { loadDashboardData, type DiagnosisRecord, type PresentationRecord } from "@/lib/supabase/data";
 
 type Translate = (key: string, fallback?: string) => string;
@@ -190,7 +191,7 @@ function ReviewModal({ record, onClose, severityClass }: { record: PresentationR
             <h3>{lang === "ko" ? "발표 분석 요약" : "Presentation summary"}</h3>
             <p>{reportDisplaySummary(record.agentReport, lang === "ko")}</p>
           </section>
-          <SessionAgentReport report={record.agentReport} language={lang} />
+          <SessionAgentReport report={record.agentReport} language={lang} onSeek={ms => jumpToVideo(record.id, ms)} practiceHref={`/history?session=${encodeURIComponent(record.id)}`} />
         </>}
         {/* AI Diagnosis */}
         {!record.agentReport && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 14 }}>

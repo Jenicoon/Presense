@@ -20,6 +20,7 @@ class ReportEndpointTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         spec = importlib.util.spec_from_file_location("report_endpoint_app", root / "server" / "app.py")
         cls.module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.module
         with patch.dict(sys.modules, {"cv2": cv2, "inference": inference}):
             spec.loader.exec_module(cls.module)
         cls.module._report_rag = lambda: None
@@ -28,6 +29,30 @@ class ReportEndpointTests(unittest.TestCase):
                        "segments": [{"segmentId": "one", "startMs": 0, "endMs": 10000,
                                      "stressScore": .8, "concepts": {}, "audioFeatures": {},
                                      "videoFeatures": {}, "quality": {"audioValid": True, "faceDetected": False}}]}
+
+    def test_report_consent_saves_outside_immutable_request_and_is_idempotent(self):
+        from server.tests.test_record_coaching_store import Database
+        from server.coaching_store import CoachingStore
+        from copy import deepcopy
+        db=Database()
+        self.module.app.dependency_overrides[self.module.require_authenticated_user]=lambda:{"sub":"owner"}
+        try:
+            with patch('requests.request',side_effect=db.call), patch.object(self.module,'_coach_store',side_effect=lambda *_:CoachingStore('https://example.test','publishable','scoped-token','owner')):
+                store=CoachingStore('https://example.test','publishable','scoped-token','owner')
+                initial=store.create(db.row['id'],db.doc)
+                original=deepcopy(initial['snapshot']['request'])
+                url=f"/agent/report/{db.row['id']}/feedback/consent"
+                response=self.client.post(url,json={'selfRecordedTest':True})
+                self.assertEqual(response.status_code,200)
+                restored=store.get(db.row['id']);revision=restored['revision']
+                self.assertTrue(restored['snapshot']['externalAiConsent'])
+                self.assertEqual(restored['snapshot']['request'],original)
+                self.assertEqual(self.client.post(url,json={'selfRecordedTest':True}).status_code,200)
+                self.assertEqual(store.get(db.row['id'])['revision'],revision)
+                changed=deepcopy(restored);changed['snapshot']['dataOrigin']='stressid';changed['revision']+=1
+                store.save(db.row['id'],changed,revision)
+                self.assertEqual(self.client.post(url,json={'selfRecordedTest':True}).status_code,403)
+        finally:self.module.app.dependency_overrides.clear()
 
     def test_auth_required(self):
         response = self.client.post("/agent/report", json=self.payload)
@@ -69,6 +94,7 @@ class ReportEndpointTests(unittest.TestCase):
         from server.tests.test_coaching import document
         from copy import deepcopy
         doc=document("s1")
+        doc["snapshot"]["request"]["externalAiConsent"] = True
         class Store:
             def get(self,identity): return deepcopy(doc) if identity=="s1" else None
             def previous(self,_):return []
@@ -111,11 +137,36 @@ class ReportEndpointTests(unittest.TestCase):
         finally:
             self.module.app.dependency_overrides.clear()
 
+    def test_legacy_coaching_without_recorded_date_still_receives_previous_session(self):
+        from copy import deepcopy
+        from server.tests.test_coaching import document
+        current=document("legacy-current");current["snapshot"]["recordedAt"]="2026-11-01T00:00:00Z"
+        current["snapshot"]["externalAiConsent"]=True
+        previous=document("previous");previous["snapshot"]["recordedAt"]=""
+        seen={}
+        class Store:
+            def get(self,identity):return deepcopy(current)
+            def previous(self,identity):return [deepcopy(previous)]
+            def save(self,*args):pass
+        def respond(doc,body,**kwargs):
+            seen["previous"]=kwargs.get("previous")
+            return doc,{"message":"ok"}
+        self.module.app.dependency_overrides[self.module.require_authenticated_user]=lambda:{"sub":"user-1"}
+        try:
+            with patch.object(self.module,"_coach_store",return_value=Store()), \
+                    patch.object(self.module,"luxia_api_key","configured"), \
+                    patch.object(self.module,"respond_with_ai",side_effect=respond):
+                response=self.client.post("/agent/coach",json={"sessionId":"legacy-current","action":"ask","message":"이전 발표와 비교해줘"})
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(seen["previous"]["state"]["sessionId"],"previous")
+        finally:self.module.app.dependency_overrides.clear()
+
     def test_new_report_receives_the_previously_selected_goal_and_outcome(self):
         from server.tests.test_coaching import document
         previous=document("previous");previous["state"]["nextGoalId"]="pitch_change"
         previous["practices"]=[{"comparison":{"outcome":"partial"}}]
         class Store:
+            def get(self,_):return None
             def previous(self,_):return [previous]
             def create(self,_,doc):return doc
         self.module.app.dependency_overrides[self.module.require_authenticated_user]=lambda:{"sub":"user-1"}

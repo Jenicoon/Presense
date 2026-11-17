@@ -11,6 +11,7 @@ function loadTs(file) {
   const exports = {};
   new Function('exports', 'require', js)(exports, (id) => {
     if (id.endsWith("concept-v2-guidance.json")) return {default:JSON.parse(fs.readFileSync(path.join(__dirname,"../../shared/concept-v2-guidance.json"),"utf8"))};
+    if (id === '@/lib/practice-experiments') return {verifiedPracticePlan:()=>null};
     if (id === '@/lib/measurement-labels') return loadTs('../lib/measurement-labels.ts');
     if (id === '@/lib/finding-evidence') return loadTs('../lib/finding-evidence.ts');
     if (id === '@/lib/report-locale') return loadTs('../lib/report-locale.ts');
@@ -18,7 +19,7 @@ function loadTs(file) {
   });
   return exports;
 }
-const { reportDisplaySummary, agentNextPractice, reportIntentReflection, savedReportAiFeedback } = loadTs('../lib/agent-report.ts');
+const { reportReviewIntro, reportDisplaySummary, agentNextPractice, reportIntentReflection, savedReportAiFeedback } = loadTs('../lib/agent-report.ts');
 const { findingText, sceneText } = loadTs('../lib/report-locale.ts');
 
 test('older generic report uses its saved measurements in the displayed summary', () => {
@@ -133,7 +134,7 @@ test('new exact-measure guidance keeps jaw opening and jitter separate from lega
   const {findingGuidance} = loadTs('../lib/report-locale.ts');
   const jaw=findingGuidance({id:'v2_jaw_open',referenceValue:.1,observations:[{startMs:20000,endMs:30000,value:.3}]},true);
   assert.match(jaw.observation,/턱을 여는 움직임/);
-  assert.match(jaw.question,/말이 급하게/);
+  assert.match(jaw.question,/문장.*경계/);
   assert.doesNotMatch(jaw.question,/덜 열|줄이/);
   const jitter=findingGuidance({id:'v2_jitter',referenceValue:.01,observations:[{startMs:20000,endMs:30000,value:.02}]},false);
   assert.match(jitter.observation,/cycle-to-cycle frequency variation/);
@@ -221,4 +222,18 @@ test('report feedback uses the accepted generated advice and its saved citation'
   assert.equal(savedReportAiFeedback({ ...report, synthesisStatus: 'not_required' }, review, true), null);
   assert.equal(savedReportAiFeedback({ ...report, evidence: [] }, review, true), null);
   assert.equal(savedReportAiFeedback(report, { ...review, evidenceStatus: 'insufficient' }, true), null);
+});
+
+
+test('review summary separates overall flow from findings without premature practice questions',()=>{
+ const rawSegments=Array.from({length:6},(_,n)=>({segmentId:`s${n}`,startMs:n*10000,endMs:(n+1)*10000,stressScore:.35,quality:{audioValid:true,faceDetected:true},audioFeatures:{egemap_jitter:n<3?.02:.04},videoFeatures:{},concepts:{}}));
+ const report={analysis:{timeline:rawSegments.map(s=>({startMs:s.startMs,endMs:s.endMs,stressScore:s.stressScore}))},rawSegments,priorities:[{id:'v2_jitter',metric:'egemap_jitter',modality:'audio',selectedSegmentIds:['s3','s4','s5'],referenceValue:.02}],summaryText:'old'};
+ const ko=reportReviewIntro(report,true,true);
+ assert.match(ko,/유지됐습니다\.\n\n00:30–01:00/);
+ assert.match(ko,/음높이의 미세 변동/);
+ assert.doesNotMatch(ko,/어느 버전|다음 연습|검토 구간은|아주 짧은/);
+ const en=reportReviewIntro(report,false,true);assert.doesNotMatch(en,/[가-힣]/);
+ report.priorities[0].selectedSegmentIds=['s3','s5'];
+ const gaps=reportReviewIntro(report,true,true);assert.doesNotMatch(gaps,/00:30–01:00/);
+ assert.match(gaps,/00:30–00:40, 00:50–01:00/);
 });

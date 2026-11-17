@@ -21,16 +21,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "목소리가 높거나 낮다는 이유로 고칠 필요는 없어요. 중요한 문장 하나를 직접 골라 잘 구분되는지 듣고, 문장 끝의 쉼도 확인해 보세요.",
-      "Pitch direction alone does not call for correction. Choose a key sentence yourself and listen for emphasis and sentence-end pauses."
+      "구간에서 비교할 문장 하나와 중요한 단어 하나를 본인이 고르세요. 그 단어가 나머지와 구분돼 들리는지 원본을 한 번 듣고 확인하세요.",
+      "Choose one sentence and one important word yourself. Listen once and check whether that word stands out from the rest."
     ],
     "goal": [
-      "한 문장만 골라 강조를 바꿔 말하기",
-      "Try a different emphasis for one sentence"
+      "선택한 한 단어가 문장의 나머지와 구분되게 말하기",
+      "Make one chosen word stand out from the rest of the sentence"
     ],
     "instruction": [
-      "문장 하나를 직접 고르세요.\n평소 방식과 다른 강조로 같은 문장을 다시 말하세요.\n어느 방식이 뜻을 잘 전달하는지 녹음을 비교하세요.",
-      "Choose a sentence yourself.\nRepeat it naturally and with a different emphasis.\nCompare which recording expresses your meaning."
+      "원본에서 다시 말할 문장 하나와 강조할 단어 하나를 고르세요.\n같은 문장을 말하되 고른 단어에만 강조를 주세요.\n두 버전을 번갈아 듣고 고른 단어가 구분되는 쪽을 선택하세요.",
+      "Choose one sentence from the original and one word to emphasize.\nRepeat the same sentence, emphasizing only the chosen word.\nAlternate the two versions and choose the one where that word stands out."
     ],
     "strategies": [
       "contrast",
@@ -41,19 +41,19 @@
   },
   "v2_jitter": {
     "title": [
-      "실제 말소리를 듣고 비교하기",
-      "Listen and compare the actual speech"
+      "문장 끝의 전달을 비교하기",
+      "Compare the sentence ending"
     ],
     "higher": [
-      "아주 짧은 소리 단위에서 높낮이가 달라지는 정도가 앞부분보다 크게 측정됐어요",
+      "음높이의 미세 변동이 앞부분보다 컸습니다",
       "cycle-to-cycle frequency variation was higher than earlier in the presentation"
     ],
     "lower": [
-      "아주 짧은 소리 단위에서 높낮이가 달라지는 정도가 앞부분보다 작게 측정됐어요",
+      "음높이의 미세 변동이 앞부분보다 작았습니다",
       "cycle-to-cycle frequency variation was lower than earlier in the presentation"
     ],
     "same": [
-      "아주 짧은 소리 단위에서 높낮이가 달라지는 정도는 앞부분과 비슷했어요",
+      "음높이의 미세 변동은 앞부분과 비슷했습니다",
       "cycle-to-cycle frequency variation was similar to earlier in the presentation"
     ],
     "missing": [
@@ -61,16 +61,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "이 수치만으로 목소리가 나쁘거나 발음이 흐리다고 판단할 수 없어요. 소리를 들으며 다시 듣게 되는 문장이 있는지 확인하세요. 잘 들리면 유지하고, 필요하면 같은 문장을 편한 목소리로 다시 녹음해 비교해요.",
-      "This measurement alone does not establish poor voice or pronunciation. Listen for any sentence that needs replaying. Keep clear delivery, or record the same sentence comfortably and compare."
+      "원본에서 문장 하나를 고르고 끝 단어까지 한 번에 구분되는지 들어보세요. 다시 듣고 싶었던 지점을 표시한 뒤, 아래 연습으로 같은 문장의 끝부분을 비교하세요.",
+      "Choose one sentence and listen for its final word on the first play. Mark any point you wanted to replay, then compare the sentence ending with the exercise below."
     ],
     "goal": [
-      "직접 고른 문장을 편한 목소리로 다시 말하기",
-      "Repeat a self-selected sentence comfortably"
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
     ],
     "instruction": [
-      "다시 말할 문장을 직접 고르세요.\n뜻이 끝나는 곳에서 편하게 쉬며 같은 내용을 말하세요.\n두 녹음에서 말이 또렷하게 들리는지 직접 비교하세요.",
-      "Choose a sentence yourself.\nRepeat it with a comfortable pause at the end of a thought.\nListen back and compare clarity yourself."
+      "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.\n같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.\n원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+      "Choose one sentence from the original, including its last word.\nRepeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable.\nListen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
     ],
     "strategies": [
       "clear_phrases",
@@ -81,8 +81,8 @@
   },
   "v2_shimmer": {
     "title": [
-      "실제 말소리를 듣고 비교하기",
-      "Listen and compare the actual speech"
+      "끝 단어까지 들리는지 비교하기",
+      "Compare delivery through the final word"
     ],
     "higher": [
       "아주 짧은 소리 단위에서 크기가 달라지는 정도가 앞부분보다 크게 측정됐어요",
@@ -101,16 +101,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "이 수치만으로 목소리가 나쁘거나 발음이 흐리다고 판단할 수 없어요. 소리를 들으며 다시 듣게 되는 문장이 있는지 확인하세요. 잘 들리면 유지하고, 필요하면 같은 문장을 편한 목소리로 다시 녹음해 비교해요.",
-      "This measurement alone does not establish poor voice or pronunciation. Listen for any sentence that needs replaying. Keep clear delivery, or record the same sentence comfortably and compare."
+      "문장 하나를 골라 처음 단어와 끝 단어를 차례로 들어보세요. 끝 단어가 구분되는지 확인한 뒤 같은 내용을 아래 방법으로 비교하세요.",
+      "Choose a sentence and listen to its first and final words. Check whether you can identify the final word, then compare the same content using the exercise below."
     ],
     "goal": [
-      "직접 고른 문장을 편한 목소리로 다시 말하기",
-      "Repeat a self-selected sentence comfortably"
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
     ],
     "instruction": [
-      "다시 말할 문장을 직접 고르세요.\n뜻이 끝나는 곳에서 편하게 쉬며 같은 내용을 말하세요.\n두 녹음에서 말이 또렷하게 들리는지 직접 비교하세요.",
-      "Choose a sentence yourself.\nRepeat it with a comfortable pause at the end of a thought.\nListen back and compare clarity yourself."
+      "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.\n같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.\n원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+      "Choose one sentence from the original, including its last word.\nRepeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable.\nListen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
     ],
     "strategies": [
       "clear_phrases",
@@ -121,8 +121,8 @@
   },
   "v2_hnr": {
     "title": [
-      "실제 말소리를 듣고 비교하기",
-      "Listen and compare the actual speech"
+      "같은 환경에서 말소리 비교하기",
+      "Compare speech in the same setup"
     ],
     "higher": [
       "목소리의 규칙적인 성분을 잡음 성분과 비교한 값이 앞부분보다 크게 측정됐어요",
@@ -141,16 +141,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "이 수치만으로 목소리가 나쁘거나 발음이 흐리다고 판단할 수 없어요. 소리를 들으며 다시 듣게 되는 문장이 있는지 확인하세요. 잘 들리면 유지하고, 필요하면 같은 문장을 편한 목소리로 다시 녹음해 비교해요.",
-      "This measurement alone does not establish poor voice or pronunciation. Listen for any sentence that needs replaying. Keep clear delivery, or record the same sentence comfortably and compare."
+      "같은 구간을 화면 없이 한 번 듣고, 다시 듣고 싶은 문장 하나를 본인이 고르세요. 같은 카메라·마이크 위치에서 그 문장을 다시 녹음해 말소리가 구분되는지 비교하세요.",
+      "Listen once without the picture and choose a sentence you want to replay. Record it in the same camera and microphone setup and compare how clearly you can identify the words."
     ],
     "goal": [
-      "직접 고른 문장을 편한 목소리로 다시 말하기",
-      "Repeat a self-selected sentence comfortably"
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
     ],
     "instruction": [
-      "다시 말할 문장을 직접 고르세요.\n뜻이 끝나는 곳에서 편하게 쉬며 같은 내용을 말하세요.\n두 녹음에서 말이 또렷하게 들리는지 직접 비교하세요.",
-      "Choose a sentence yourself.\nRepeat it with a comfortable pause at the end of a thought.\nListen back and compare clarity yourself."
+      "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.\n같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.\n원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+      "Choose one sentence from the original, including its last word.\nRepeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable.\nListen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
     ],
     "strategies": [
       "clear_phrases",
@@ -181,16 +181,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "같은 장면을 소리 없이 한 번, 소리와 함께 한 번 보세요. 전달하려던 느낌은 직접 정하고 표정이 그 느낌과 맞는지 확인하세요. 움직임의 크기만으로 감정은 판단하지 않아요.",
-      "Watch once without sound, then with sound. Choose the intended feeling yourself and compare the expression. Movement magnitude alone does not identify emotion."
+      "같은 문장을 소리만 듣고 한 번, 소리와 영상으로 한 번 확인하세요. 본인이 전달하려던 느낌과 표정이 맞는지 비교할 문장을 고르세요.",
+      "Listen to the same sentence once, then watch it with sound. Choose the sentence whose expression you want to compare with the feeling you intended."
     ],
     "goal": [
-      "같은 문장을 두 표정으로 말하고 비교하기",
-      "Compare two expressions for the same sentence"
+      "전달할 느낌을 정하고 한 문장 다시 말하기",
+      "Choose what you want to convey, then repeat one sentence"
     ],
     "instruction": [
-      "전달할 느낌을 직접 정하세요.\n같은 문장을 두 표정으로 말해 보세요.\n영상과 소리를 함께 보고 표현을 직접 선택하세요.",
-      "Choose your intended feeling.\nSay the same sentence with two expressions.\nWatch with sound and choose your expression."
+      "다시 말할 문장과 전달할 느낌 하나를 본인이 고르세요.\n말하기 직전에 잠깐 준비한 뒤 같은 문장을 자연스러운 표정으로 말하세요.\n두 버전을 소리와 함께 보고 본인이 고른 느낌에 가까운 쪽을 선택하세요.",
+      "Choose one sentence and the feeling you want to convey.\nTake a brief moment to prepare, then say the same sentence with a natural expression.\nWatch both versions with sound and choose the one closer to the feeling you selected."
     ],
     "strategies": [
       "expression"
@@ -219,16 +219,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "조명이나 안경 때문에 눈이 불편하지 않았는지 함께 확인하세요. 원하면 잠깐 쉬고 자연스럽게 눈을 깜박인 뒤, 얼굴과 시선을 편하게 두고 같은 문장을 다시 녹음해요.",
-      "Check whether lighting or glasses made your eyes uncomfortable. Optionally take a brief break, blink naturally, then record the same sentence with a comfortable face and gaze."
+      "문장을 말할 때와 문장 사이에 눈 주변이 어떻게 움직이는지 나누어 보세요. 조명과 카메라 위치를 유지하고 같은 문장에서 의도하지 않은 조임이 반복되는지 비교하세요.",
+      "Compare eye-area movement while speaking and between sentences. Keep lighting and camera position unchanged and check whether unintended tightening repeats in the same sentence."
     ],
     "goal": [
-      "잠깐 쉬고 같은 문장 다시 녹음하기",
-      "Take a brief break and repeat the sentence"
+      "같은 촬영 환경에서 렌즈나 청중 위치를 보며 한 문장 다시 말하기",
+      "Repeat one sentence toward the lens or an audience position in the same setup"
     ],
     "instruction": [
-      "카메라와 조명을 같은 위치에 두고 잠깐 쉬세요.\n눈을 자연스럽게 깜박이고 편하게 시선을 두세요.\n같은 문장을 말한 두 영상을 비교하세요.",
-      "Keep camera and lighting in the same position and take a brief break.\nBlink naturally and let your gaze rest comfortably.\nCompare recordings of the same sentence."
+      "다시 말할 문장 하나를 고르고 조명과 카메라 위치를 그대로 두세요.\n렌즈나 청중 위치를 보며 같은 문장을 여러 번 말하세요.\n두 버전을 보고 의도하지 않은 눈꺼풀 조임이 반복되는지 원본과 비교하세요.",
+      "Choose one sentence and keep the lighting and camera position unchanged.\nRepeat it several times while looking toward the lens or an audience position.\nCompare both versions and check whether unintended eyelid tightening repeats."
     ],
     "strategies": [
       "face_reset"
@@ -257,16 +257,16 @@
       "There is not enough data to compare this measurement with earlier intervals"
     ],
     "check": [
-      "턱 움직임은 말하는 내용과 조음에 따라 달라져요. 소리와 함께 재생해 말이 급하게 이어졌는지 직접 확인하세요. 편하게 들리면 유지하고, 쉼이 필요하면 문장 하나를 골라 뜻이 끝나는 곳에서 쉬며 다시 말해요.",
-      "Jaw movement depends on speech content and articulation. Play with sound and judge rushed delivery yourself. Keep comfortable delivery, or choose one sentence and pause at a completed thought."
+      "소리만 듣고 문장 끝의 쉼을 본인이 표시한 뒤, 같은 장면을 영상과 함께 보세요. 아래 연습에서는 입 모양 대신 같은 문장의 경계가 구분되는지를 비교하세요.",
+      "Listen without the picture and mark a sentence boundary yourself, then watch with sound. In the exercise below, compare the boundary in the same sentence rather than the amount of mouth opening."
     ],
     "goal": [
-      "뜻이 끝나는 곳에서 쉬고 같은 문장 다시 말하기",
-      "Pause at a completed thought and repeat the sentence"
+      "뜻이 끝나는 곳에서 한 번 쉬고 다음 문장 시작하기",
+      "Pause once at a completed thought before starting the next sentence"
     ],
     "instruction": [
-      "문장 하나를 직접 고르세요.\n의미가 끝나는 곳에서 쉬고 다음 문장을 시작하세요.\n같은 조건에서 녹음하고 두 영상을 소리와 함께 비교하세요.",
-      "Choose one sentence yourself.\nPause at the completed thought before starting the next sentence.\nRecord under matching conditions and compare with sound."
+      "다시 말할 문장을 고르고 뜻이 끝나는 곳에 쉼 표시를 하세요.\n같은 내용을 말하며 표시한 곳에서 한 번 쉬세요. 다른 부분은 평소처럼 말하세요.\n두 버전을 듣고 문장 끝과 다음 시작이 구분되는 쪽을 고르세요.",
+      "Choose a sentence and mark where a complete thought ends.\nRepeat the same content with one pause at your mark. Keep the rest of your delivery natural.\nListen to both versions and choose the one with a clearer sentence boundary."
     ],
     "strategies": [
       "phrasing",

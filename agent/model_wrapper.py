@@ -270,7 +270,10 @@ class StressInferenceEngine:
             import mediapipe as mp
             opts = mp.tasks.vision.FaceLandmarkerOptions(
                 base_options=mp.tasks.BaseOptions(
-                    model_asset_path=str(model_path)),
+                    model_asset_path=str(model_path),
+                    # Explicit CPU delegation avoids MediaPipe's macOS Metal
+                    # service abort when the inference server has no GUI context.
+                    delegate=mp.tasks.BaseOptions.Delegate.CPU),
                 running_mode=mp.tasks.vision.RunningMode.IMAGE,
                 num_faces=1,
                 min_face_detection_confidence=0.3,

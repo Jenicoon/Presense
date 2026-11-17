@@ -1,0 +1,198 @@
+{
+  "contrast": {
+    "label": [
+      "핵심어 하나만 강조하기",
+      "Emphasize one key word"
+    ],
+    "goal": [
+      "선택한 한 단어가 문장의 나머지와 구분되게 말하기",
+      "Make one chosen word stand out from the rest of the sentence"
+    ],
+    "steps": [
+      [
+        "원본에서 다시 말할 문장 하나와 강조할 단어 하나를 고르세요.",
+        "Choose one sentence from the original and one word to emphasize."
+      ],
+      [
+        "같은 문장을 말하되 고른 단어에만 강조를 주세요.",
+        "Repeat the same sentence, emphasizing only the chosen word."
+      ],
+      [
+        "두 버전을 번갈아 듣고 고른 단어가 구분되는 쪽을 선택하세요.",
+        "Alternate the two versions and choose the one where that word stands out."
+      ]
+    ],
+    "question": [
+      "어느 버전에서 고른 단어가 더 잘 구분됐나요?",
+      "Which version made your chosen word stand out more?"
+    ]
+  },
+  "phrasing": {
+    "label": [
+      "문장 경계에 한 번 쉬기",
+      "Pause at a sentence boundary"
+    ],
+    "goal": [
+      "뜻이 끝나는 곳에서 한 번 쉬고 다음 문장 시작하기",
+      "Pause once at a completed thought before starting the next sentence"
+    ],
+    "steps": [
+      [
+        "다시 말할 문장을 고르고 뜻이 끝나는 곳에 쉼 표시를 하세요.",
+        "Choose a sentence and mark where a complete thought ends."
+      ],
+      [
+        "같은 내용을 말하며 표시한 곳에서 한 번 쉬세요. 다른 부분은 평소처럼 말하세요.",
+        "Repeat the same content with one pause at your mark. Keep the rest of your delivery natural."
+      ],
+      [
+        "두 버전을 듣고 문장 끝과 다음 시작이 구분되는 쪽을 고르세요.",
+        "Listen to both versions and choose the one with a clearer sentence boundary."
+      ]
+    ],
+    "question": [
+      "어느 버전에서 문장 끝과 다음 시작이 더 잘 구분됐나요?",
+      "Which version made the end of one sentence and the start of the next clearer?"
+    ]
+  },
+  "clear_phrases": {
+    "label": [
+      "끝 단어까지 전달하고 쉬기",
+      "Finish the last word, then pause"
+    ],
+    "goal": [
+      "고른 문장의 끝 단어를 마친 뒤 한 번 쉬기",
+      "Finish the last word of your chosen sentence before pausing"
+    ],
+    "steps": [
+      [
+        "원본을 듣고 끝 단어까지 비교할 문장 하나를 고르세요.",
+        "Choose one sentence from the original, including its last word."
+      ],
+      [
+        "같은 문장을 말하며 끝 단어를 마친 뒤 한 번 쉬세요. 목소리 높이나 크기를 억지로 바꾸지 마세요.",
+        "Repeat the same sentence and pause once after its last word. Keep your pitch and volume comfortable."
+      ],
+      [
+        "원본과 재녹화를 듣고 끝 단어를 다시 듣지 않아도 구분할 수 있는 쪽을 선택하세요.",
+        "Listen to the original and new take. Choose the version whose last word is easier to identify without replaying it."
+      ]
+    ],
+    "question": [
+      "어느 버전에서 문장의 끝 단어까지 한 번에 구분됐나요?",
+      "Which version made the final word easier to identify on the first listen?"
+    ]
+  },
+  "two_versions": {
+    "label": [
+      "쉼 한 곳만 바꿔 비교하기",
+      "Compare one change in pausing"
+    ],
+    "goal": [
+      "같은 문장에 쉼 한 곳만 더해 두 방식 비교하기",
+      "Compare the same sentence with just one added pause"
+    ],
+    "steps": [
+      [
+        "다시 말할 문장 하나와 뜻이 끝나는 곳 하나를 고르세요.",
+        "Choose one sentence and one completed thought within it."
+      ],
+      [
+        "원본과 같은 단어를 사용해 말하고, 고른 곳에서만 한 번 쉬세요.",
+        "Use the same words as the original, adding a pause only at the chosen point."
+      ],
+      [
+        "두 버전을 번갈아 듣고 문장의 뜻을 따라가기 쉬운 쪽을 고르세요.",
+        "Alternate the versions and choose the one that makes the thought easier to follow."
+      ]
+    ],
+    "question": [
+      "어느 버전에서 문장의 뜻을 따라가기 쉬웠나요?",
+      "Which version made the sentence easier to follow?"
+    ]
+  },
+  "expression": {
+    "label": [
+      "말하기 전 전달할 느낌 정하기",
+      "Choose the feeling before speaking"
+    ],
+    "goal": [
+      "전달할 느낌을 정하고 한 문장 다시 말하기",
+      "Choose what you want to convey, then repeat one sentence"
+    ],
+    "steps": [
+      [
+        "다시 말할 문장과 전달할 느낌 하나를 본인이 고르세요.",
+        "Choose one sentence and the feeling you want to convey."
+      ],
+      [
+        "말하기 직전에 잠깐 준비한 뒤 같은 문장을 자연스러운 표정으로 말하세요.",
+        "Take a brief moment to prepare, then say the same sentence with a natural expression."
+      ],
+      [
+        "두 버전을 소리와 함께 보고 본인이 고른 느낌에 가까운 쪽을 선택하세요.",
+        "Watch both versions with sound and choose the one closer to the feeling you selected."
+      ]
+    ],
+    "question": [
+      "어느 버전에서 말과 표정이 고른 느낌에 더 잘 맞았나요?",
+      "Which version better matched your chosen feeling in both words and expression?"
+    ]
+  },
+  "gaze_anchor": {
+    "label": [
+      "한 문장 동안 시선 두기",
+      "Anchor gaze for one sentence"
+    ],
+    "goal": [
+      "고른 한 문장을 말할 때 카메라 옆 한 지점 보기",
+      "Look at one point beside the camera while saying your chosen sentence"
+    ],
+    "steps": [
+      [
+        "다시 말할 문장 하나와 카메라 옆에서 볼 지점 하나를 고르세요.",
+        "Choose one sentence and one point beside the camera."
+      ],
+      [
+        "그 문장을 말하는 동안만 고른 지점을 보세요. 나머지 움직임은 자연스럽게 두세요.",
+        "Look at your chosen point only while saying that sentence. Keep other movement natural."
+      ],
+      [
+        "두 버전을 보고 그 문장 동안 시선이 머무는지 비교하세요.",
+        "Watch both versions and compare whether your gaze stays at that point for the sentence."
+      ]
+    ],
+    "question": [
+      "어느 버전에서 고른 문장 동안 시선이 더 잘 머물렀나요?",
+      "Which version kept your gaze at the chosen point for that sentence?"
+    ]
+  },
+  "face_reset": {
+    "label": [
+      "눈 주변 움직임과 시선 비교하기",
+      "Compare eye-area movement and gaze"
+    ],
+    "goal": [
+      "같은 촬영 환경에서 렌즈나 청중 위치를 보며 한 문장 다시 말하기",
+      "Repeat one sentence toward the lens or an audience position in the same setup"
+    ],
+    "steps": [
+      [
+        "다시 말할 문장 하나를 고르고 조명과 카메라 위치를 그대로 두세요.",
+        "Choose one sentence and keep the lighting and camera position unchanged."
+      ],
+      [
+        "렌즈나 청중 위치를 보며 같은 문장을 여러 번 말하세요.",
+        "Repeat the same sentence several times while looking toward the lens or an audience position."
+      ],
+      [
+        "두 버전을 보고 의도하지 않은 눈꺼풀 조임이 반복되는지 원본과 비교하세요.",
+        "Compare both versions and check whether unintended eyelid tightening repeats."
+      ]
+    ],
+    "question": [
+      "의도하지 않은 눈꺼풀 조임이 어느 버전에서 반복됐나요?",
+      "In which version did unintended eyelid tightening repeat?"
+    ]
+  }
+}

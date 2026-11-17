@@ -56,3 +56,18 @@ test('a saved recommendation uses an existing primary action in both languages',
   const en=renderToStaticMarkup(React.createElement(CoachComponents,{components:english,ko:false,busy:false,onAction(){}}));
   assert.match(en,/Suggested · Sentence boundary practice/);assert.doesNotMatch(en,/[가-힣]/);
 });
+
+test('coaching research is shown in a collapsed reference section',()=>{
+  const {CoachComponents}=compile('components/coach-components.tsx',id=>{
+    if(id==='@/components/practice-review-form')return {PracticeReviewForm};
+    if(id==='@/lib/report-locale')return {signalScore:()=>''};
+    if(id==='@/lib/measurement-labels')return {measurementLabel:x=>x};
+    if(id==='@/lib/coaching')return {clock:()=>'',jumpToVideo(){}};
+    return require(id);
+  });
+  const components=[{type:'research_references',items:[{id:'paper-1',title:'AU7 study',articleUrl:'https://example.test/paper',finding:'눈꺼풀 조임과 관련된 연구 결과',scope:'연습 효과를 시험한 연구는 아닙니다.'}]}];
+  const html=renderToStaticMarkup(React.createElement(CoachComponents,{components,ko:true,busy:false,onAction(){}}));
+  assert.match(html,/<details[^>]*coach-research-references/);
+  assert.match(html,/참고 논문/);assert.match(html,/AU7 study/);assert.match(html,/눈꺼풀 조임과 관련된 연구 결과/);
+  assert.match(html,/href="https:\/\/example.test\/paper"/);
+});

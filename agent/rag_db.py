@@ -68,9 +68,10 @@ class PaperRAG:
     def __init__(self, db_path: str | Path | None = None,
                  papers_dir: str | Path | None = None, sync: bool = True):
         import chromadb
+        from chromadb.config import Settings
 
         Path(db_path or _DB_PATH).mkdir(parents=True, exist_ok=True)
-        self._client     = chromadb.PersistentClient(path=str(db_path or _DB_PATH))
+        self._client     = chromadb.PersistentClient(path=str(db_path or _DB_PATH), settings=Settings(anonymized_telemetry=False))
         self._collection = self._client.get_or_create_collection(
             name='stress_papers_v2',
             metadata={'hnsw:space': 'cosine'},

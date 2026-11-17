@@ -282,7 +282,8 @@ class AgentReportTests(unittest.TestCase):
                 {"issueId": issue["id"], "recommendation": "Review the recording.", "evidenceIds": []}
                 for issue in context["issues"]]}
         report = self.report(request, rag=None, synthesize=synthesize)
-        self.assertEqual(report["synthesisStatus"], "generated")
+        self.assertEqual(report["synthesisStatus"], "unavailable")
+        self.assertTrue(report["synthesisGenerated"])
         self.assertTrue(report["summaryFallbackUsed"])
         self.assertNotIn("긴장이 잘 드러납니다", report["summaryText"])
 

@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from agent.coach_ai import build_context, validate_plan
 from agent.coaching import CoachRequest, compare_snapshots, new_document
-from agent.coaching_methods import profile
+from agent.coaching_methods import METHODS, profile
 from agent.model_contract import (
     CONCEPT_VERSION,
     METRIC_VERSION,
@@ -88,7 +88,7 @@ class ConceptV2Contracts(unittest.TestCase):
         report = generate_report(req, model_version=req.modelVersion, agent_mode=True)
         self.assertEqual(report["metricDefinitionVersion"], METRIC_VERSION)
         self.assertEqual(report["conceptDefinitionVersion"], CONCEPT_VERSION)
-        self.assertLessEqual(len(report["priorities"]), 3)
+        self.assertTrue({f["id"] for f in report["priorities"]}.issubset({c[2] for c in RAW_METRICS}))
 
     def test_stable_v2_session_does_not_invent_a_problem(self):
         data = request().model_dump()
@@ -120,7 +120,7 @@ class ConceptV2Contracts(unittest.TestCase):
         import json
         from tempfile import TemporaryDirectory
 
-        from server.verify_concept_v2_ai import SyntheticAudit, synthetic_request
+        from server.tests.tools.verify_concept_v2_ai import SyntheticAudit, synthetic_request
 
         first, second = synthetic_request(), synthetic_request()
         self.assertNotEqual(first.sessionId, second.sessionId)
@@ -188,9 +188,20 @@ class ConceptV2Contracts(unittest.TestCase):
             self.assertNotIn("구간 차이", view["observation"])
             self.assertNotIn("의도한 강조", view["question"])
         self.assertIn(
-            "말이 급하게",
+            "문장의 경계",
             guidance({"id": "v2_jaw_open", "observations": []}, True)["question"],
         )
+
+    def test_every_v2_concept_has_a_safe_practice_path(self):
+        for concept in PROPOSED_CONCEPTS_V2:
+            strategies = profile({"id": concept.research_topic})["strategies"]
+            self.assertTrue(strategies, concept.research_topic)
+            self.assertTrue(all(strategy in METHODS for strategy in strategies))
+        eye_text = str(METHODS["face_reset"]) + str(
+            guidance({"id": "v2_eye_squint", "observations": []}, True)
+        )
+        self.assertNotRegex(eye_text, r"깜박|깜빡|blink")
+        self.assertIn("렌즈", eye_text)
 
     def test_model_plan_rejects_cause_claims_and_prescribed_jaw_reduction(self):
         req = request()
@@ -284,7 +295,7 @@ class ConceptV2Contracts(unittest.TestCase):
 )
 class FrozenConceptV2Runtime(unittest.TestCase):
     def test_full_runtime_reproduces_frozen_97_of_121_and_all_seven_r2(self):
-        from server.verify_concept_v2 import verify
+        from server.tests.tools.verify_concept_v2 import verify
 
         result = verify(
             Path(os.environ["PRESENSE_V2_SOURCE_ROOT"]), ROOT / "weights/concept_v2"

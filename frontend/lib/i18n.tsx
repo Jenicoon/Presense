@@ -300,7 +300,7 @@ const dict: Record<string, { ko: string; en: string }> = {
   "report.mostStressfulPhaseDesc": { ko: "발표 구조 인식이 아닌 시간 분할입니다.", en: "A division of time, not recognized presentation structure." },
   "report.nextStep": { ko: "추천 다음 단계", en: "Recommended Next Step" },
   "report.nextStepDesc": { ko: "다음 리허설의 집중 영역.", en: "Focus area for your next rehearsal." },
-  "report.confidence": { ko: "Confidence", en: "Confidence" },
+  "report.confidence": { ko: "분류 확신도", en: "Classification confidence" },
   "report.deck": { ko: "자료", en: "Deck" },
   "report.scene": { ko: "장면", en: "Scene" },
   "report.aiAgent": { ko: "AI ChatBot", en: "AI ChatBot" },
@@ -334,14 +334,6 @@ const dict: Record<string, { ko: string; en: string }> = {
   "starter.0": { ko: "스트레스 신호 점수가 가장 두드러진 구간은?", en: "Where was the stress signal score most prominent?" },
   "starter.1": { ko: "다음 리허설 전에 무엇을 개선해야 할까?", en: "What should I improve before the next rehearsal?" },
   "starter.2": { ko: "해당 구간에서 어떤 측정값이 관측됐어?", en: "What measurements were observed in that interval?" },
-
-  // Post-session highlights
-  "highlight.0.title": { ko: "관측 구간 확인", en: "Review observed intervals" },
-  "highlight.0.detail": { ko: "분석된 구간과 빈 구간을 타임라인에서 확인하세요.", en: "Review observed and missing intervals on the timeline." },
-  "highlight.1.title": { ko: "영상과 함께 확인", en: "Review with the recording" },
-  "highlight.1.detail": { ko: "음성·영상 측정값은 실제 전달 맥락과 함께 확인하세요.", en: "Review audio and video measurements in the context of delivery." },
-  "highlight.2.title": { ko: "다음 목표 선택", en: "Choose the next goal" },
-  "highlight.2.detail": { ko: "근거가 확인된 목표 하나를 선택해 같은 내용으로 다시 연습하세요.", en: "Choose one supported goal and repeat the same content." },
 
   // Session naming
   "save.title": { ko: "세션 저장", en: "Save Session" },

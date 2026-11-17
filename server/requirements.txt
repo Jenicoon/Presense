@@ -16,3 +16,8 @@ PyJWT[crypto]>=2.8
 
 chromadb>=0.5
 pdfplumber>=0.11
+
+# Chroma imports the telemetry SDK; keep the namespace packages in sync.
+opentelemetry-api==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp-proto-grpc==1.45.2

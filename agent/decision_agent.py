@@ -7,14 +7,14 @@ from typing import Callable
 
 from .report_schema import Evidence, ReviewRequest
 from .finding_groups import METRIC_FLOORS, finding_kind, repeated_group_reason
-from .session_analyzer import RESEARCHABLE_IDS, _independent_count, _ranges, metric
+from .session_analyzer import RESEARCHABLE_IDS, RESEARCHABLE_TOPICS, _independent_count, _ranges, metric
 
 
 # 1. 설정값과 AgentState: 실행 한도와 분석 중 유지할 상태.
 
 logger = logging.getLogger(__name__)
-MAX_ACTIONS = 5
-MAX_PAPER_SEARCHES = 2
+MAX_ACTIONS = 24
+MAX_PAPER_SEARCHES = 7
 MAX_DECISION_ATTEMPTS = 3
 METRIC_DEFINITION_VERSION = "session-analysis-v4"
 
@@ -34,6 +34,7 @@ class AgentState:
     selected_ids: list[str] = field(default_factory=list)
     decision_errors: list[str] = field(default_factory=list)
     stop_reason: str = "action_limit"
+    action_limit: int = 5
 
     def candidate(self, identity: str) -> dict:
         return next(item for item in self.candidates if item["id"] == identity)
@@ -84,22 +85,33 @@ def _session_window_view(request: ReviewRequest) -> list[dict]:
 
 def _decision_view(state: AgentState, rag) -> dict:
     weak = _weak_measurement_context(state)
+    segment_options = []
+    for item in state.candidates:
+        ids = (item.get('selectedSegmentIds') or [row['segmentId'] for row in item.get('observations', [])])[:12]
+        if not ids: continue
+        proposal = {'action':'analyze_segment','candidateId':item['id'],'segmentIds':ids}
+        try:
+            _validate_action(proposal,state,rag)
+            segment_options.append(proposal)
+        except ValueError:
+            pass
     review_ready = [item["id"] for item in state.candidates
                     if ("analyze_segment", item["id"]) in state.seen
                     and item["measurementQuality"] >= .8
                     and item["independentObservations"] >= 2
-                    and any(hit.applicability == "direct" and item["id"] in hit.topics
+                    and any((item.get("researchTopic") or item["id"]) in hit.topics
                             for hit in state.hits.get(item["id"], []))]
     prior_goal = (state.prior or {}).get("focusGoal")
     prior_goal_id = prior_goal.get("candidateId") if isinstance(prior_goal, dict) else None
     pending_prior_goal = (prior_goal_id if prior_goal_id in {item["id"] for item in state.candidates}
                           and _has_comparison(state, prior_goal_id)
                           and ("compare_previous_session", prior_goal_id) not in state.seen else None)
-    return {"remainingActions": MAX_ACTIONS - len(state.actions),
+    view = {"remainingActions": state.action_limit - len(state.actions),
             "remainingPaperSearches": MAX_PAPER_SEARCHES - sum(a["action"] == "retrieve_papers" for a in state.actions),
             "summary": {key: value for key, value in state.summary.items() if key != "timeline"},
             "sessionWindows": _session_window_view(state.request),
             "candidates": [_candidate_view(item) for item in state.candidates],
+            "segmentReviewOptions": segment_options,
             "priorGoal": {key: (state.prior or {}).get("focusGoal", {}).get(key)
                           for key in ("candidateId", "metric")}
             if isinstance((state.prior or {}).get("focusGoal"), dict) else None,
@@ -117,6 +129,42 @@ def _decision_view(state: AgentState, rag) -> dict:
             "weakMeasurementContext": weak,
             "decisionErrors": state.decision_errors[-2:],
             "toolResults": state.actions}
+
+    # The model chooses among server-validated actions. It cannot accidentally
+    # repeat a tool or invent a window list while trying to repair its JSON.
+    proposals = list(segment_options)
+    for item in state.candidates:
+        proposed = measurement_decider(state.request, [item])({"toolResults": [], "finishEligibleCandidateIds": []})
+        if proposed.get("action") == "analyze_segment": proposals.append(proposed)
+        identity = item["id"]
+        proposals.append({"action":"compare_previous_session", "candidateId":identity})
+        if ("analyze_segment", identity) in state.seen:
+            proposals.append({"action":"analyze_concept", "candidateId":identity})
+        proposals.append({"action":"retrieve_papers", "candidateId":identity, "claimKind":"interpretation"})
+    actions = []
+    seen_options = set()
+    if view["remainingActions"] > 0:
+        for proposal in proposals:
+            try: checked = _validate_action(proposal, state, rag)
+            except ValueError: continue
+            signature = repr(checked)
+            if signature in seen_options: continue
+            seen_options.add(signature)
+            actions.append({"id":f"tool-{len(actions)}", "proposal":checked})
+    from itertools import combinations
+    eligible = view["finishEligibleCandidateIds"]
+    subsets = [()]
+    if len(eligible) <= 10:
+        subsets += [group for size in range(1, len(eligible)+1) for group in combinations(eligible,size)]
+    else:
+        subsets += [(identity,) for identity in eligible] + [tuple(eligible)]
+    for group in subsets:
+        proposal = {"action":"finish", "priorityCandidateIds":list(group)}
+        try: _validate_action(proposal, state, rag)
+        except ValueError: continue
+        actions.append({"id":f"finish-{len(actions)}", "proposal":proposal})
+    view["availableActions"] = actions
+    return view
 
 
 # 3. 측정값과 이전 세션 비교: 기준값, 관측 횟수, 비교 가능성 계산.
@@ -269,6 +317,7 @@ def _comparison_result(state: AgentState, item: dict) -> dict:
 
 
 def _paper_result(item: dict, rag, claim_kind: str) -> tuple[dict, list[Evidence]]:
+    research_topic = item.get("researchTopic") or item["id"]
     claim = (f"A presentation rehearsal exercise targeting {item['metric']} may improve delivery"
              if claim_kind == "practice" else
              f"The observed {item['metric']} change may be relevant when reviewing this speaking interval")
@@ -276,13 +325,13 @@ def _paper_result(item: dict, rag, claim_kind: str) -> tuple[dict, list[Evidence
              + (" feedback rehearsal intervention" if claim_kind == "practice" else ""))
     try:
         retriever = getattr(rag, "retrieve_issue_evidence", None)
-        raw = retriever(item["id"], query, k=5) if retriever else rag.retrieve_evidence(query, k=5)
+        raw = retriever(research_topic, query, k=5) if retriever else rag.retrieve_evidence(query, k=5)
         from .report_agent import _eligible_evidence  # reuse curated scope guard
-        hits = [hit for entry in raw if _eligible_evidence(item["id"], hit := Evidence.model_validate(entry))]
+        hits = [hit for entry in raw if _eligible_evidence(item["id"], hit := Evidence.model_validate(entry), research_topic)]
     except Exception as error:
         logger.warning("Agent paper tool failed (%s)", type(error).__name__)
         hits = []
-    direct = [hit for hit in hits if hit.applicability == "direct" and item["id"] in hit.topics]
+    direct = [hit for hit in hits if hit.applicability == "direct" and research_topic in hit.topics]
     practice = [hit for hit in direct if hit.evidenceRole == "practice_specific"]
     support = "direct" if (practice if claim_kind == "practice" else direct) else "partial" if hits else "unsupported"
     return {"candidateId": item["id"], "claimKind": claim_kind, "claim": claim,
@@ -298,7 +347,7 @@ def _paper_result(item: dict, rag, claim_kind: str) -> tuple[dict, list[Evidence
 
 def _paper_eligible(state: AgentState, item: dict, rag) -> tuple[bool, str]:
     identity = item["id"]
-    if identity not in RESEARCHABLE_IDS:
+    if (item.get("researchTopic") or identity) not in RESEARCHABLE_TOPICS:
         return False, "no_indexed_research_topic"
     if rag is None or sum(row["action"] == "retrieve_papers" for row in state.actions) >= MAX_PAPER_SEARCHES:
         return False, "paper_search_unavailable_or_exhausted"
@@ -396,7 +445,7 @@ def _finish_eligible_ids(state: AgentState) -> list[str]:
 
 def _safe_next_action(state: AgentState, rag) -> dict:
     """Preserve checked measurements without inventing research-backed advice."""
-    return {"action": "finish", "priorityCandidateIds": _finish_eligible_ids(state)[:3]}
+    return {"action": "finish", "priorityCandidateIds": _finish_eligible_ids(state)}
 
 
 def _validate_action(raw: dict, state: AgentState, rag) -> dict:
@@ -406,7 +455,7 @@ def _validate_action(raw: dict, state: AgentState, rag) -> dict:
     ids = [item["id"] for item in state.candidates]
     if action == "finish":
         selected = raw.get("priorityCandidateIds")
-        if (not isinstance(selected, list) or len(selected) > 3
+        if (not isinstance(selected, list) or len(selected) > len(ids)
                 or len(selected) != len(set(selected)) or any(i not in ids for i in selected)):
             raise ValueError("Finish must select observed candidate IDs only")
         for identity in selected:
@@ -527,7 +576,7 @@ def _decision_log(state: AgentState, action: dict, source: str,
                                             if _concept_eligible(item)[0]
                                             and ("analyze_concept", item["id"]) not in state.seen
                                             and (weak is None or item["id"] in weak["sameIntervalAlternatives"])],
-            "remainingActions": MAX_ACTIONS - len(state.actions),
+            "remainingActions": state.action_limit - len(state.actions),
             "observedResult": _observed_result(state),
             "proposals": proposals, "selectedAction": action.copy(),
             "selectedCandidateId": action.get("candidateId"),
@@ -548,8 +597,11 @@ def run_agent(request: ReviewRequest, summary: dict, candidates: list[dict], rag
     if summary["coverage"] < .5:
         state.stop_reason = "insufficient_coverage"
         return state
+    # Enough room to inspect every measured feature and retrieve its evidence.
+    # This is a network/tool safety budget, never a quota of findings.
+    state.action_limit = min(MAX_ACTIONS, max(5, 2 * len(candidates) + 3))
     decider_active = decide is not None
-    for step in range(MAX_ACTIONS):
+    for step in range(state.action_limit):
         action = None
         source = decision_provider
         proposals = []
@@ -656,6 +708,80 @@ def build_memory(report: dict, state: AgentState) -> dict:
             "focusGoal": goal}
 
 
+def _stress_guided_review_plans(request, candidates):
+    """Locate within-session turns, then keep only co-observed measured changes.
+
+    The stress signal chooses *where to inspect*; it never becomes the finding.
+    A candidate still has to pass the existing repeated/distinct measurement
+    rules against earlier independent windows before it can reach the report.
+    """
+    measured_rows = [row for row in sorted(request.segments, key=lambda r: (r.endMs, r.startMs))
+                     if row.quality.audioValid or row.quality.faceDetected]
+    independent = []
+    for row in measured_rows:
+        if not independent or row.startMs >= independent[-1].endMs:
+            independent.append(row)
+    if len(independent) < 4:
+        return []
+
+    session_range = max(row.stressScore for row in independent) - min(row.stressScore for row in independent)
+    required_signal_change = max(.08, session_range * .35)
+    best = {}
+    for start in range(3, len(independent)):
+        for width in (2, 1):
+            selected = independent[start:start + width]
+            if len(selected) != width:
+                continue
+            local_reference = independent[max(0, start - 3):start]
+            reference_signal = median(row.stressScore for row in local_reference)
+            selected_signal = median(row.stressScore for row in selected)
+            signal_change = selected_signal - reference_signal
+            if abs(signal_change) < required_signal_change:
+                continue
+            for item in candidates:
+                # Auxiliary concept outputs describe a selected raw measurement;
+                # they are never promoted to a standalone correction target.
+                if item["modality"] not in {"audio", "video"}:
+                    continue
+                valid = [row for row in selected
+                         if metric(row, item["modality"], item["metric"]) is not None]
+                if len(valid) != len(selected):
+                    continue
+                earlier = [metric(row, item["modality"], item["metric"])
+                           for row in independent[:start]
+                           if metric(row, item["modality"], item["metric"]) is not None]
+                if len(earlier) < 3:
+                    continue
+                reference = median(earlier)
+                observations = [{"value": metric(row, item["modality"], item["metric"]),
+                                 "startMs": row.startMs, "endMs": row.endMs}
+                                for row in valid]
+                kind = finding_kind(observations, reference, item["metric"], earlier)
+                if kind is None:
+                    continue
+                floor = METRIC_FLOORS.get(item["metric"], .15)
+                measurement_change = max(abs(row["value"] - reference) for row in observations)
+                prominence = measurement_change / max(abs(reference), floor)
+                plan = {
+                    "candidateId": item["id"],
+                    "segmentIds": [row.segmentId for row in valid],
+                    "rank": abs(signal_change) + prominence,
+                    "context": {
+                        "role": "stress_signal_located_measurement_review",
+                        "referenceStartMs": local_reference[0].startMs,
+                        "referenceEndMs": local_reference[-1].endMs,
+                        "reviewStartMs": valid[0].startMs,
+                        "reviewEndMs": valid[-1].endMs,
+                        "referenceSignal": round(reference_signal, 4),
+                        "reviewSignal": round(selected_signal, 4),
+                        "signalDifference": round(signal_change, 4),
+                    },
+                }
+                if item["id"] not in best or plan["rank"] > best[item["id"]]["rank"]:
+                    best[item["id"]] = plan
+    return sorted(best.values(), key=lambda row: (-row["rank"], row["candidateId"]))
+
+
 def measurement_decider(request, candidates):
     """Conservative review heuristic when a language model is not configured.
 
@@ -664,6 +790,7 @@ def measurement_decider(request, candidates):
     beyond their ordinary range. The 10% relative deviation is a review threshold, not a clinical
     or presentation quality cutoff. Every selected range is checked again.
     """
+    stress_plans = _stress_guided_review_plans(request, candidates)
     plans=[]
     for item in candidates:
         if item["id"] not in RESEARCHABLE_IDS: continue
@@ -693,7 +820,22 @@ def measurement_decider(request, candidates):
     plans.sort(reverse=True)
     def decide(view):
         done={r["candidateId"] for r in view["toolResults"] if r["action"]=="analyze_segment"}
-        for _,identity,ids in plans[:3]:
+        concept_done={r["candidateId"] for r in view["toolResults"] if r["action"]=="analyze_concept"}
+        for row in view["toolResults"]:
+            identity = row["candidateId"]
+            if (row["action"] == "analyze_segment"
+                    and identity in view.get("conceptEligibleCandidateIds", [])
+                    and identity not in concept_done):
+                return {"action":"analyze_concept", "candidateId":identity}
+        for plan in stress_plans:
+            identity = plan["candidateId"]
+            if identity not in done:
+                item = next(row for row in candidates if row["id"] == identity)
+                item["selectionBasis"] = "stress_guided_within_session_change"
+                item["stressContext"] = plan["context"]
+                return {"action":"analyze_segment", "candidateId":identity,
+                        "segmentIds":plan["segmentIds"]}
+        for _,identity,ids in plans:
             if identity not in done: return {"action":"analyze_segment","candidateId":identity,"segmentIds":ids}
-        return {"action":"finish","priorityCandidateIds":view["finishEligibleCandidateIds"][:3]}
+        return {"action":"finish","priorityCandidateIds":view["finishEligibleCandidateIds"]}
     return decide

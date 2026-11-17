@@ -116,7 +116,7 @@ def bundle_version(manifest):
 
 
 def model_variant():
-    value = os.getenv("PRESENSE_MODEL_VARIANT", "legacy")
+    value = os.getenv("PRESENSE_MODEL_VARIANT", VARIANT)
     if value not in {"legacy", VARIANT}:
         raise ValueError("Unknown model variant")
     return value

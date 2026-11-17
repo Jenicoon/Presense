@@ -55,6 +55,7 @@ class ReviewRequest(Contract):
     conceptDefinitionVersion: str | None = Field(default=None, max_length=100)
     source: Literal["live"] = "live"
     sceneLabel: str | None = Field(default=None, max_length=120)
+    externalAiConsent: bool = False
     practiceContext: PracticeContext | None = None
     segments: list[SegmentAnalysis] = Field(min_length=0, max_length=7200)
     personalBaseline: Probability | None = None
@@ -115,13 +116,27 @@ class Evidence(Contract):
     applicability: Literal["direct", "related"] = "related"
 
 
+class PracticeInstructions(Contract):
+    reason: str = Field(min_length=10, max_length=500)
+    goal: str = Field(min_length=8, max_length=250)
+    steps: list[Annotated[str, Field(min_length=8, max_length=350)]] = Field(min_length=2, max_length=4)
+    question: str = Field(min_length=8, max_length=250)
+
+
+class PracticeChoice(Contract):
+    strategyId: Literal["contrast", "phrasing", "two_versions", "clear_phrases", "expression", "gaze_anchor", "face_reset"]
+    segmentId: str = Field(min_length=1, max_length=100)
+    instructions: PracticeInstructions | None = None
+
+
 class CoachingItem(Contract):
     issueId: str
+    practicePlan: PracticeChoice | None = None
     researchBasis: str = Field(default="", max_length=600)
-    recommendation: str = Field(min_length=1, max_length=900)
+    recommendation: str = Field(default="", max_length=900)
     evidenceIds: list[str] = Field(default_factory=list, max_length=3)
 
 
 class Synthesis(Contract):
     summary: str = Field(min_length=1, max_length=1400)
-    coaching: list[CoachingItem] = Field(default_factory=list, max_length=5)
+    coaching: list[CoachingItem] = Field(default_factory=list)

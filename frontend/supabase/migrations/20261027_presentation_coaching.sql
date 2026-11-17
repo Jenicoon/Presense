@@ -15,6 +15,7 @@ create table if not exists public.coaching_sessions (
 );
 alter table public.coaching_sessions enable row level security;
 grant select, insert, update, delete on public.coaching_sessions to authenticated;
+drop policy if exists "Own coaching sessions" on public.coaching_sessions;
 create policy "Own coaching sessions" on public.coaching_sessions for all to authenticated
 using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create index if not exists coaching_sessions_recent on public.coaching_sessions(user_id, created_at desc);

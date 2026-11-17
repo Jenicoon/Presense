@@ -23,11 +23,13 @@ export function CoachComponents({
   ko,
   busy,
   onAction,
+  onVideo,
 }: {
   components: CoachComponent[];
   ko: boolean;
   busy: boolean;
   onAction: (action: CoachAction, findingId?: string, context?: CoachActionContext) => void;
+  onVideo?: (sessionId: string, startMs: number, endMs: number, label: string) => void;
 }) {
   const recommended = components.filter(c => c.type === "action_choices" && c.choices.some(choice => choice.recommended));
   const ordered = recommended.length ? [...recommended, ...components.filter(c => !recommended.includes(c))] : components;
@@ -39,6 +41,17 @@ export function CoachComponents({
             return <article key={i} className="coach-card coach-next-action"><span className="coach-component-heading">{ko ? "다음 행동" : "Next action"}</span><strong>{c.title}</strong><p>{c.instruction}</p></article>;
           case "review_guide":
             return <article key={i} className="coach-card coach-review-guide"><strong>{c.title}</strong><ol>{c.steps.map((step,index)=><li key={index}>{step}</li>)}</ol></article>;
+          case "research_references":
+            return <details key={i} className="review-details coach-research-references"><summary>{ko ? "참고 논문" : "Research references"}</summary>
+              {c.items.map(item => {
+                const href = item.articleUrl ?? (item.doi ? `https://doi.org/${item.doi}` : undefined);
+                return <div className="coach-research-reference" key={item.id}>
+                  {href ? <a href={href} target="_blank" rel="noreferrer">{item.title}</a> : <strong>{item.title}</strong>}
+                  <p>{item.finding}</p>
+                  {item.scope && <small>{item.scope}</small>}
+                </div>;
+              })}
+            </details>;
           case "action_choices":
             return (
               <div className="coach-choices" key={i}>
@@ -64,7 +77,7 @@ export function CoachComponents({
               return <section key={i} className="coach-observation-group" aria-label={ko ? `확인할 영상 ${group.length}곳` : `${group.length} intervals to review`}>
                 <strong>{ko ? `확인할 영상 ${group.length}곳` : `${group.length} intervals to review`}</strong>
                 <p>{ko ? "아래 시간을 눌러 해당 장면을 다시 보세요." : "Select a time to replay that part of the recording."}</p>
-                <div className="coach-observation-grid">{group.map((part, index) => <button key={`${part.sessionId}:${part.startMs}:${part.endMs}`} type="button" className="coach-card coach-video" aria-label={ko ? `영상 ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}` : `Clip ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}`} onClick={() => jumpToVideo(part.sessionId, part.startMs)}>
+                <div className="coach-observation-grid">{group.map((part, index) => <button key={`${part.sessionId}:${part.startMs}:${part.endMs}`} type="button" className="coach-card coach-video" aria-label={ko ? `영상 ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}` : `Clip ${index+1}: ${clock(part.startMs)}–${clock(part.endMs)}`} onClick={() => onVideo ? onVideo(part.sessionId, part.startMs, part.endMs, part.label) : jumpToVideo(part.sessionId, part.startMs)}>
                   <span className="coach-video-icon"><Play size={14} /></span><span><strong>{ko ? `영상 ${index+1}` : `Clip ${index+1}`}</strong><small>{clock(part.startMs)}–{clock(part.endMs)}</small></span><ArrowRight size={13} />
                 </button>)}</div>
               </section>;
@@ -74,7 +87,7 @@ export function CoachComponents({
                 key={i}
                 type="button"
                 className="coach-card coach-video"
-                onClick={() => jumpToVideo(c.sessionId, c.startMs)}
+                  onClick={() => onVideo ? onVideo(c.sessionId, c.startMs, c.endMs, c.label) : jumpToVideo(c.sessionId, c.startMs)}
               >
                 <span className="coach-video-icon"><Play size={16} /></span><span><strong>{c.label}</strong><small>{clock(c.startMs)}–{clock(c.endMs)}</small></span><ArrowRight size={15} />
               </button>

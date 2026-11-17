@@ -188,16 +188,16 @@ PROFILES = {
 }
 V2_GUIDANCE = json.loads((Path(__file__).resolve().parents[1]/"shared/concept-v2-guidance.json").read_text())
 METHODS["face_reset"] = {
-    "label": ("눈 주변을 편하게 두고 다시 말하기", "Repeat with comfortable eyes and gaze"),
-    "goal": ("잠깐 쉰 뒤 자연스럽게 눈을 깜박이고 같은 문장을 다시 말하기", "Take a brief break, blink naturally, and repeat the same sentence"),
-    "check": ("같은 조명과 카메라 위치에서 눈 주변이 편했는지 직접 확인하기", "Check your own comfort with the same lighting and camera position"),
+    "label": ("눈 주변 움직임과 시선 비교하기", "Compare eye-area movement and gaze"),
+    "goal": ("같은 문장을 렌즈나 청중 위치를 보며 다시 말하기", "Repeat the same sentence while looking toward the lens or an audience position"),
+    "check": ("같은 조명과 카메라 위치에서 의도하지 않은 조임이 반복되는지 원본과 비교하기", "With matching lighting and camera position, compare whether unintended tightening repeats"),
 }
 for identity, view in V2_GUIDANCE.items():
     base = view["profile"]
     if base in PROFILES:
         outcomes = list(PROFILES[base]["outcomes"])
     elif base == "eye_reset":
-        outcomes = [("effective", "지금 표현이 편하고 자연스러워요", "This expression feels comfortable"), ("needs_face_reset", "잠깐 쉬고 다시 말해볼게요", "Take a brief break and repeat")]
+        outcomes = [("effective", "지금 표현이 의도와 맞아요", "This expression matches my intention"), ("needs_face_reset", "시선을 정해 다시 비교해볼게요", "Repeat with a chosen gaze point")]
     else:
         outcomes = [("effective", "지금 전달이 편하게 들려요", "The delivery sounds comfortable"), ("needs_phrasing", "문장 사이에 쉼이 필요해요", "I need pauses between thoughts"), ("unsure", "두 방식으로 비교해 볼게요", "Compare two versions")]
     PROFILES[identity] = {"check":tuple(view["check"]), "outcomes":outcomes, "strategies":view["strategies"]}
@@ -388,14 +388,7 @@ def attach_coaching_path(response, doc, ko):
             else "After reviewing, choose what you noticed"
         )
         choices = review_choices(finding, ko)
-    others.insert(
-        0,
-        {
-            "type": "coaching_path",
-            "findingId": finding["id"],
-            "title": title,
-            "instruction": body,
-        },
-    )
+    if not any(component["type"] == "review_guide" and component.get("findingId") == finding["id"] for component in others):
+        others.insert(0, {"type": "coaching_path", "findingId": finding["id"], "title": title, "instruction": body})
     response["components"] = others + [{"type": "action_choices", "choices": choices}]
     return response

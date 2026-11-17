@@ -41,8 +41,8 @@ CHECKS = {
         ("comfortable_gaze", "나머지 문장은 시선을 억지로 고정하지 않고 편하게 말했나요?", "Did you keep your gaze comfortable for the remaining sentences?"),
     ],
     "face_reset": [
-        ("brief_break", "잠깐 쉬고 자연스럽게 눈을 깜박인 뒤 다시 말했나요?", "Did you take a brief break, blink naturally, and repeat the sentence?"),
-        ("comfortable_repeat", "같은 조명과 카메라 위치에서 눈 주변이 편했나요?", "Did your eyes feel comfortable with the same lighting and camera position?"),
+        ("brief_break", "렌즈나 청중 위치를 보며 같은 문장을 다시 말했나요?", "Did you repeat the same sentence while looking toward the lens or an audience position?"),
+        ("comfortable_repeat", "같은 조명과 카메라 위치에서 의도하지 않은 조임이 반복되는지 비교했나요?", "With matching lighting and camera position, did you compare whether unintended tightening repeated?"),
     ],
 }
 
@@ -81,8 +81,8 @@ RETRIES = {
     "message_match": ("두 표정의 영상을 소리와 함께 다시 보고 전달할 느낌에 맞는 쪽을 하나 고르세요.", "Watch both expressions with sound and choose the one that fits your intended feeling."),
     "key_gaze": ("핵심 문장 메모를 카메라 옆에 두고 그 문장을 말할 때만 카메라 부근을 바라보세요.", "Place a key-sentence reminder beside the camera and look near it when saying that sentence."),
     "comfortable_gaze": ("핵심 문장을 마친 뒤에는 시선을 억지로 고정하지 말고 편하게 이어 말해 보세요.", "After the key sentence, continue comfortably without forcing a fixed gaze."),
-    "brief_break": ("잠깐 쉬고 자연스럽게 눈을 깜박인 뒤 같은 문장을 다시 말해 보세요.", "Take a brief break, blink naturally, and repeat the same sentence."),
-    "comfortable_repeat": ("조명과 카메라 위치를 유지하고 편하게 다시 말해 보세요. 눈 주변의 편안함은 직접 확인해요.", "Keep lighting and camera position unchanged and repeat comfortably. Check your own eye comfort."),
+    "brief_break": ("렌즈나 청중 위치를 정하고 그곳을 보며 같은 문장을 다시 말해 보세요.", "Choose the lens or an audience position and repeat the same sentence while looking there."),
+    "comfortable_repeat": ("조명과 카메라 위치를 유지하고 원본과 비교해 의도하지 않은 조임이 반복되는지 확인하세요.", "Keep lighting and camera position unchanged and compare with the original for repeated unintended tightening."),
 }
 
 

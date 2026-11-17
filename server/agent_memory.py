@@ -82,6 +82,9 @@ def load_recent_memory(supabase_url: str, publishable_key: str, token: str,
             if not isinstance(row, dict):
                 continue
             report = row.get("agent_report")
+            if isinstance(report, dict) and (report.get("dataOrigin") == "stressid"
+                    or (report.get("reportInput") or {}).get("baselineSource") == "dataset_example"):
+                continue
             memory = report.get("agentMemory") if isinstance(report, dict) else None
             if isinstance(memory, dict) and memory.get("sessionId") == report.get("sessionId"):
                 validated = _validated_memory(memory)

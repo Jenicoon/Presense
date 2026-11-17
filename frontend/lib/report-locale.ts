@@ -52,6 +52,7 @@ export function sceneText(value: string, ko: boolean) {
     "Interview Panel": ["면접 패널", "Interview Panel"], "면접 패널": ["면접 패널", "Interview Panel"],
     "Presentation Slides": ["발표 슬라이드", "Presentation Slides"], "발표 슬라이드": ["발표 슬라이드", "Presentation Slides"],
     "Slides in Classroom": ["강의실 속 슬라이드", "Slides in Classroom"], "강의실 속 슬라이드": ["강의실 속 슬라이드", "Slides in Classroom"],
+    "Practice example": ["예시 연습", "Practice example"], synthetic_test: ["예시 연습", "Practice example"],
     Unlabeled: ["환경 미지정", "Unlabeled"],
     Camera: ["카메라", "Camera"], 카메라: ["카메라", "Camera"],
     Classroom: ["강의실", "Classroom"], 강의실: ["강의실", "Classroom"],
@@ -81,13 +82,22 @@ export function findingGuidance(finding: Finding, ko: boolean) {
   const v2 = (v2Guidance as Record<string,{higher:string[];lower:string[];same:string[];missing:string[];title:string[];goal:string[];check:string[]}>)[finding.id];
   const v2Observation = v2?.[direction === null ? "missing" : direction > 0 ? "higher" : direction < 0 ? "lower" : "same"];
   const row = v2 ? [...v2Observation!,...v2.title,...v2.goal] : choices[finding.id] ?? ["발표 중 측정값에 변화가 나타났습니다", "an observed measurement changed", "선택 구간의 전달을 확인하기", "Review delivery in the selected interval", "한 가지 전달 목표로 다시 발표하기", "Repeat with one delivery goal"];
-  let observation = row[ko ? 0 : 1];
+  const description = row[ko ? 0 : 1];
+  const intervals: Array<{startMs: number; endMs: number}> = [];
+  for (const interval of [...(finding.observations ?? [])].sort((a, b) => a.startMs - b.startMs)) {
+    const previous = intervals[intervals.length - 1];
+    if (previous && interval.startMs <= previous.endMs) previous.endMs = Math.max(previous.endMs, interval.endMs);
+    else intervals.push({startMs: interval.startMs, endMs: interval.endMs});
+  }
+  const spans = intervals.map(interval => `${time(interval.startMs)}–${time(interval.endMs)}`).join(", ");
+  const summary = spans ? (ko ? `${spans} · ${description}.` : `${spans}: ${description}.`) : (ko ? "이 항목의 상세 관측 자료가 없습니다." : "No detailed observations are saved for this finding.");
+  let observation = description;
   if (first) observation = ko ? `${time(first.startMs)}–${time(first.endMs)}, ${finding.id === "pitch_change" && direction ? "앞부분과 비교해 " : ""}${observation}` : `In ${time(first.startMs)}–${time(first.endMs)}, ${observation}${finding.id === "pitch_change" && direction ? " compared with earlier intervals" : ""}.`;
   if (ko) observation += ".";
   if (!first) observation = ko ? "이 항목의 상세 관측 자료가 없습니다." : "No detailed observations are saved for this finding.";
   const count = finding.observations?.length ?? 0;
   if (count > 1) observation += ko ? ` 검토 구간은 ${count}곳입니다.` : ` There are ${count} recorded intervals to review together.`;
-  return { title: row[ko ? 2 : 3], goal: row[ko ? 4 : 5], observation,
+  return { summary, title: row[ko ? 2 : 3], goal: row[ko ? 4 : 5], observation,
     question: v2 ? v2.check[ko ? 0 : 1] : ({
       pitch_change: ["높낮이가 바뀌는 순간에 중요한 문장이 구분되는지 들어보세요. 문장 끝의 쉼과 다음 문장 시작도 따로 들어보세요.", "Listen for whether a pitch change marks a key sentence. Separately check sentence-end pauses and the next sentence start."],
       pitch_variability: ["고른 구간을 듣고 가장 중요한 문장 하나를 직접 골라보세요. 그 문장이 나머지와 구분되는지, 의미가 끝나기 전에 끊겨 들리는지 확인하세요.", "Choose the key sentence yourself. Listen for whether it stands out and whether the thought sounds interrupted before it is complete."],

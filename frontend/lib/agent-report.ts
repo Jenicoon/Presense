@@ -19,9 +19,19 @@ export type ReportSegment = {
   quality: { faceDetected: boolean; audioValid: boolean };
 };
 
+export type FeedbackText = { ko: string; en: string };
+export type ReportFeedback = {
+  version: string; status: "ready" | "partial" | "failed" | "blocked"; failedStage?: string;
+  summary?: FeedbackText; strengths?: FeedbackText[]; nextReview?: FeedbackText | null; limitations?: FeedbackText;
+  items?: Array<{ findingId: string; segmentIds: string[]; observation?: FeedbackText; explanation: FeedbackText; review: FeedbackText; paperIds: string[];
+    practice?: { strategyId: string; segmentId: string; reason: FeedbackText; goal: FeedbackText; steps: FeedbackText[]; question: FeedbackText } | null }>;
+};
+
 export type AgentReport = {
+  reportFeedback?: ReportFeedback;
   dataOrigin?: "recorded" | "synthetic" | "stressid";
   schemaVersion: string;
+  practiceDefinitionVersion?: string;
   language?: "ko" | "en";
   sessionId: string;
   modelVersion?: string;
@@ -58,10 +68,11 @@ export type AgentReport = {
   observationEvidenceIds?: string[];
   rawSegments?: ReportSegment[];
   coachingAvailable?: boolean;
-  coachingDisabledReason?: "dataset_privacy";
+  coachingDisabledReason?: "dataset_privacy" | "setup_required" | "storage_unavailable";
   previousCoaching?: { previousSessionId:string;goalLabel:string;comparable:boolean;lastOutcome:string|null };
   referenceFindings?: AgentReport["priorities"];
   priorities: Array<{
+    practicePlan?: { kind: "comparison_experiment"; source: "ai_selected"; strategyId: string; segmentId: string; startMs: number; endMs: number; definitionVersion: string; language?: "ko" | "en"; instructions?: { reason: string; goal: string; steps: string[]; question: string } };
     findingKind?: "repeated" | "distinct" | null;
     groupingStatus?: "verified" | "reference_only";
     groupingReason?: string | null;
@@ -82,15 +93,23 @@ export type AgentReport = {
     reviewAction: string;
     practiceSuggestion: string;
     evidenceIds?: string[];
+    retrievedEvidenceIds?: string[];
     evidenceStatus?: "cited_excerpt" | "insufficient";
     ranges: Array<{ startMs: number; endMs: number }>;
   }>;
   limitations: string[];
-  evidence?: Array<{ id: string; title?: string | null; source: string; articleUrl?: string | null; doi?: string | null; findingKo?: string | null; page?: number | null; applicability?: "direct" | "related" }>;
+  evidence?: Array<{ id: string; title?: string | null; source: string; articleUrl?: string | null; doi?: string | null; findingKo?: string | null; scope?: string | null; page?: number | null; applicability?: "direct" | "related" }>;
   analysis: Record<string, unknown>;
   agentRun?: { stopReason: string; actions?: Array<{action: string; candidateId: string; segmentIds?: string[]}> };
   [key: string]: unknown;
 };
+
+export function analysisResultsAvailable(report: AgentReport | null, feedbackRequired: boolean,
+  reportSaved: boolean, loading = false, error = ""): boolean {
+  return Boolean(!loading && !error && reportSaved && report
+    && report.generationState === "ready" && report.analysisStatus !== "pending"
+    && (!feedbackRequired || report.reportFeedback?.status === "ready"));
+}
 
 /** Only surface advice released by report synthesis in the selected language. */
 export function savedReportAiFeedback(report: AgentReport, finding: AgentReport["priorities"][number], ko: boolean) {
@@ -101,6 +120,23 @@ export function savedReportAiFeedback(report: AgentReport, finding: AgentReport[
   if (matchesLanguage(finding.practiceSuggestion, ko)) return { kind: "practice" as const, text: finding.practiceSuggestion };
   if (matchesLanguage(finding.reviewAction, ko)) return { kind: "review" as const, text: finding.reviewAction };
   return null;
+}
+
+export function reportReviewIntro(report: AgentReport, ko: boolean, hasVideo: boolean): string {
+  const verified = completeReportEvidence(report);
+  const cells = (verified.analysis?.timeline ?? []) as Array<{ stressScore: number | null }>;
+  const scores = cells.map(cell => cell.stressScore).filter((score): score is number => typeof score === "number" && Number.isFinite(score));
+  const peak = verified.observationReport?.peakSegment;
+  const lines: string[] = [];
+  if (scores.length > 1 && Math.max(...scores) - Math.min(...scores) < .02) {
+    lines.push(ko ? "분석된 구간의 스트레스 신호는 큰 변화 없이 유지됐습니다." : "The stress signal remained similar across the analyzed intervals.");
+  } else if (peak) {
+    const time = (ms: number) => `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+    const interval = `${time(peak.startMs)}–${time(peak.endMs)}`;
+    lines.push(ko ? `스트레스 신호가 가장 높았던 시점은 ${interval}입니다.` : `The stress signal was highest during ${interval}.`);
+  }
+  lines.push(...verified.priorities.map(finding => findingGuidance(finding, ko).summary));
+  return lines.length ? lines.join("\n\n") : reportDisplaySummary(verified, ko);
 }
 
 /** Expand older, generic saved summaries using measurements already stored in the report. */
@@ -177,6 +213,11 @@ export function reportIntentReflection(report: AgentReport) {
 }
 
 export function agentNextPractice(report: AgentReport, ko: boolean): string {
+  if (report?.reportFeedback?.status === "ready" || report?.reportFeedback?.status === "partial") {
+    const item = report.reportFeedback.items?.[0];
+    return item?.practice?.goal[ko ? "ko" : "en"] ?? item?.review[ko ? "ko" : "en"] ?? "";
+  }
+
   if (report.analysis && Array.isArray(report.priorities)) report = completeReportEvidence(report);
   const reflection = report.reflection;
   if (reflection?.kind === "overall" && reflection.answer === "intentional") return ko
@@ -270,18 +311,21 @@ export function toReportSegment(frame: LiveInferenceFrame, index: number, endMs:
   };
 }
 
-export async function generateAgentReport(input: {
+export type ReportRequest = {
   sessionId: string;
   durationMs: number;
   language: "ko" | "en";
   sceneLabel: string;
   segments: ReportSegment[];
+  externalAiConsent?: boolean;
   practiceContext?: { sessionId: string; practiceId: string };
   personalBaseline?: number;
   baselineSampleCount?: number;
   baselineModelVersion?: string;
   baselineSource?: "preparation" | "dataset_example" | "synthetic";
-}): Promise<AgentReport> {
+};
+
+export async function generateAgentReport(input: ReportRequest): Promise<AgentReport> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) throw new Error("보고서를 생성하려면 로그인해 주세요.");
   const { data: { session }, error } = await supabase.auth.getSession();
@@ -290,6 +334,7 @@ export async function generateAgentReport(input: {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
     body: JSON.stringify({ ...input, source: "live" }),
+    signal: AbortSignal.timeout(300_000),
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
@@ -302,4 +347,53 @@ export async function generateAgentReport(input: {
     throw new Error("보고서 응답 형식이 올바르지 않습니다.");
   }
   return report as AgentReport;
+}
+
+export class FeedbackRequestError extends Error {
+  constructor(public status: number, public stage: "consent" | "generation", public code?: string) {
+    super(`Feedback ${stage} failed (${status})`);
+  }
+}
+async function feedbackResponseError(response: Response, stage: "consent" | "generation") {
+  const payload = await response.json().catch(() => ({}));
+  const code = payload.detail && typeof payload.detail === "object" ? payload.detail.code : undefined;
+  return new FeedbackRequestError(response.status, stage, code);
+}
+export function feedbackFailureMessage(error: unknown, ko: boolean, saving = false): string {
+  if (saving) return ko ? "AI 피드백은 생성됐지만 보고서 저장에 실패했어요. 피드백은 화면에 유지되며 저장만 다시 시도할 수 있습니다." : "AI feedback was generated, but report saving failed. It remains visible; retry to save it.";
+  if (error instanceof FeedbackRequestError) {
+    if (error.status === 401) return ko ? "로그인이 만료됐어요. 다시 로그인한 뒤 피드백을 이어서 생성해 주세요." : "Your sign-in expired. Sign in again to continue feedback.";
+    if (error.status === 409) return error.stage === "consent"
+      ? (ko ? "측정값 전송 동의를 저장하지 못했어요. 다른 화면에서 이 기록을 수정 중이라면 마친 뒤 다시 시도해 주세요." : "Measurement consent could not be saved. Finish any changes to this record in another window, then retry.")
+      : (ko ? "기록이 다른 화면에서 변경됐어요. 저장된 내용을 다시 불러온 뒤 시도해 주세요." : "This record changed in another window. Reload the saved report and retry.");
+    if (error.status === 403) return ko ? "이 세션은 외부 AI로 전송할 수 없거나 전송 동의가 확인되지 않았어요." : "This session cannot be sent to external AI, or consent is missing.";
+    if (error.status === 404) return ko ? "저장된 분석 자료를 찾지 못했어요. 기록을 다시 불러와 주세요." : "Saved analysis could not be found. Reload the session.";
+    if (error.code?.startsWith("coaching_storage")) return ko ? "보고서 저장소 연결에 실패했어요. 원본은 유지되며 연결 후 다시 시도할 수 있습니다." : "The report store is unavailable. Your original is retained; retry when it reconnects.";
+    return ko ? "분석 서버에서 피드백 요청을 처리하지 못했어요. 발표 기록은 보관되어 있습니다." : "The analysis server could not process feedback. Your session is retained.";
+  }
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return ko ? "피드백 생성 시간이 길어져 응답 대기가 끝났어요. 잠시 후 다시 불러와 주세요." : "Feedback took longer than the response limit. Reload it shortly.";
+  if (error instanceof TypeError) return ko ? "분석 서버에 연결하지 못했어요. 서버 연결을 확인한 뒤 다시 시도해 주세요." : "Could not connect to the analysis server. Check the connection and retry.";
+  return ko ? "피드백 요청을 처리하지 못했어요. 발표 기록은 보관되어 있습니다." : "Feedback could not finish. Your session is retained.";
+}
+
+export async function retryReportFeedback(sessionId: string): Promise<AgentReport> {
+  const client = getSupabaseBrowserClient();
+  const session = client ? (await client.auth.getSession()).data.session : null;
+  if (!session) throw new Error("Sign in to resume feedback.");
+  const response = await fetch(`${INFERENCE_URL.replace(/\/$/, "")}/agent/report/${encodeURIComponent(sessionId)}/feedback`, {
+    method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, signal: AbortSignal.timeout(300_000),
+  });
+  if (!response.ok) throw await feedbackResponseError(response, "generation");
+  return await response.json() as AgentReport;
+}
+
+export async function authorizeReportFeedback(sessionId: string) {
+  const client = getSupabaseBrowserClient();
+  const session = client ? (await client.auth.getSession()).data.session : null;
+  if (!session) throw new Error("Sign in to resume feedback.");
+  const response = await fetch(`${INFERENCE_URL.replace(/\/$/, "")}/agent/report/${encodeURIComponent(sessionId)}/feedback/consent`, {
+    method: "POST", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ selfRecordedTest: true }),
+  });
+  if (!response.ok) throw await feedbackResponseError(response, "consent");
 }

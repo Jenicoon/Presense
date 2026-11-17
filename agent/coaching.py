@@ -163,6 +163,20 @@ class CoachingPathCard(Contract):
     instruction: str = Field(min_length=1, max_length=900)
 
 
+class ResearchReference(Contract):
+    id: str = Field(min_length=1, max_length=180)
+    title: str = Field(min_length=1, max_length=500)
+    articleUrl: str | None = Field(default=None, max_length=1000)
+    doi: str | None = Field(default=None, max_length=300)
+    finding: str = Field(min_length=1, max_length=1200)
+    scope: str | None = Field(default=None, max_length=1200)
+
+
+class ResearchReferencesCard(Contract):
+    type: Literal["research_references"]
+    items: list[ResearchReference] = Field(min_length=1, max_length=3)
+
+
 Component = Annotated[
     Choices
     | SegmentCard
@@ -172,7 +186,8 @@ Component = Annotated[
     | ComparisonCard
     | Notice
     | ReviewGuideCard
-    | CoachingPathCard,
+    | CoachingPathCard
+    | ResearchReferencesCard,
     Field(discriminator="type"),
 ]
 
@@ -182,6 +197,7 @@ class Generation(Contract):
     provider: str | None = None
     model: str | None = None
     validated: bool = False
+    authoringVersion: str | None = None
     dataOrigin: Literal["recorded", "synthetic", "stressid"] = "recorded"
     evidenceIds: list[str] = Field(default_factory=list, max_length=8)
 
@@ -665,7 +681,7 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
         raise ValueError("Session identity mismatch")
     ko = request.language == "ko"
     state = ConversationState.model_validate(doc["state"])
-    findings = doc["snapshot"]["report"]["priorities"][:3]
+    findings = doc["snapshot"]["report"]["priorities"]
     if request.findingId:
         if (
             state.stage in {"recording", "evaluating"}
@@ -1504,7 +1520,8 @@ def _respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=N
             if ko
             else "The saved data cannot answer that question. Ask about intervals, measurements, previous sessions or practice."
         )
-        choices(choice("review", "보고서 살펴보기", "Review report"))
+        # Keep controls for the current stage when answering a free question.
+        # In particular, a practice explanation must retain its record button.
     if not any(c["type"] == "action_choices" for c in components):
         if state.stage == "recording":
             choices(
@@ -1619,7 +1636,7 @@ def respond(doc, request: CoachRequest, *, attempt=None, previous=None, route=No
         if component["type"] == "practice":
             component["practiceId"] = committed["practiceId"]
     for component in translated["components"]:
-        if component["type"] == "practice" and request.action == "create_practice":
+        if component["type"] == "practice":
             practice = next(
                 p for p in updated["practices"] if p["id"] == component["practiceId"]
             )

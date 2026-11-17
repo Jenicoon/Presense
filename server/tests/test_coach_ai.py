@@ -3,7 +3,14 @@
 import unittest
 from copy import deepcopy
 
-from agent.coach_ai import AIUnavailable, build_context, respond_with_ai, validate_plan
+from agent.coach_ai import (
+    AIUnavailable,
+    VERIFY_PROMPT,
+    build_context,
+    coaching_prompt,
+    respond_with_ai,
+    validate_plan,
+)
 from agent.coaching import CoachRequest
 from server.tests.test_coaching import document
 
@@ -90,6 +97,303 @@ def grounded_plan(context):
 
 
 class CoachAIContractTests(unittest.TestCase):
+    def test_no_finding_review_uses_ai_narrative_with_server_facts_and_no_forced_exercise(self):
+        doc=document(changed=False)
+        request=CoachRequest(sessionId='baseline',action='review')
+        def generate(context):
+            return {'action':'review','findingId':None,'evidenceIds':['current.summary'],
+                    'message':{'ko':'선택된 교정 목표는 없습니다. 저장된 구간에 대해 질문할 수 있습니다.',
+                               'en':'No correction target is selected. You can ask about the saved intervals.'},
+                    'practice':None,'reviewGuide':None,'videoRefs':[],'followUps':[]}
+        updated,response=respond_with_ai(doc,request,generate=generate,verify=lambda context:{'supported':True})
+        self.assertEqual(response['generation']['source'],'ai')
+        self.assertIn('선택된 교정 목표는 없습니다',response['message'])
+        self.assertEqual(updated['practices'],[])
+        self.assertFalse(any(card['type']=='practice' for card in response['components']))
+        self.assertEqual(doc['messages'],[])
+
+    def test_no_finding_prompt_allows_coaching_from_presenter_self_report(self):
+        doc = document(changed=False)
+        request = CoachRequest(
+            sessionId="baseline",
+            action="ask",
+            message="중간에 대본이 생각나지 않으면 당황하게 돼",
+        )
+        context = build_context(doc, request)
+        prompt = coaching_prompt(context)
+        self.assertIn("first-person experience", prompt)
+        self.assertIn("forgetting a script", prompt)
+        self.assertIn("current question is a source", VERIFY_PROMPT)
+
+        def generate(_context):
+            return {
+                "action": "ask",
+                "findingId": None,
+                "evidenceIds": [],
+                "message": {
+                    "ko": "말씀하신 상황에서는 문장 전체를 외우기보다 핵심 단어를 기준으로 다음 내용을 이어가는 연습이 도움이 됩니다. 멈추면 핵심 문장을 짧게 다시 말하고 다음 요점으로 넘어가 보세요.",
+                    "en": "For the situation you described, rehearse from key words instead of memorizing every sentence. If you lose your place, briefly restate the key point and move to the next idea.",
+                },
+                "practice": None,
+                "reviewGuide": None,
+                "videoRefs": [],
+                "followUps": [],
+            }
+
+        seen = {}
+
+        def verify(payload):
+            seen.update(payload)
+            return {"supported": True}
+
+        updated, response = respond_with_ai(
+            doc, request, generate=generate, verify=verify
+        )
+        self.assertEqual(seen["question"], request.message)
+        self.assertIn("말씀하신 상황", response["message"])
+        self.assertEqual(updated["messages"][-2]["text"], request.message)
+
+    def test_direct_previous_session_question_requires_a_measured_comparison(self):
+        current = document(identity="current", changed=True)
+        previous = document(identity="previous", changed=False)
+        request = CoachRequest(
+            sessionId="current",
+            action="ask",
+            message="나 지난 세션보다 괜찮아진 것과 나쁜 게 있니?",
+        )
+        current["messages"] = [{"role": "agent", "text": "구체적인 데이터는 제공되지 않았습니다."}]
+        context = build_context(current, request, previous=previous)
+        self.assertTrue(context["comparisonQuestion"])
+        self.assertEqual(context["comparison"]["outcome"], "comparable")
+        self.assertTrue(context["comparisonHighlights"])
+        self.assertIn("comparison.selection", context["facts"])
+        self.assertEqual(context["history"], [])
+        self.assertEqual(
+            set(context["facts"]),
+            {"comparison.result", "comparison.selection", *context["comparisonHighlights"]},
+        )
+        metric_id = context["comparisonHighlights"][0]
+        plan = {
+            "action": "ask",
+            "findingId": None,
+            "evidenceIds": ["comparison.result", "comparison.selection", metric_id],
+            "message": {
+                "ko": "{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:" + metric_id + "}} 지금 방식대로 이어갈 점과 살펴볼 변화를 나누기 위해 같은 종류의 문장을 두 영상에서 직접 비교해 보세요.",
+                "en": "{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:" + metric_id + "}} Review the same kind of sentence in both recordings to separate what can stay as-is from a change to check.",
+            },
+            "practice": None,
+            "reviewGuide": None,
+            "videoRefs": [],
+            "followUps": [],
+        }
+        checked = validate_plan(plan, context)
+        self.assertIn(metric_id, checked.evidenceIds)
+        self.assertIn("같은 종류의 문장", checked.message.ko)
+        self.assertIn("stay as-is", checked.message.en)
+
+        sparse = deepcopy(plan)
+        sparse["evidenceIds"] = ["comparison.result"]
+        sparse["message"] = {
+            "ko": "{{evidence:comparison.result}} 긍정적으로 이어갈 후보와 살펴볼 변화를 나누기 위해 두 녹화에서 같은 종류의 문장을 비교하세요.",
+            "en": "{{evidence:comparison.result}} Review the same kind of sentence in both recordings to separate a positive carry-forward candidate from a change to check.",
+        }
+        normalized = validate_plan(sparse, context)
+        self.assertIn(metric_id, normalized.evidenceIds)
+        self.assertIn("{{evidence:" + metric_id + "}}", normalized.message.ko)
+
+        generic = deepcopy(plan)
+        generic["evidenceIds"] = ["comparison.result", "comparison.selection", metric_id]
+        generic["message"] = {
+            "ko": "{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:" + metric_id + "}} 지난 세션과 비교할 구체적인 데이터는 제공되지 않았습니다.",
+            "en": "{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:" + metric_id + "}} No concrete data were provided for the previous-session comparison.",
+        }
+        with self.assertRaisesRegex(ValueError, "comparison data are missing"):
+            validate_plan(generic, context)
+
+        unrelated = deepcopy(plan)
+        unrelated["message"]["ko"] += " 불안을 줄이기 위한 준비 전략을 사용하세요."
+        unrelated["message"]["en"] += " Use a preparation strategy to reduce anxiety."
+        with self.assertRaisesRegex(ValueError, "stay with measured differences"):
+            validate_plan(unrelated, context)
+
+        prompt = coaching_prompt(context)
+        self.assertIn("comparisonHighlights", prompt)
+        self.assertIn("generic confidence", prompt)
+
+    def test_previous_session_video_measurements_are_displayed_to_two_decimals(self):
+        current = document(identity="current", changed=True)
+        previous = document(identity="previous", changed=False)
+        for segment in previous["snapshot"]["request"]["segments"]:
+            segment["videoFeatures"]["brow_tension"] = 0.256412
+        for segment in current["snapshot"]["request"]["segments"]:
+            segment["videoFeatures"]["brow_tension"] = 0.310715
+        context = build_context(
+            current,
+            CoachRequest(
+                sessionId="current",
+                action="ask",
+                message="지난 세션보다 달라진 점이 있니?",
+            ),
+            previous=previous,
+        )
+        video_facts = [
+            fact["ko"]
+            for identity, fact in context["facts"].items()
+            if identity.startswith("comparison.metric")
+        ]
+        self.assertTrue(any("이전 0.26, 현재 0.31" in fact for fact in video_facts))
+        self.assertFalse(any("0.256412" in fact or "0.310715" in fact for fact in video_facts))
+
+    def test_saved_validated_comparison_is_reused_when_the_previous_record_is_no_longer_available(self):
+        current = document(identity="current", changed=True)
+        previous = document(identity="previous", changed=False)
+        request = CoachRequest(
+            sessionId="current",
+            action="ask",
+            message="나 지난 세션보다 괜찮아진 것과 나쁜 게 있니?",
+        )
+
+        def generate(context):
+            metric_id = context["comparisonHighlights"][0]
+            return {
+                "action": "ask",
+                "findingId": None,
+                "evidenceIds": ["comparison.result", "comparison.selection", metric_id],
+                "message": {
+                    "ko": "{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:" + metric_id + "}} 유지할 후보와 확인할 변화를 나누기 위해 두 영상에서 같은 종류의 문장을 살펴보세요.",
+                    "en": "{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:" + metric_id + "}} Review the same kind of sentence in both recordings to separate a positive carry-forward candidate from a change to check.",
+                },
+                "practice": None,
+                "reviewGuide": None,
+                "videoRefs": [],
+                "followUps": [],
+            }
+
+        updated, first = respond_with_ai(
+            current,
+            request,
+            generate=generate,
+            verify=lambda _: {"supported": True},
+            previous=previous,
+        )
+        reused, second = respond_with_ai(
+            updated,
+            request,
+            generate=None,
+            verify=None,
+            previous=None,
+        )
+        self.assertEqual(second["message"], first["message"])
+        self.assertEqual(second["generation"]["source"], "ai")
+        self.assertEqual(reused["revision"], updated["revision"] + 1)
+        self.assertNotIn("현재 발표:", second["message"])
+
+    def test_legacy_comparison_facts_generate_new_ai_coaching_without_source_snapshot(self):
+        current=document(identity="legacy-current",changed=True)
+        generation={"source":"ai","validated":True,
+                    "evidenceIds":["comparison.result","comparison.selection","comparison.metric0"]}
+        ko=("같은 기준의 스트레스 신호: 이전 72 / 100, 현재 75 / 100. 이 차이는 좋고 나쁨의 결론보다 음성·영상 측정값을 함께 살펴볼 위치를 정하는 데 사용합니다. "
+            "보고서에서 선택된 검토 항목: 이전 선택된 검토 항목 없음; 현재 선택된 검토 항목 없음. "
+            "눈꺼풀 조임 움직임: 이전 0.26, 현재 0.31. 이전 고정 코칭 문장")
+        en=("Stress signals under the same criteria: before 72 / 100, current 75 / 100. Use this difference to prioritize the voice and video measurements to review, rather than as a better-or-worse verdict. "
+            "Report-selected review items: previous no selected review item; current no selected review item. "
+            "Eyelid tightening movement: before 0.26, current 0.31. Old fixed coaching prose")
+        current["messages"]=[{"role":"agent","text":ko,"response":{"message":ko,"generation":generation},
+                              "translations":{"ko":{"response":{"message":ko,"generation":generation}},
+                                              "en":{"response":{"message":en,"generation":generation}}}}]
+        request=CoachRequest(sessionId="legacy-current",action="ask",message="지난 세션과 비교해서 알려줘")
+        def generate(context):
+            self.assertTrue(context["comparisonQuestion"])
+            self.assertEqual(context["facts"]["comparison.metric0"]["ko"],"눈꺼풀 조임 움직임: 이전 0.26, 현재 0.31.")
+            return {"action":"ask","findingId":None,
+                    "evidenceIds":["comparison.result","comparison.selection","comparison.metric0"],
+                    "message":{"ko":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:comparison.metric0}} 두 영상에서 비슷한 문장을 골라 눈 주변 움직임이 의도한 강조와 함께 나타나는지 비교하세요.",
+                               "en":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:comparison.metric0}} Compare similar sentences in both recordings and review whether the eye movement accompanies intended emphasis."},
+                    "practice":None,"reviewGuide":None,"videoRefs":[],"followUps":[]}
+        _,response=respond_with_ai(current,request,previous=None,generate=generate,verify=lambda _: {"supported":True})
+        self.assertEqual(response["generation"]["authoringVersion"],"ai-authored-comparison-v3")
+        self.assertNotIn("이전 고정 코칭 문장",response["message"])
+        self.assertIn("눈 주변 움직임",response["message"])
+
+    def test_comparison_uses_retrieved_paper_fact_and_server_owned_reference(self):
+        current=document(identity="research-current",changed=True)
+        previous=document(identity="research-previous",changed=False)
+        request=CoachRequest(sessionId="research-current",action="ask",message="지난 발표와 비교해줘")
+
+        def retrieve(context):
+            self.assertTrue(context["comparisonQuestion"])
+            return [{
+                "id":"paper:eye:1", "title":"Eyelid activity study",
+                "articleUrl":"https://example.test/paper", "doi":"10.0000/example",
+                "factKo":"관련 연구에서 AU7 눈꺼풀 조임 움직임은 주관적 반응과 연관됐지만 생리 지표는 같은 방향이 아니었습니다.",
+                "factEn":"In related research, AU7 eyelid activity was associated with subjective response while physiological markers did not follow the same direction.",
+                "scopeKo":"측정 해석 연구이며 연습 효과 연구는 아닙니다.",
+                "scopeEn":"Measurement interpretation, not an exercise trial.",
+            }, {
+                "id":"paper:gaze:2", "title":"Audience gaze training trial",
+                "articleUrl":"https://example.test/trial", "doi":"10.0000/trial",
+                "factKo":"무작위 비교 연구에서 반복적인 청중 시선 연습을 시험했습니다.",
+                "factEn":"A randomized trial tested repeated audience-gaze practice.",
+                "scopeKo":"눈꺼풀 조임 교정 실험은 아닙니다.",
+                "scopeEn":"Not an eyelid-tightening intervention.",
+            }]
+
+        def generate(context):
+            metric_id=context["comparisonHighlights"][0]
+            self.assertIn("research.0",context["facts"])
+            self.assertIn("research.0",context["researchRefs"])
+            self.assertIn("research.1",context["researchRefs"])
+            return {"action":"ask","findingId":None,
+                    "evidenceIds":["comparison.result","comparison.selection",metric_id,"research.0","research.1"],
+                    "message":{"ko":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:"+metric_id+"}} {{evidence:research.0}} {{evidence:research.1}} 같은 조명과 카메라에서 같은 문장을 비교하세요. 원치 않은 움직임이 반복되면 렌즈나 청중 위치를 보며 같은 문장을 여러 번 말한 뒤 원본과 비교하세요.",
+                               "en":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:"+metric_id+"}} {{evidence:research.0}} {{evidence:research.1}} Compare the same sentence with matching camera and lighting. If the unwanted movement repeats, say it several times while looking toward the lens or an audience position, then compare it with the original."},
+                    "practice":None,"reviewGuide":None,"videoRefs":[],"followUps":[]}
+
+        _,response=respond_with_ai(current,request,previous=previous,generate=generate,
+                                   verify=lambda _: {"supported":True},retrieve_research=retrieve)
+        self.assertNotIn("관련 연구",response["message"])
+        self.assertIn("같은 조명과 카메라",response["message"])
+        reference=next(card for card in response["components"] if card["type"]=="research_references")
+        self.assertEqual(reference["items"][0]["title"],"Eyelid activity study")
+        self.assertEqual(reference["items"][0]["finding"],retrieve({"comparisonQuestion":True})[0]["factKo"])
+        self.assertEqual(reference["items"][1]["title"],"Audience gaze training trial")
+        self.assertNotIn("깜빡",response["message"])
+
+    def test_comparison_removes_restated_server_owned_research_claim(self):
+        current=document(identity="research-guard-current",changed=True)
+        previous=document(identity="research-guard-previous",changed=False)
+        request=CoachRequest(sessionId="research-guard-current",action="ask",message="지난 발표와 비교해줘")
+        context=build_context(current,request,previous=previous)
+        metric_id=context["comparisonHighlights"][0]
+        context["facts"]["research.0"]={"ko":"서버 논문 근거.","en":"Server research evidence."}
+        context["researchRefs"]={"research.0":{"id":"paper"}}
+        plan={"action":"ask","findingId":None,
+              "evidenceIds":["comparison.result","comparison.selection",metric_id,"research.0"],
+              "message":{"ko":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:"+metric_id+"}} {{evidence:research.0}} 연구에 따르면 이 움직임은 스트레스 반응을 뜻합니다. 두 영상을 비교하세요.",
+                         "en":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:"+metric_id+"}} {{evidence:research.0}} According to the study, this movement means a stress response. Compare both recordings."},
+              "practice":None,"reviewGuide":None,"videoRefs":[],"followUps":[]}
+        checked=validate_plan(plan,context)
+        self.assertIn("{{evidence:research.0}}",checked.message.ko)
+        self.assertNotIn("연구에 따르면",checked.message.ko)
+        self.assertIn("두 영상을 비교하세요",checked.message.ko)
+
+    def test_comparison_removes_redundant_research_tail_without_failing(self):
+        current=document(identity="concise-current",changed=True)
+        previous=document(identity="concise-previous",changed=False)
+        request=CoachRequest(sessionId="concise-current",action="ask",message="지난 발표와 비교해줘")
+        context=build_context(current,request,previous=previous)
+        metric_id=context["comparisonHighlights"][0]
+        plan={"action":"ask","findingId":None,
+              "evidenceIds":["comparison.result","comparison.selection",metric_id],
+              "message":{"ko":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:"+metric_id+"}} 측정값의 변화를 확인해보세요. 같은 문장을 영상에서 비교하세요. 렌즈를 보며 다시 말한 뒤 원본과 비교하세요. 이런 연습이 도움이 될 수 있습니다.",
+                         "en":"{{evidence:comparison.result}} {{evidence:comparison.selection}} {{evidence:"+metric_id+"}} Review the measured change. Compare the same sentence in both recordings. Repeat it toward the lens and compare it with the original. This practice may help."},
+              "practice":None,"reviewGuide":None,"videoRefs":[],"followUps":[]}
+        checked=validate_plan(plan,context)
+        self.assertNotIn("도움이 될 수",checked.message.ko)
+        self.assertNotIn("may help",checked.message.en)
+        self.assertNotIn("변화를 확인",checked.message.ko)
+        self.assertIn("원본과 비교",checked.message.ko)
+
     def setUp(self):
         self.doc = document()
         self.request = CoachRequest(sessionId="baseline", action="explain_finding")
@@ -252,6 +556,60 @@ class CoachAIContractTests(unittest.TestCase):
                 verify=lambda c: {"supported": True},
             )
         self.assertEqual(calls, [])
+
+
+class V2ReviewCompositionTests(unittest.TestCase):
+    def context(self):
+        from agent.coaching import new_document
+        from agent.report_agent import generate_report
+        from server.tests.test_feedback_selection import measured_request
+        req=measured_request(2)
+        report=generate_report(req,model_version=req.modelVersion,agent_mode=True)
+        doc=new_document(req,report,req.modelVersion)
+        return build_context(doc,CoachRequest(sessionId=req.sessionId,action="explain_finding",findingId="v2_jitter"))
+
+    def test_review_uses_server_facts_and_ai_guide_instead_of_untrusted_restatement(self):
+        context=self.context();raw=grounded_plan(context)
+        raw['message']={'ko':'없는 시점 99:99와 지어낸 값 999','en':'An invented observation at 99:99 with value 999'}
+        plan=validate_plan(raw,context)
+        self.assertIn('{{evidence:finding.v2_jitter}}',plan.message.ko)
+        self.assertNotIn('999',plan.message.ko)
+        self.assertEqual(plan.reviewGuide.steps[0].ko,raw['reviewGuide']['steps'][0]['ko'])
+        invalid=deepcopy(raw);invalid['reviewGuide']['steps'][0]['ko']='99초에 시작하세요.'
+        with self.assertRaises(ValueError):validate_plan(invalid,context)
+        invalid=deepcopy(raw);invalid['videoRefs']=['invented']
+        with self.assertRaises(ValueError):validate_plan(invalid,context)
+
+    def test_question_about_active_practice_does_not_create_a_second_exercise(self):
+        from agent.coaching import new_document,respond
+        from agent.report_agent import generate_report
+        from server.tests.test_feedback_selection import measured_request
+        req=measured_request(2);report=generate_report(req,model_version=req.modelVersion,agent_mode=True)
+        doc=new_document(req,report,req.modelVersion)
+        doc,_=respond(doc,CoachRequest(sessionId=req.sessionId,action="create_practice",findingId="v2_jitter",practiceStrategyId="two_versions"))
+        active=doc['state']['activePracticeId']
+        def answer(context):
+            self.assertIn('practice.task',context['facts'])
+            return {'action':'ask','findingId':'v2_jitter','evidenceIds':[],
+                    'message':{'ko':'같은 문장을 두 방식으로 말한 뒤, 어느 쪽에서 뜻이 더 잘 전달되는지 골라보세요.','en':'Say the same sentence in both ways, then choose which better conveys your intent.'}}
+        for question in ['이 연습에서 무엇을 비교하면 돼?','What should I compare in this practice?']:
+            updated,response=respond_with_ai(doc,CoachRequest(sessionId=req.sessionId,action='ask',message=question),generate=answer,verify=lambda _: {'supported':True})
+            self.assertEqual(len(updated['practices']),1)
+            self.assertEqual(updated['state']['activePracticeId'],active)
+            self.assertEqual(updated['state']['stage'],'practice_created')
+            self.assertEqual(response['generation']['source'],'ai')
+            actions=[choice['action'] for component in response['components'] if component['type']=='action_choices' for choice in component['choices']]
+            self.assertIn('start_recording',actions)
+
+    def test_provider_aliases_never_send_saved_identity_and_restore_references(self):
+        from agent.coach_ai import anonymize_provider_context
+        identity='a9622c30-5b4f-4b65-884e-487822b61974'
+        context={'request':{'sessionId':identity},'state':{'sessionId':identity},'sessionSummaries':{'current':{'recordedAt':'private date','scene':'private filename'}},'responseSchema':{'const':identity}}
+        safe,restore=anonymize_provider_context(context)
+        self.assertNotIn(identity,str(safe));self.assertNotIn('private',str(safe))
+        self.assertEqual(safe['request']['sessionId'],safe['state']['sessionId'])
+        self.assertEqual(restore({'id':safe['request']['sessionId']})['id'],identity)
+        self.assertEqual(context['request']['sessionId'],identity)
 
 
 if __name__ == "__main__":

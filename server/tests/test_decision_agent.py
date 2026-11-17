@@ -73,6 +73,28 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertTrue(claim["segmentIds"])
         self.assertEqual(claim["evidenceIds"], report["priorities"][0]["evidenceIds"])
 
+    def test_report_searches_when_agent_selects_a_finding_without_calling_papers(self):
+        rag = ResearchRag()
+
+        def decide(view):
+            if not view["toolResults"]:
+                return {"action": "analyze_segment", "candidateId": "pitch_change",
+                        "segmentIds": ["high-1", "high-2"]}
+            return {"action": "finish", "priorityCandidateIds": ["pitch_change"]}
+
+        def synthesize(context):
+            ids = context["issues"][0]["retrievedEvidenceIds"]
+            self.assertEqual(ids, ["pitch_change:1:0"])
+            return {"summary": "Review the measured voice change.", "coaching": [{
+                "issueId": "pitch_change", "researchBasis": "Pitch was measured.",
+                "recommendation": "Listen to the highlighted interval and compare the emphasis.",
+                "evidenceIds": ids}]}
+
+        report = generate_report(self.request(), rag=rag, decide=decide, synthesize=synthesize)
+        self.assertEqual([issue_id for issue_id, _ in rag.queries], ["pitch_change"])
+        self.assertEqual(report["researchActions"][0]["acceptedHits"], 1)
+        self.assertEqual(report["priorities"][0]["evidenceStatus"], "cited_excerpt")
+
     def test_path_a_segment_concept_paper_finish_uses_each_result(self):
         request = self.request()
         summary, candidates = analyze_session(request)
@@ -615,7 +637,7 @@ class DecisionAgentTests(unittest.TestCase):
         self.assertEqual(first["selectedAction"]["action"], "finish")
         self.assertEqual(first["source"], "fallback")
         self.assertEqual(first["serverValidation"], "fallback_after_rejection")
-        self.assertEqual(first["remainingActions"], MAX_ACTIONS)
+        self.assertEqual(first["remainingActions"], state.action_limit)
         self.assertIn("pitch_change", first["validCandidateIds"])
         self.assertEqual(first["proposals"][0]["proposedAction"]["action"], "retrieve_papers")
         self.assertEqual(first["proposals"][0]["reason"], "candidate_measurement_not_checked")
@@ -674,11 +696,12 @@ class DecisionAgentTests(unittest.TestCase):
             {"action": "analyze_concept", "candidateId": "pitch_change"},
             {"action": "finish", "priorityCandidateIds": []},
         ]
-        state = run_agent(request, summary, candidates, rag=ResearchRag(),
-                          decide=lambda _: choices.pop(0))
+        with patch("agent.decision_agent.MAX_ACTIONS", 5):
+            state = run_agent(request, summary, candidates, rag=ResearchRag(),
+                              decide=lambda _: choices.pop(0))
         self.assertEqual(state.stop_reason, "finished")
         self.assertEqual(state.selected_ids, [])
-        self.assertEqual(len(state.actions), MAX_ACTIONS)
+        self.assertEqual(len(state.actions), state.action_limit)
 
     def test_bad_causal_recommendation_is_revised_or_removed(self):
         request = self.request()

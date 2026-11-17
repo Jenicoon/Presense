@@ -1,0 +1,15 @@
+[
+  {
+    "id": "doi:10.1016/j.jadr.2023.100627",
+    "title": "Virtual reality gaze exposure treatment reduces state anxiety during public speaking in individuals with public speaking anxiety: A randomized controlled trial",
+    "year": 2023,
+    "doi": "10.1016/j.jadr.2023.100627",
+    "article_url": "https://www.sciencedirect.com/science/article/pii/S2666915323001658",
+    "topics": ["gaze", "practice"],
+    "evidence_role": "practice_specific",
+    "finding_ko": "발표 불안이 있는 성인 89명을 무작위 배정한 연구에서 1시간의 단회 시선 노출은 차이를 만들지 못했지만, 이후 2주간 20분씩 9회 추가한 가상현실 시선 노출 뒤 실제 발표의 상태 불안과 시선 회피가 대조군보다 감소했습니다.",
+    "finding_en": "In a randomized trial of adults with public-speaking anxiety, a single hour of gaze exposure did not produce a group difference, while repeated VR gaze exposure over the following two weeks reduced state anxiety and gaze avoidance during a real-life speech compared with control.",
+    "scope_ko": "가상현실에서 청중과의 시선을 반복 훈련한 연구입니다. 눈꺼풀 조임을 줄이는 실험이나 한 번의 웹캠 연습 효과를 시험한 연구는 아니며, 연구진도 시선 노출과 사회적 맥락의 효과를 분리할 수 없다고 밝혔습니다.",
+    "scope_en": "This tested repeated audience-gaze exposure in VR, not an eyelid-tightening exercise or a one-off webcam task. The study could not separate the effect of gaze exposure from the social context."
+  }
+]
